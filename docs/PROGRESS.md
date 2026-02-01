@@ -59,16 +59,28 @@
 
 ## Phase 2: Memory + Chat 🔄 IN PROGRESS
 
-**Target Components:**
-- [ ] Entities table (people, teams, projects, companies, documents, topics)
-- [ ] Facts table (atomic facts with embeddings)
+**Database:** Migrated from Railway Postgres to Neon (pgvector support)
+
+### Vertical Slice (Complete)
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Entities table | ✅ | people, teams, projects, companies, topics |
+| Facts table | ✅ | with embeddings, superseding support |
+| Conversations table | ✅ | chat history storage |
+| pgvector extension | ✅ | Neon with vector search |
+| OpenRouter integration | ✅ | Kimi 2.5 as default model |
+| OpenAI embeddings | ✅ | text-embedding-3-small |
+| Chat API | ✅ | Streaming SSE, memory extraction |
+| Chat page | ✅ | Full-screen with avatar |
+| Memory extraction | ✅ | Auto-extract from chat |
+| Undo memory | ✅ | DELETE /api/memory/[factId] |
+
+### Remaining
+
 - [ ] Documents table (original content storage)
 - [ ] Document chunks table (for vector search)
-- [ ] Claude Max integration
-- [ ] Chat page (full-screen)
-- [ ] Memory extraction via chat
 - [ ] JSON document ingestion CLI
-- [ ] Vector embeddings (pgvector)
 - [ ] Memory browser UI
 
 ---

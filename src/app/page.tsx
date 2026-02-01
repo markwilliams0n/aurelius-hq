@@ -43,7 +43,6 @@ export default async function Home() {
                 href="/chat"
                 title="Chat"
                 description="Talk to Aurelius"
-                disabled
               />
               <NavCard
                 href="/activity"
