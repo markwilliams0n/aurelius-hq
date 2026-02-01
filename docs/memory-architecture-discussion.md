@@ -1,7 +1,8 @@
 # Aurelius Memory Architecture Discussion
 
 **Date:** 2026-02-01
-**Status:** Planning - ready to implement
+**Status:** Decisions complete - see implementation plan
+**Implementation:** [Memory V2 Implementation Plan](plans/2026-02-01-memory-v2-implementation.md)
 
 ## The Goal
 
@@ -311,12 +312,138 @@ Met through Sarah at the conference in 2025.
 - ✅ **Conversation history?** → Keep in Postgres (conversations table) - it's transactional
 - ✅ **Structure vs free-form?** → Follow QMD article: `summary.md` + `items.json` per entity
 
-## Remaining Questions
+## Key Decisions from Discussion
 
-- How does the AI know when to create a new entity vs append to daily notes?
-  - Heuristic from article: 3+ mentions, direct relationship, or significant → entity
-- How do we handle the MCP integration for QMD in the web app context?
-- Do we need a file watcher for real-time QMD updates, or is periodic `qmd update` enough?
+### 1. Entity Creation: When does AI create an entity vs log to daily notes?
+
+**Decision:** Everything goes to daily notes first, heartbeat extracts later.
+
+**Reasoning:**
+- Simpler for AI - just write naturally, no special judgment calls
+- Systematic - background process applies consistent rules
+- Matches the article's approach
+- Avoids the reliability issues we hit with the `remember()` tool
+
+The heartbeat process scans daily notes and promotes to entities when:
+- Mentioned 3+ times
+- Has direct relationship to user
+- Is a significant project/company
+
+### 2. QMD Integration: How do we use QMD from the Next.js app?
+
+**Decision:** Shell out to QMD CLI (local only for now).
+
+**Options considered:**
+- A) Shell out to CLI ← chosen
+- B) Import as library
+- C) Run as separate service
+- D) Build our own search
+- E) Use simpler search library
+- F) Use Postgres FTS + pgvector
+
+**Reasoning:**
+- Everything runs locally, so subprocess overhead is acceptable
+- Get full QMD features (hybrid search, LLM reranking)
+- Easy to test manually
+- Defer remote deployment complexity until needed
+
+### 3. Reindexing: When do we update the QMD index?
+
+**Decision:** Heartbeat-based (periodic, every 2 minutes).
+
+**Reasoning:**
+- Matches the article's recommendation
+- Batches work with extraction process
+- Non-blocking for chat operations
+- Heartbeat already doing:
+  1. Scan daily notes
+  2. Extract entities
+  3. Reindex QMD ← added here
+
+### 4. Local vs Remote: Where does the system run?
+
+**Decision:** Everything local for now, figure out remote later.
+
+**Architecture:**
+```
+localhost
+├── Next.js (localhost:3333)
+├── QMD (shell out)
+├── Files (./life/, ./memory/, ME.md)
+└── Postgres (Neon - still cloud for transactional data)
+```
+
+**Reasoning:**
+- Core interface will be custom web app (where hosted TBD)
+- Simplifies development - no tunnels or remote access
+- QMD runs natively with full features
+- Can add remote access (Tailscale, etc.) when needed
+
+### 5. Local LLM: What should run locally vs cloud?
+
+**Decision:** Local LLM for background ops, cloud for chat.
+
+**Local LLM handles:**
+- QMD query expansion
+- QMD result reranking
+- Heartbeat entity extraction
+- Summary generation
+
+**Cloud (OpenRouter) handles:**
+- Main chat interface (quality matters most)
+- Complex reasoning when explicitly needed
+
+**Reasoning:**
+- Keeps costs down
+- Most processing stays local
+- Chat is the "expensive" path, background is "cheap"
+- QMD already uses node-llama-cpp with GGUF models
+
+---
+
+## Why QMD is Special
+
+QMD isn't just a search library - it's a sophisticated retrieval pipeline:
+
+**1. Query Expansion**
+Before searching, an LLM rewrites queries to capture related terms.
+"Joe's job" → "Joe employment work company role position"
+
+**2. Dual Retrieval**
+Searches both indexes in parallel:
+- BM25 (keyword) - exact matches, names, IDs
+- Vector (semantic) - conceptually related content
+
+**3. Reciprocal Rank Fusion**
+Combines results from both searches with position-aware scoring.
+
+**4. LLM Reranking**
+Local LLM examines top candidates and reorders by actual relevance.
+
+**5. Confidence-based Blending**
+Final results blend based on retrieval confidence.
+
+**Why this matters:**
+- Simple FTS misses "works at Google" when searching "employment"
+- Simple vector misses "Joe Bloggs" (embeddings fuzzy on proper nouns)
+- QMD combines intelligently, then verifies with LLM
+
+---
+
+## The Three Memory Layers (from QMD Article)
+
+| Layer | Purpose | Storage | Update Frequency |
+|-------|---------|---------|------------------|
+| **Knowledge Graph** | Entities and facts | `life/` (PARA + JSON) | Continuous via heartbeat |
+| **Daily Notes** | Raw timeline | `memory/YYYY-MM-DD.md` | Every conversation |
+| **Tacit Knowledge** | User patterns | `ME.md` | When new patterns emerge |
+
+Like human memory:
+- Knowledge graph = declarative memory (facts you know)
+- Daily notes = episodic memory (what happened when)
+- Tacit knowledge = procedural memory (how you operate)
+
+---
 
 ## References
 
