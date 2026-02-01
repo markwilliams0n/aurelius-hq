@@ -104,47 +104,101 @@ Atomic fact schema:
 
 ## The Architectural Decision
 
-**Files as source of truth, database as index.**
+**Hybrid: Files for knowledge, Postgres for transactions.**
 
-Why files are more AI-friendly:
+The system has two types of data with different characteristics:
+
+| **Transactional Data** (Postgres) | **Knowledge Data** (Files + QMD) |
+|-----------------------------------|----------------------------------|
+| Sessions, auth | Entities (people, projects, companies) |
+| Inbox items | Facts about entities |
+| Tasks | Daily notes (timeline) |
+| Connectors | Tacit knowledge (ME.md) |
+| Activity log | |
+| Triage rules | |
+| Conversations | |
+
+**Why this split:**
+
+Transactional data needs:
+- Foreign key relationships
+- Status updates and queries
+- ACID guarantees
+- Integration with triage/task UIs
+
+Knowledge data benefits from files:
 - No special tools needed (AI knows read/write)
 - Always works (no tool-calling reliability)
 - Transparent (human readable, git-friendly)
 - Portable (works with any AI)
 - Natural (AI thinks in text)
 
-The database becomes a derived index:
-- SQLite with sqlite-vec for vector search
-- FTS5 for BM25 keyword search
-- Rebuilt from files automatically
+**QMD as the search layer:**
+
+Instead of building our own search, use [QMD](https://github.com/tobi/qmd):
+- TypeScript/Bun (same ecosystem)
+- SQLite FTS5 for BM25 keyword search
+- Vector embeddings for semantic search
+- LLM-powered re-ranking
+- MCP integration for Claude
+- Collections for organizing different memory layers
 
 ## Proposed Architecture
 
-### File Structure
+### Hybrid Data Model
 
 ```
-~/aurelius/
-├── people/
-│   ├── joe-bloggs.md
-│   ├── sarah.md
+┌─────────────────────────────────────────────────────────────┐
+│                        Aurelius                              │
+├─────────────────────────────────────────────────────────────┤
+│  Postgres (Neon)              │  Files + QMD                │
+│  ─────────────────            │  ────────────                │
+│  • users, sessions            │  • life/ (PARA)              │
+│  • inbox_items                │    ├── people/               │
+│  • tasks                      │    ├── projects/             │
+│  • connectors                 │    ├── companies/            │
+│  • triage_rules               │    └── ...                   │
+│  • activity_log               │  • memory/ (daily notes)     │
+│  • conversations              │  • ME.md (tacit knowledge)   │
+│                               │                              │
+│  Queries, status, FKs         │  Knowledge graph             │
+│  ↓                            │  ↓                           │
+│  Triage UI, Tasks UI          │  QMD index → AI context      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### File Structure (Knowledge Layer)
+
+Location: `./life/` directory within the app (for now - can move to `~/aurelius/` later)
+
+```
+life/
+├── projects/              # Active work with deadlines
+│   ├── aurelius/
+│   │   ├── summary.md
+│   │   └── items.json
 │   └── _index.md
-├── projects/
-│   ├── aurelius.md
+├── areas/                 # Ongoing responsibilities
+│   ├── people/
+│   │   ├── joe-bloggs/
+│   │   │   ├── summary.md
+│   │   │   └── items.json
+│   │   └── sarah/
+│   ├── companies/
+│   │   └── acme/
 │   └── _index.md
-├── companies/
-│   └── acme.md
-├── areas/
-│   ├── health.md
-│   └── finances.md
-├── resources/
-│   └── react-patterns.md
-├── archives/
-│   └── old-project.md
-├── memory/
-│   ├── 2026-02-01.md      # Daily notes
-│   └── 2026-02-02.md
-├── MEMORY.md              # Long-term curated
-└── ME.md                  # Tacit knowledge (user preferences, patterns)
+├── resources/             # Reference material
+│   └── _index.md
+├── archives/              # Inactive items
+│   └── _index.md
+└── _index.md
+
+memory/
+├── 2026-02-01.md          # Daily notes (timeline)
+├── 2026-02-02.md
+└── ...
+
+ME.md                      # Tacit knowledge (preferences, patterns)
 ```
 
 ### Entity File Format (e.g., `people/joe-bloggs.md`)
@@ -208,28 +262,38 @@ Met through Sarah at the conference in 2025.
 
 ## Implementation Plan
 
-### Phase 1: Foundation
-- [ ] Set up file structure in workspace
-- [ ] Create file read/write utilities
-- [ ] Update system prompt for file-based memory
-- [ ] Test AI writing to daily notes
+### Phase 1: File Structure & QMD Setup
+- [ ] Create `life/` directory with PARA structure
+- [ ] Create `memory/` directory for daily notes
+- [ ] Create `ME.md` for tacit knowledge
+- [ ] Install QMD (`bun install -g github:tobi/qmd`)
+- [ ] Configure QMD collections (life, memory)
+- [ ] Test QMD search works
 
-### Phase 2: Search
-- [ ] SQLite index with sqlite-vec
-- [ ] File watcher to sync index
-- [ ] Hybrid search (BM25 + vector)
-- [ ] Search tool for AI
+### Phase 2: AI File Writing
+- [ ] Update system prompt for file-based memory
+- [ ] Implement daily note appending (AI writes to `memory/YYYY-MM-DD.md`)
+- [ ] Test AI writing during chat
+- [ ] Remove dependency on `remember()` tool
+- [ ] Deprecate `entities` and `facts` tables
 
 ### Phase 3: Entity Management
-- [ ] Entity file templates
-- [ ] PARA categorization
-- [ ] Relationship linking
-- [ ] Browse UI by type
+- [ ] Entity file templates (`summary.md` + `items.json`)
+- [ ] AI can create/update entity files
+- [ ] PARA categorization logic
+- [ ] Relationship linking via `relatedEntities`
 
-### Phase 4: Intelligence
-- [ ] Access tracking
-- [ ] Memory decay tiers
-- [ ] Background extraction from daily notes
+### Phase 4: Memory Browser UI
+- [ ] Update `/memory` to read from files
+- [ ] Browse by PARA category
+- [ ] View entity details
+- [ ] Search via QMD
+
+### Phase 5: Intelligence (Heartbeat)
+- [ ] Heartbeat process for extraction
+- [ ] Extract durable facts from daily notes → entity files
+- [ ] Access tracking (`lastAccessed`, `accessCount`)
+- [ ] Memory decay tiers (hot/warm/cold)
 - [ ] Weekly summary synthesis
 
 ## Key Principles
@@ -240,16 +304,24 @@ Met through Sarah at the conference in 2025.
 4. **No information loss** - Supersede, don't delete
 5. **Graceful degradation** - Multiple fallback layers
 
-## Open Questions
+## Open Questions (Resolved)
 
-- Where should the workspace live? (`~/aurelius/` vs inside the app?)
-- How to handle the transition from current DB-based system?
-- Should conversation history also be files?
-- How much structure vs free-form in entity files?
+- ✅ **Where should the workspace live?** → `./life/` inside app for now, can move to `~/aurelius/` later
+- ✅ **How to handle transition?** → Hybrid approach - keep Postgres for transactional data, migrate knowledge to files
+- ✅ **Conversation history?** → Keep in Postgres (conversations table) - it's transactional
+- ✅ **Structure vs free-form?** → Follow QMD article: `summary.md` + `items.json` per entity
+
+## Remaining Questions
+
+- How does the AI know when to create a new entity vs append to daily notes?
+  - Heuristic from article: 3+ mentions, direct relationship, or significant → entity
+- How do we handle the MCP integration for QMD in the web app context?
+- Do we need a file watcher for real-time QMD updates, or is periodic `qmd update` enough?
 
 ## References
 
 - OpenClaw documentation on memory
 - "How Clawdbot Remembers Everything" blog post
 - "Agentic PKM with PARA and QMD" blog post
+- [QMD - Query Markup Documents](https://github.com/tobi/qmd) - Local search engine for markdown
 - Tiago Forte's PARA method
