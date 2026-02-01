@@ -1,7 +1,7 @@
 # Aurelius V1 Design
 
 **Date:** 2026-02-01
-**Status:** Approved
+**Status:** Phase 1 Complete
 
 ---
 

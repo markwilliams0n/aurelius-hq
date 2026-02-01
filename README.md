@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Aurelius
 
-## Getting Started
+Personal AI Command Center
 
-First, run the development server:
+A unified interface for managing communications, tasks, and knowledge with an AI agent that learns and evolves over time.
+
+## Quick Start
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+# Install dependencies
+pnpm install
+
+# Set up environment
+cp .env.example .env.local
+# Edit .env.local with your credentials
+
+# Set up database
+pnpm drizzle-kit push
+pnpm db:seed
+
+# Run development server
 pnpm dev
-# or
-bun dev
+# → http://localhost:3333
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Tech Stack
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Framework:** Next.js 16 (App Router, TypeScript)
+- **Styling:** Tailwind CSS + shadcn/ui
+- **Database:** PostgreSQL + Drizzle ORM
+- **Auth:** Magic link (single user)
+- **AI:** Claude Max (coming Phase 2)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Project Structure
 
-## Learn More
+```
+src/
+├── app/                    # Next.js App Router
+│   ├── api/               # API routes
+│   │   ├── auth/          # Magic link auth
+│   │   └── config/        # Config CRUD
+│   ├── (auth)/            # Auth pages (login)
+│   └── (app)/             # Protected pages
+├── components/
+│   ├── ui/                # shadcn/ui components
+│   └── aurelius/          # App-specific components
+└── lib/
+    ├── db/                # Drizzle schema & queries
+    ├── auth.ts            # Auth utilities
+    ├── activity.ts        # Activity logging
+    └── config.ts          # Config utilities
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Development Progress
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+See [docs/PROGRESS.md](docs/PROGRESS.md) for detailed progress tracking.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Phase 1:** Foundation ✅
+- **Phase 2:** Memory + Chat (in progress)
+- **Phase 3:** Chat Polish
+- **Phase 4:** Connectors + Triage
+- **Phase 5:** Actions + Background
 
-## Deploy on Vercel
+## Environment Variables
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+DATABASE_URL=             # PostgreSQL connection string
+ADMIN_EMAIL=              # Single admin user email
+RESEND_API_KEY=           # Resend.com API key for magic links
+NEXT_PUBLIC_APP_URL=      # App URL (http://localhost:3333)
+```
