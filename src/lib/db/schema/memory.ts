@@ -122,6 +122,50 @@ export const conversations = pgTable("conversations", {
     .notNull(),
 });
 
+// Document processing status
+export const processingStatusEnum = pgEnum("processing_status", [
+  "pending",
+  "processing",
+  "completed",
+  "failed",
+]);
+
+// Documents: original content storage
+export const documents = pgTable("documents", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  entityId: uuid("entity_id").references(() => entities.id, {
+    onDelete: "cascade",
+  }),
+  filename: text("filename").notNull(),
+  contentType: text("content_type").notNull(), // 'application/json' | 'text/markdown' | etc
+  rawContent: text("raw_content").notNull(),
+  processingStatus: processingStatusEnum("processing_status")
+    .default("pending")
+    .notNull(),
+  processedAt: timestamp("processed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+// Document chunks: for vector search
+export const documentChunks = pgTable(
+  "document_chunks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    documentId: uuid("document_id")
+      .references(() => documents.id, { onDelete: "cascade" })
+      .notNull(),
+    chunkIndex: text("chunk_index").notNull(), // "0", "1", "2" or semantic like "section-intro"
+    content: text("content").notNull(),
+    embedding: vector("embedding", { dimensions: 1536 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [index("document_chunks_document_idx").on(table.documentId)]
+);
+
 // Type exports
 export type Entity = typeof entities.$inferSelect;
 export type NewEntity = typeof entities.$inferInsert;
@@ -129,3 +173,7 @@ export type Fact = typeof facts.$inferSelect;
 export type NewFact = typeof facts.$inferInsert;
 export type Conversation = typeof conversations.$inferSelect;
 export type NewConversation = typeof conversations.$inferInsert;
+export type Document = typeof documents.$inferSelect;
+export type NewDocument = typeof documents.$inferInsert;
+export type DocumentChunk = typeof documentChunks.$inferSelect;
+export type NewDocumentChunk = typeof documentChunks.$inferInsert;

@@ -37,7 +37,6 @@ export default async function Home() {
                 href="/memory"
                 title="Memory"
                 description="Browse knowledge graph"
-                disabled
               />
               <NavCard
                 href="/chat"
