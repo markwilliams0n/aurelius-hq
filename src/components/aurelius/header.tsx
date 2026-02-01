@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { CmdKButton } from "./cmd-k-button";
 
 export async function Header() {
   const session = await getSession();
@@ -14,6 +15,7 @@ export async function Header() {
 
         {session ? (
           <div className="flex items-center gap-4">
+            <CmdKButton />
             <span className="text-sm text-muted-foreground">
               {session.user.email}
             </span>

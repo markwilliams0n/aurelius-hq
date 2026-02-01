@@ -78,18 +78,23 @@
 
 ### Remaining
 
-- [ ] Documents table (original content storage)
-- [ ] Document chunks table (for vector search)
-- [ ] JSON document ingestion CLI
-- [ ] Memory browser UI
+- [x] Documents table (original content storage)
+- [x] Document chunks table (for vector search)
+- [x] JSON document ingestion CLI (`pnpm ingest <file>`)
+- [x] Memory browser UI (`/memory`)
 
 ---
 
-## Phase 3: Chat Polish
+## Phase 3: Chat Polish 🔄 IN PROGRESS
 
-**Target Components:**
-- [ ] Slide-out panel (Cmd+K)
-- [ ] Context compaction
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Slide-out panel | ✅ | Cmd+K global shortcut |
+| CmdK button in header | ✅ | With keyboard hint |
+
+### Remaining
+
+- [ ] Context compaction (auto-compact long conversations)
 - [ ] Config changes via chat (approval flow)
 - [ ] @ mentions for entities
 
