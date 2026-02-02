@@ -30,7 +30,23 @@ export function ThinkingWaves({ className = "", state = "thinking" }: ThinkingWa
     resize();
     window.addEventListener("resize", resize);
 
-    // Get colors based on state
+    // Get background color from parent for proper clearing
+    const getBackgroundColor = (): string => {
+      const parent = canvas.parentElement;
+      if (parent) {
+        const computed = getComputedStyle(parent);
+        const bg = computed.backgroundColor;
+        // Parse rgb/rgba and add alpha for trail effect
+        const match = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+        if (match) {
+          return `rgba(${match[1]}, ${match[2]}, ${match[3]}, 0.25)`;
+        }
+      }
+      // Fallback to dark theme color
+      return "rgba(18, 18, 18, 0.25)";
+    };
+
+    // Pre-compute wave config outside draw loop (only changes when state changes)
     const getWaveConfig = () => {
       if (state === "error") {
         // Dull, muted colors for error state
@@ -44,6 +60,7 @@ export function ThinkingWaves({ className = "", state = "thinking" }: ThinkingWa
           ],
           speed: 0.5, // Slower for error
           opacity: 0.6,
+          pulse: false,
         };
       } else if (state === "streaming") {
         // Bright, active colors for streaming
@@ -57,6 +74,7 @@ export function ThinkingWaves({ className = "", state = "thinking" }: ThinkingWa
           ],
           speed: 1,
           opacity: 1,
+          pulse: false,
         };
       } else {
         // Thinking state - pulsing transparency
@@ -75,7 +93,11 @@ export function ThinkingWaves({ className = "", state = "thinking" }: ThinkingWa
       }
     };
 
-    // Wave parameters
+    // Memoize config - only recalculated when effect re-runs (state changes)
+    const config = getWaveConfig();
+    const bgColor = getBackgroundColor();
+
+    // Wave parameters (static)
     const baseWaves = [
       { amplitude: 6, frequency: 0.012, speed: 0.03, phase: 0, lineWidth: 2, baseOpacity: 0.9 },
       { amplitude: 8, frequency: 0.018, speed: -0.025, phase: Math.PI / 4, lineWidth: 1.2, baseOpacity: 0.5 },
@@ -91,7 +113,6 @@ export function ThinkingWaves({ className = "", state = "thinking" }: ThinkingWa
       const width = canvas.getBoundingClientRect().width;
       const height = canvas.getBoundingClientRect().height;
       const centerY = height / 2;
-      const config = getWaveConfig();
 
       // Calculate pulse factor for thinking state (oscillates between 0.3 and 1)
       const pulseFactor = config.pulse
@@ -99,7 +120,7 @@ export function ThinkingWaves({ className = "", state = "thinking" }: ThinkingWa
         : config.opacity;
 
       // Clear with slight fade for trail effect
-      ctx.fillStyle = "rgba(18, 18, 18, 0.25)";
+      ctx.fillStyle = bgColor;
       ctx.fillRect(0, 0, width, height);
 
       // Draw secondary waves first (behind)

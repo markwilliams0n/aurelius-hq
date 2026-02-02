@@ -37,6 +37,9 @@ const TOOL_MODEL = "anthropic/claude-sonnet-4";
 // Max tool call iterations to prevent infinite loops
 const MAX_TOOL_ITERATIONS = 5;
 
+// API request timeout in milliseconds
+const API_TIMEOUT_MS = 30000;
+
 // Simple chat completion
 export async function chat(
   input: string | Message[],
@@ -80,7 +83,7 @@ export async function* chatStreamWithTools(
     iterations++;
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
+    const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
     let response: Response;
     try {
@@ -142,15 +145,29 @@ export async function* chatStreamWithTools(
     for (const toolCall of toolCalls) {
       const toolName = toolCall.function?.name;
       const toolArgs = toolCall.function?.arguments;
+      const toolId = toolCall.id;
 
-      if (!toolName) continue;
+      // Validate required fields
+      if (!toolName || !toolId) {
+        console.warn("[AI Client] Tool call missing name or id, skipping");
+        continue;
+      }
 
-      yield { type: "tool_use", toolName, toolInput: JSON.parse(toolArgs || "{}") };
+      // Parse args once and reuse
+      let parsedArgs: Record<string, unknown>;
+      try {
+        parsedArgs = JSON.parse(toolArgs || "{}");
+      } catch (parseError) {
+        console.error("[AI Client] Failed to parse tool args:", parseError);
+        continue;
+      }
+
+      yield { type: "tool_use", toolName, toolInput: parsedArgs };
 
       try {
         const { result: toolResult, pendingChangeId } = await handleConfigTool(
           toolName,
-          JSON.parse(toolArgs || "{}"),
+          parsedArgs,
           conversationId
         );
 
@@ -167,15 +184,15 @@ export async function* chatStreamWithTools(
           role: "assistant",
           content: null,
           tool_calls: [{
-            id: toolCall.id,
+            id: toolId,
             type: "function",
-            function: { name: toolName, arguments: toolArgs },
+            function: { name: toolName, arguments: toolArgs || "{}" },
           }],
         });
         conversationMessages.push({
           role: "tool",
           content: toolResult,
-          tool_call_id: toolCall.id,
+          tool_call_id: toolId,
         });
 
       } catch (error) {
@@ -187,7 +204,9 @@ export async function* chatStreamWithTools(
     // Continue loop to see if AI wants to call more tools
   }
 
+  // Max iterations reached - inform the user
   console.warn("[AI Client] Max tool iterations reached");
+  yield { type: "text", content: "I've completed multiple operations but reached my limit. Please let me know if you need anything else." };
 }
 
 // Fallback streaming without tools

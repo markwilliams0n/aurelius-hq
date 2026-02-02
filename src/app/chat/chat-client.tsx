@@ -9,9 +9,13 @@ import { ToolPanel, PanelContent } from "@/components/aurelius/tool-panel";
 import { toast } from "sonner";
 
 type Message = {
+  id: string;
   role: "user" | "assistant";
   content: string;
 };
+
+// Generate unique message ID
+const generateMessageId = () => `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
 type ChatStats = {
   model: string;
@@ -33,6 +37,7 @@ export function ChatClient() {
   });
   const [toolPanelContent, setToolPanelContent] = useState<PanelContent>(null);
   const [currentToolName, setCurrentToolName] = useState<string | null>(null);
+  const [hasError, setHasError] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingContentRef = useRef("");
 
@@ -50,7 +55,12 @@ export function ChatClient() {
           if (response.ok) {
             const data = await response.json();
             setConversationId(savedId);
-            setMessages(data.messages || []);
+            // Add IDs to loaded messages if they don't have them
+            const loadedMessages = (data.messages || []).map((m: Omit<Message, "id">, i: number) => ({
+              ...m,
+              id: m.id || `loaded-${i}-${Date.now()}`,
+            }));
+            setMessages(loadedMessages);
             setStats((prev) => ({
               ...prev,
               model: data.model || prev.model,
@@ -89,7 +99,7 @@ export function ChatClient() {
     toast.success("Started new conversation");
   };
 
-  const fetchPendingChange = async (changeId: string) => {
+  const fetchPendingChange = useCallback(async (changeId: string) => {
     console.log("[Chat] fetchPendingChange called with:", changeId);
     try {
       const response = await fetch(`/api/config/pending/${changeId}`);
@@ -112,7 +122,7 @@ export function ChatClient() {
     } catch (error) {
       console.error("Failed to fetch pending change:", error);
     }
-  };
+  }, []);
 
   const handleApproveChange = async (id: string) => {
     const response = await fetch(`/api/config/pending/${id}`, {
@@ -148,9 +158,11 @@ export function ChatClient() {
     if (!content.trim() || isStreaming) return;
 
     streamingContentRef.current = "";
+    setHasError(false);
 
-    const userMessage: Message = { role: "user", content };
-    setMessages((prev) => [...prev, userMessage, { role: "assistant", content: "" }]);
+    const userMessage: Message = { id: generateMessageId(), role: "user", content };
+    const assistantMessage: Message = { id: generateMessageId(), role: "assistant", content: "" };
+    setMessages((prev) => [...prev, userMessage, assistantMessage]);
     setIsStreaming(true);
 
     try {
@@ -304,6 +316,8 @@ export function ChatClient() {
     } catch (error) {
       console.error("Chat error:", error);
       toast.error("Failed to send message");
+      setHasError(true);
+      // Remove the empty assistant message on error
       setMessages((prev) => prev.slice(0, -1));
     } finally {
       setIsStreaming(false);
@@ -353,11 +367,13 @@ export function ChatClient() {
               {messages.map((message, index) => {
                 const isLastMessage = index === messages.length - 1;
                 const isAssistantStreaming = isStreaming && isLastMessage && message.role === "assistant";
+                const showError = hasError && isLastMessage && message.role === "assistant";
                 return (
                   <ChatMessage
-                    key={index}
+                    key={message.id}
                     message={message}
                     isStreaming={isAssistantStreaming}
+                    hasError={showError}
                   />
                 );
               })}

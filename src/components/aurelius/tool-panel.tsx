@@ -7,8 +7,6 @@ import {
   Settings,
   Check,
   Copy,
-  ChevronDown,
-  ChevronUp,
   Loader2,
   AlertTriangle,
 } from "lucide-react";
@@ -143,54 +141,61 @@ function ConfigViewPanel({ content }: { content: ConfigViewContent }) {
 type DiffLine = {
   type: "context" | "added" | "removed";
   content: string;
-  lineNumber?: number;
 };
 
-// Compute a simple line-based diff
+// Compute LCS (Longest Common Subsequence) for proper diff
+function computeLCS(oldLines: string[], newLines: string[]): number[][] {
+  const m = oldLines.length;
+  const n = newLines.length;
+  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (oldLines[i - 1] === newLines[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+
+  return dp;
+}
+
+// Compute a proper line-based diff using LCS
 function computeDiff(oldText: string | null, newText: string): DiffLine[] {
   const oldLines = (oldText || "").split("\n");
   const newLines = newText.split("\n");
   const result: DiffLine[] = [];
 
-  // Use a simple LCS-based approach for small texts
-  const oldSet = new Set(oldLines);
-  const newSet = new Set(newLines);
+  // Use LCS to find common lines
+  const dp = computeLCS(oldLines, newLines);
 
-  let oldIdx = 0;
-  let newIdx = 0;
+  // Backtrack to build diff
+  let i = oldLines.length;
+  let j = newLines.length;
+  const reversed: DiffLine[] = [];
 
-  while (oldIdx < oldLines.length || newIdx < newLines.length) {
-    const oldLine = oldLines[oldIdx];
-    const newLine = newLines[newIdx];
-
-    if (oldIdx >= oldLines.length) {
-      // Remaining new lines are additions
-      result.push({ type: "added", content: newLine });
-      newIdx++;
-    } else if (newIdx >= newLines.length) {
-      // Remaining old lines are removals
-      result.push({ type: "removed", content: oldLine });
-      oldIdx++;
-    } else if (oldLine === newLine) {
-      // Lines match - context
-      result.push({ type: "context", content: oldLine });
-      oldIdx++;
-      newIdx++;
-    } else if (!newSet.has(oldLine) && oldSet.has(newLine)) {
-      // Old line was removed
-      result.push({ type: "removed", content: oldLine });
-      oldIdx++;
-    } else if (newSet.has(oldLine) && !oldSet.has(newLine)) {
-      // New line was added
-      result.push({ type: "added", content: newLine });
-      newIdx++;
-    } else {
-      // Both changed - show removal then addition
-      result.push({ type: "removed", content: oldLine });
-      result.push({ type: "added", content: newLine });
-      oldIdx++;
-      newIdx++;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+      // Common line
+      reversed.push({ type: "context", content: oldLines[i - 1] });
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      // Line added in new
+      reversed.push({ type: "added", content: newLines[j - 1] });
+      j--;
+    } else if (i > 0) {
+      // Line removed from old
+      reversed.push({ type: "removed", content: oldLines[i - 1] });
+      i--;
     }
+  }
+
+  // Reverse to get correct order
+  for (let k = reversed.length - 1; k >= 0; k--) {
+    result.push(reversed[k]);
   }
 
   return result;
