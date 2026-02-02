@@ -16,12 +16,12 @@ vi.mock('@/lib/ai/client', () => ({
 
 // Mock the memory facts
 vi.mock('@/lib/memory/facts', () => ({
-  getMemoryContext: vi.fn().mockResolvedValue(null),
+  getRecentFacts: vi.fn().mockResolvedValue([]),
 }));
 
 import { sendMessage, sendTypingAction, splitMessage } from '../client';
 import { chat } from '@/lib/ai/client';
-import { getMemoryContext } from '@/lib/memory/facts';
+import { getRecentFacts } from '@/lib/memory/facts';
 
 describe('Telegram Handler', () => {
   const createMessage = (text: string, chatId = 12345): TelegramMessage => ({
@@ -144,7 +144,7 @@ describe('Telegram Handler', () => {
       const update = createUpdate(createMessage('Hello'));
       await handleTelegramUpdate(update);
 
-      expect(getMemoryContext).toHaveBeenCalled();
+      expect(getRecentFacts).toHaveBeenCalled();
     });
 
     it('sends AI response back to user', async () => {

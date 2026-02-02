@@ -5,7 +5,7 @@
  */
 
 import { chat } from '@/lib/ai/client';
-import { getMemoryContext } from '@/lib/memory/facts';
+import { getRecentFacts } from '@/lib/memory/facts';
 import {
   sendMessage,
   sendTypingAction,
@@ -125,8 +125,16 @@ async function handleChatMessage(message: TelegramMessage): Promise<void> {
     // Get conversation history
     const history = getHistory(chatId);
 
-    // Get memory context
-    const memoryContext = await getMemoryContext();
+    // Get memory context from recent facts
+    let memoryContext = '';
+    try {
+      const recentFacts = await getRecentFacts(10);
+      if (recentFacts.length > 0) {
+        memoryContext = recentFacts.map((f) => `- ${f.content}`).join('\n');
+      }
+    } catch {
+      // Memory context is optional, continue without it
+    }
 
     // Build system prompt with memory
     const systemPrompt = `You are Aurelius, a helpful AI assistant accessible via Telegram.
