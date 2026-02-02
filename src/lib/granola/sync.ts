@@ -28,18 +28,23 @@ export interface GranolaSyncResult {
  * Transform a Granola document into a triage inbox item
  */
 function transformToInboxItem(doc: GranolaDocumentFull) {
-  const calendarData = doc.google_calendar_data;
-  const organizer = calendarData?.organizer;
-  const attendees = calendarData?.attendees || [];
+  // API returns google_calendar_event, not google_calendar_data
+  const calendarEvent = (doc as unknown as { google_calendar_event?: typeof doc.google_calendar_data })
+    .google_calendar_event;
+  const organizer = calendarEvent?.organizer;
+  const attendees = calendarEvent?.attendees || [];
+
+  // API returns notes_markdown, not markdown
+  const markdown = (doc as unknown as { notes_markdown?: string }).notes_markdown || '';
 
   // Build preview from markdown content
-  const preview = doc.markdown
-    ? doc.markdown.slice(0, 200).replace(/\n/g, ' ').trim()
+  const preview = markdown
+    ? markdown.slice(0, 200).replace(/\n/g, ' ').trim()
     : 'No notes available';
 
   // Build attendee list for display
   const attendeeNames = attendees
-    .map(a => a.displayName || a.email)
+    .map((a: { displayName?: string; email?: string }) => a.displayName || a.email)
     .filter(Boolean)
     .slice(0, 5)
     .join(', ');
@@ -51,16 +56,17 @@ function transformToInboxItem(doc: GranolaDocumentFull) {
     senderName: organizer?.displayName || doc.title,
     subject: doc.title,
     preview: preview + (preview.length >= 200 ? '...' : ''),
-    content: doc.markdown || '',
+    content: markdown,
     rawPayload: {
-      transcript: doc.transcript,
+      notes: markdown,
       attendees: attendees,
-      calendarEvent: calendarData,
-      transcriptState: doc.transcript_state,
+      calendarEvent: calendarEvent,
+      people: (doc as unknown as { people?: unknown[] }).people,
+      summary: (doc as unknown as { summary?: string }).summary,
       createdAt: doc.created_at,
       updatedAt: doc.updated_at,
     },
-    receivedAt: new Date(calendarData?.start?.dateTime || doc.created_at),
+    receivedAt: new Date(calendarEvent?.start?.dateTime || doc.created_at),
     status: 'new' as const,
     priority: 'normal' as const,
     aiEnrichment: {

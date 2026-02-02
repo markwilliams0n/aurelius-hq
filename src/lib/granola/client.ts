@@ -5,10 +5,12 @@
  * Based on: https://github.com/getprobo/reverse-engineering-granola-api
  */
 
-import { getConfig, saveConfig } from '@/lib/config';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 const WORKOS_AUTH_URL = 'https://api.workos.com/user_management/authenticate';
 const GRANOLA_API_URL = 'https://api.granola.ai';
+const CREDENTIALS_PATH = path.join(process.cwd(), '.granola-credentials.json');
 
 // Granola document types
 export interface GranolaDocument {
@@ -43,16 +45,13 @@ export interface GranolaCredentials {
   last_synced_at?: string;
 }
 
-const CONFIG_KEY = 'connector:granola';
-
 /**
  * Get stored Granola credentials
  */
 export async function getCredentials(): Promise<GranolaCredentials | null> {
   try {
-    const config = await getConfig(CONFIG_KEY);
-    if (!config?.content) return null;
-    return JSON.parse(config.content);
+    const content = await fs.readFile(CREDENTIALS_PATH, 'utf-8');
+    return JSON.parse(content);
   } catch {
     return null;
   }
@@ -62,7 +61,7 @@ export async function getCredentials(): Promise<GranolaCredentials | null> {
  * Save Granola credentials
  */
 export async function saveCredentials(creds: GranolaCredentials): Promise<void> {
-  await saveConfig(CONFIG_KEY, JSON.stringify(creds), 'granola-sync');
+  await fs.writeFile(CREDENTIALS_PATH, JSON.stringify(creds, null, 2));
 }
 
 /**
@@ -141,10 +140,13 @@ export async function getDocuments(options?: {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
+      'User-Agent': 'Granola/5.354.0',
+      'X-Client-Version': '5.354.0',
     },
     body: JSON.stringify({
       limit: options?.limit || 50,
-      cursor: options?.cursor,
+      offset: options?.cursor ? parseInt(options.cursor) : 0,
+      include_last_viewed_panel: true,
     }),
   });
 
@@ -152,29 +154,51 @@ export async function getDocuments(options?: {
     throw new Error(`Failed to fetch documents: ${response.status}`);
   }
 
-  return response.json();
+  // API returns { docs: [...], deleted: [...] }
+  const data = await response.json();
+  return {
+    documents: data.docs || [],
+    next_cursor: data.next_cursor,
+  };
 }
 
 /**
- * Fetch a single document with full content and transcript
+ * Fetch documents by IDs (batch endpoint)
  */
-export async function getDocument(documentId: string): Promise<GranolaDocumentFull> {
+export async function getDocumentsBatch(documentIds: string[]): Promise<GranolaDocumentFull[]> {
   const token = await getAccessToken();
 
-  const response = await fetch(`${GRANOLA_API_URL}/v2/get-document`, {
+  const response = await fetch(`${GRANOLA_API_URL}/v1/get-documents-batch`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
+      'User-Agent': 'Granola/5.354.0',
+      'X-Client-Version': '5.354.0',
     },
-    body: JSON.stringify({ document_id: documentId }),
+    body: JSON.stringify({
+      document_ids: documentIds,
+      include_last_viewed_panel: true,
+    }),
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch document: ${response.status}`);
+    throw new Error(`Failed to fetch documents batch: ${response.status}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  return data.docs || [];
+}
+
+/**
+ * Fetch a single document with full content
+ */
+export async function getDocument(documentId: string): Promise<GranolaDocumentFull> {
+  const docs = await getDocumentsBatch([documentId]);
+  if (docs.length === 0) {
+    throw new Error(`Document not found: ${documentId}`);
+  }
+  return docs[0];
 }
 
 /**
