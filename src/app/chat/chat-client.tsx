@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { ChatMessage } from "@/components/aurelius/chat-message";
 import { ChatInput } from "@/components/aurelius/chat-input";
+import { ChatStatus } from "@/components/aurelius/chat-status";
 import { AppShell } from "@/components/aurelius/app-shell";
 import { ChatMemoryPanel } from "@/components/aurelius/chat-memory-panel";
 import { ToolPanel, PanelContent } from "@/components/aurelius/tool-panel";
@@ -349,6 +350,19 @@ export function ChatClient() {
   return (
     <AppShell rightSidebar={rightSidebar} wideSidebar={!!toolPanelContent}>
       <div className="flex flex-col h-screen">
+        {/* Status bar - sticky header */}
+        <div className="shrink-0 border-b border-border bg-background/80 backdrop-blur-sm px-6 py-2 sticky top-0 z-10">
+          <div className="max-w-3xl mx-auto flex items-center justify-between">
+            <button
+              onClick={handleNewChat}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              New chat
+            </button>
+            <ChatStatus stats={stats} />
+          </div>
+        </div>
+
         {/* Messages area - scrollable, takes remaining space */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {messages.length === 0 ? (
