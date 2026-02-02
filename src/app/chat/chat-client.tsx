@@ -24,7 +24,6 @@ type ChatStats = {
   factsSaved: number;
 };
 
-const STORAGE_KEY = "aurelius_conversation_id";
 const SHARED_CONVERSATION_ID = "00000000-0000-0000-0000-000000000000"; // Shared between web and Telegram
 
 export function ChatClient() {
@@ -47,54 +46,56 @@ export function ChatClient() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
-  // Load conversation on mount - use shared ID by default
-  useEffect(() => {
-    const loadConversation = async () => {
-      // Always use the shared conversation ID (synced with Telegram)
-      const targetId = localStorage.getItem(STORAGE_KEY) || SHARED_CONVERSATION_ID;
-
-      try {
-        const response = await fetch(`/api/conversation/${targetId}`);
-        if (response.ok) {
-          const data = await response.json();
-          setConversationId(targetId);
-          localStorage.setItem(STORAGE_KEY, targetId);
-          // Add IDs to loaded messages if they don't have them
-          const loadedMessages = (data.messages || []).map((m: Partial<Message> & { role: Message["role"]; content: string }, i: number) => ({
-            ...m,
-            id: m.id || `loaded-${i}-${Date.now()}`,
-          }));
-          setMessages(loadedMessages);
-          setStats((prev) => ({
-            ...prev,
-            model: data.model || prev.model,
-            factsSaved: data.factsSaved || 0,
-          }));
-        } else if (targetId === SHARED_CONVERSATION_ID) {
-          // Shared conversation doesn't exist yet, that's fine - it will be created on first message
-          setConversationId(SHARED_CONVERSATION_ID);
-          localStorage.setItem(STORAGE_KEY, SHARED_CONVERSATION_ID);
-        } else {
-          // Non-shared conversation not found, fall back to shared
-          localStorage.setItem(STORAGE_KEY, SHARED_CONVERSATION_ID);
-          setConversationId(SHARED_CONVERSATION_ID);
-        }
-      } catch (error) {
-        console.error("Failed to load conversation:", error);
-        setConversationId(SHARED_CONVERSATION_ID);
-        localStorage.setItem(STORAGE_KEY, SHARED_CONVERSATION_ID);
+  // Load conversation from API
+  const loadConversation = useCallback(async (isInitial = false) => {
+    try {
+      const response = await fetch(`/api/conversation/${SHARED_CONVERSATION_ID}`);
+      if (response.ok) {
+        const data = await response.json();
+        // Add IDs to loaded messages if they don't have them
+        const loadedMessages = (data.messages || []).map((m: Partial<Message> & { role: Message["role"]; content: string }, i: number) => ({
+          ...m,
+          id: m.id || `loaded-${i}-${Date.now()}`,
+        }));
+        // Only update if message count changed (avoid re-render during streaming)
+        setMessages((prev) => {
+          if (prev.length !== loadedMessages.length) {
+            return loadedMessages;
+          }
+          return prev;
+        });
+        setStats((prev) => ({
+          ...prev,
+          model: data.model || prev.model,
+          factsSaved: data.factsSaved || 0,
+        }));
       }
+    } catch (error) {
+      console.error("Failed to load conversation:", error);
+    }
+    if (isInitial) {
+      setConversationId(SHARED_CONVERSATION_ID);
       setIsLoading(false);
-    };
-
-    loadConversation();
+    }
   }, []);
 
+  // Load on mount
   useEffect(() => {
-    if (conversationId) {
-      localStorage.setItem(STORAGE_KEY, conversationId);
-    }
-  }, [conversationId]);
+    loadConversation(true);
+  }, [loadConversation]);
+
+  // Poll for new messages every 3 seconds (for Telegram sync)
+  useEffect(() => {
+    if (isStreaming) return; // Don't poll while streaming
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadConversation();
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [loadConversation, isStreaming]);
 
   useEffect(() => {
     scrollToBottom();
@@ -113,7 +114,6 @@ export function ChatClient() {
     setConversationId(SHARED_CONVERSATION_ID);
     setStats((prev) => ({ ...prev, tokenCount: 0, factsSaved: 0 }));
     setToolPanelContent(null);
-    localStorage.setItem(STORAGE_KEY, SHARED_CONVERSATION_ID);
     toast.success("Started new conversation");
   };
 
