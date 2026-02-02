@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Image from "next/image";
 import {
   MessageSquare,
   Brain,
@@ -28,10 +29,16 @@ export function AppSidebar() {
 
   return (
     <aside className="w-16 border-r border-border bg-background flex flex-col items-center py-4 gap-2">
-      {/* Logo */}
+      {/* Logo - Aurelius Avatar */}
       <Link href="/" className="mb-4">
-        <div className="w-10 h-10 rounded-lg bg-gold/10 border border-gold/30 flex items-center justify-center">
-          <span className="font-serif text-gold text-lg">A</span>
+        <div className="w-10 h-10 rounded-full overflow-hidden border border-gold/30">
+          <Image
+            src="/avatars/aurelius.svg"
+            alt="Aurelius"
+            width={40}
+            height={40}
+            className="w-full h-full"
+          />
         </div>
       </Link>
 

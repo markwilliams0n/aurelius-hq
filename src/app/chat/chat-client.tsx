@@ -3,12 +3,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { ChatMessage } from "@/components/aurelius/chat-message";
 import { ChatInput } from "@/components/aurelius/chat-input";
-import { ChatStatus } from "@/components/aurelius/chat-status";
 import { AppShell } from "@/components/aurelius/app-shell";
 import { ChatMemoryPanel } from "@/components/aurelius/chat-memory-panel";
 import { toast } from "sonner";
-import { RotateCcw } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
 type Message = {
   role: "user" | "assistant";
@@ -212,25 +209,11 @@ export function ChatClient() {
 
   return (
     <AppShell rightSidebar={<ChatMemoryPanel />}>
-      <div className="flex-1 flex flex-col h-screen">
-        {/* Status bar */}
-        <div className="flex items-center justify-between px-6 py-3 border-b border-border">
-          <ChatStatus stats={stats} />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleNewChat}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <RotateCcw className="w-4 h-4 mr-2" />
-            New Chat
-          </Button>
-        </div>
-
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+      <div className="flex flex-col h-screen">
+        {/* Messages area - scrollable, takes remaining space */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           {messages.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center h-full min-h-[400px]">
+            <div className="h-full flex items-center justify-center">
               <div className="text-center">
                 <h2 className="font-serif text-2xl text-gold mb-2">
                   Aurelius
@@ -241,16 +224,20 @@ export function ChatClient() {
               </div>
             </div>
           ) : (
-            messages.map((message, index) => (
-              <ChatMessage key={index} message={message} />
-            ))
+            <div className="max-w-3xl mx-auto space-y-4">
+              {messages.map((message, index) => (
+                <ChatMessage key={index} message={message} />
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
           )}
-          <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
-        <div className="px-6 py-4 border-t border-border">
-          <ChatInput onSend={handleSend} disabled={isStreaming} />
+        {/* Input - fixed at bottom */}
+        <div className="shrink-0 border-t border-border bg-background px-6 py-4">
+          <div className="max-w-3xl mx-auto">
+            <ChatInput onSend={handleSend} disabled={isStreaming} />
+          </div>
         </div>
       </div>
     </AppShell>
