@@ -104,7 +104,20 @@ export async function searchFacts(
     LIMIT ${limit}
   `);
 
-  return results as unknown as Array<Fact & { similarity: number }>;
+  // Map snake_case columns to camelCase (raw SQL doesn't do this)
+  return (results as unknown as Array<Record<string, unknown>>).map((row) => ({
+    id: row.id,
+    entityId: row.entity_id,
+    content: row.content,
+    embedding: row.embedding,
+    category: row.category,
+    status: row.status,
+    supersededBy: row.superseded_by,
+    sourceType: row.source_type,
+    sourceId: row.source_id,
+    createdAt: row.created_at,
+    similarity: row.similarity,
+  })) as Array<Fact & { similarity: number }>;
 }
 
 // Get recent facts

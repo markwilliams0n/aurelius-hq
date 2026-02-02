@@ -77,7 +77,28 @@ export async function createSession(email: string) {
   return user;
 }
 
+// Dev mode mock session for local development
+const DEV_SESSION = {
+  session: {
+    id: "dev-session",
+    userId: "dev-user",
+    token: "dev-token",
+    expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+    createdAt: new Date(),
+  },
+  user: {
+    id: "dev-user",
+    email: "dev@localhost",
+    createdAt: new Date(),
+  },
+};
+
 export async function getSession() {
+  // Bypass auth in development
+  if (process.env.NODE_ENV === "development") {
+    return DEV_SESSION;
+  }
+
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
 

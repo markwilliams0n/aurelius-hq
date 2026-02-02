@@ -1,5 +1,6 @@
 import { AureliusAvatar } from "./aurelius-avatar";
-import { User } from "lucide-react";
+import { UserAvatar } from "./user-avatar";
+import { ThinkingWaves } from "./thinking-waves";
 import { Button } from "@/components/ui/button";
 
 type Message = {
@@ -28,38 +29,43 @@ export function ChatMessage({
     <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
       {/* Avatar */}
       {isUser ? (
-        <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center flex-shrink-0">
-          <User className="w-4 h-4 text-muted-foreground" />
-        </div>
+        <UserAvatar className="flex-shrink-0" />
       ) : (
         <AureliusAvatar className="flex-shrink-0" />
       )}
 
       {/* Content */}
-      <div className={`flex flex-col gap-2 max-w-[80%] ${isUser ? "items-end" : ""}`}>
-        <div
-          className={`rounded-lg px-4 py-2 ${
-            isUser
-              ? "bg-gold text-background"
-              : "bg-secondary text-foreground"
-          }`}
-        >
-          <p className="whitespace-pre-wrap">{displayContent || "..."}</p>
+      {!isUser && !displayContent ? (
+        // Thinking state - waves extend across full width, no chat bubble
+        <div className="flex-1 -ml-3">
+          <ThinkingWaves />
         </div>
-
-        {/* Memory chips */}
-        {message.memories && message.memories.length > 0 && (
-          <div className="flex flex-col gap-1">
-            {message.memories.map((memory) => (
-              <MemoryChip
-                key={memory.factId}
-                content={memory.content}
-                onUndo={() => onUndo?.(memory.factId)}
-              />
-            ))}
+      ) : (
+        <div className={`flex flex-col gap-2 max-w-[80%] ${isUser ? "items-end" : ""}`}>
+          <div
+            className={`rounded-lg px-4 py-2 ${
+              isUser
+                ? "bg-gold text-background"
+                : "bg-secondary text-foreground"
+            }`}
+          >
+            <p className="whitespace-pre-wrap">{displayContent}</p>
           </div>
-        )}
-      </div>
+
+          {/* Memory chips */}
+          {message.memories && message.memories.length > 0 && (
+            <div className="flex flex-col gap-1">
+              {message.memories.map((memory) => (
+                <MemoryChip
+                  key={memory.factId}
+                  content={memory.content}
+                  onUndo={() => onUndo?.(memory.factId)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,12 +1,10 @@
 import { NextRequest } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getConfig } from "@/lib/config";
-import { chatStream, type Message } from "@/lib/ai/client";
-import { buildChatPrompt, parseResponse } from "@/lib/ai/prompts";
+import { chatStreamWithTools, DEFAULT_MODEL, type Message } from "@/lib/ai/client";
+import { buildChatPrompt } from "@/lib/ai/prompts";
 import { buildMemoryContext } from "@/lib/memory/search";
-import { upsertEntity } from "@/lib/memory/entities";
-import { createFact } from "@/lib/memory/facts";
-import { logActivity } from "@/lib/activity";
+import { extractAndSaveMemories, containsMemorableContent } from "@/lib/memory/extraction";
 import { db } from "@/lib/db";
 import { conversations } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -19,7 +17,6 @@ type StoredMessage = {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
-  memories?: Array<{ factId: string; content: string }>;
 };
 
 export async function POST(request: NextRequest) {
@@ -60,7 +57,7 @@ export async function POST(request: NextRequest) {
     content: m.content,
   }));
 
-  // Build memory context
+  // Build memory context using QMD search (also tracks access)
   const memoryContext = await buildMemoryContext(message);
 
   // Get soul config
@@ -69,7 +66,8 @@ export async function POST(request: NextRequest) {
   // Build system prompt
   const systemPrompt = buildChatPrompt(
     memoryContext,
-    soulConfig?.content || null
+    soulConfig?.content || null,
+    DEFAULT_MODEL
   );
 
   // Build messages for AI
@@ -86,63 +84,19 @@ export async function POST(request: NextRequest) {
     async start(controller) {
       try {
         // Stream the response
-        for await (const chunk of chatStream(aiMessages, systemPrompt)) {
-          fullResponse += chunk;
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: "text", content: chunk })}\n\n`)
-          );
-        }
-
-        // Parse response for memories
-        const { reply, memories } = parseResponse(fullResponse);
-
-        // Save memories
-        const savedMemories: Array<{ factId: string; content: string }> = [];
-
-        for (const mem of memories) {
-          try {
-            // Upsert entity
-            const entity = await upsertEntity(
-              mem.entity,
-              mem.type as any
+        for await (const event of chatStreamWithTools(
+          aiMessages,
+          systemPrompt,
+          conversationId || undefined
+        )) {
+          if (event.type === "text") {
+            fullResponse += event.content;
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({ type: "text", content: event.content })}\n\n`
+              )
             );
-
-            // Create fact
-            const fact = await createFact(
-              entity.id,
-              mem.fact,
-              mem.category as any,
-              "chat",
-              conversationId || undefined
-            );
-
-            savedMemories.push({
-              factId: fact.id,
-              content: mem.fact,
-            });
-
-            await logActivity({
-              eventType: "memory_created",
-              actor: "aurelius",
-              description: `Remembered: ${mem.fact}`,
-              metadata: {
-                entityId: entity.id,
-                entityName: entity.name,
-                factId: fact.id,
-              },
-            });
-          } catch (error) {
-            console.error("Failed to save memory:", error);
           }
-        }
-
-        // Send memories event
-        if (savedMemories.length > 0) {
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({ type: "memories", memories: savedMemories })}\n\n`
-            )
-          );
         }
 
         // Build stored messages with timestamps
@@ -155,9 +109,8 @@ export async function POST(request: NextRequest) {
           },
           {
             role: "assistant",
-            content: reply,
+            content: fullResponse,
             timestamp: new Date().toISOString(),
-            memories: savedMemories.length > 0 ? savedMemories : undefined,
           },
         ];
 
@@ -183,6 +136,34 @@ export async function POST(request: NextRequest) {
             )
           );
         }
+
+        // Save to daily notes if message contains memorable content
+        if (containsMemorableContent(message)) {
+          try {
+            await extractAndSaveMemories(message, fullResponse);
+          } catch (error) {
+            console.error("Failed to save to daily notes:", error);
+            // Don't fail the request if memory saving fails
+          }
+        }
+
+        // Estimate token count (rough approximation: ~4 chars per token)
+        const totalChars = newStoredMessages.reduce(
+          (sum, m) => sum + m.content.length,
+          systemPrompt.length
+        );
+        const estimatedTokens = Math.ceil(totalChars / 4);
+
+        // Send stats event
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({
+              type: "stats",
+              model: DEFAULT_MODEL,
+              tokenCount: estimatedTokens,
+            })}\n\n`
+          )
+        );
 
         // Send done event
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));

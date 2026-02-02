@@ -1,0 +1,7 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="32" cy="32" r="32" fill="#2a2a2a"/>
+  <circle cx="32" cy="32" r="30" fill="#1a1a1a"/>
+  <!-- Simple user silhouette -->
+  <circle cx="32" cy="24" r="10" fill="#4a4a4a"/>
+  <path d="M16 52 C16 40 24 34 32 34 C40 34 48 40 48 52" fill="#4a4a4a"/>
+</svg>

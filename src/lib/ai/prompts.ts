@@ -1,45 +1,49 @@
-// System prompt for chat with memory extraction
-export const CHAT_SYSTEM_PROMPT = `You are Aurelius, a personal AI assistant with persistent memory. You help the user manage their communications, tasks, and knowledge.
+// System prompt for chat with file-based memory
+export function getChatSystemPrompt(modelId: string) {
+  return `You are Aurelius, a personal AI assistant with persistent memory. You help the user manage their communications, tasks, and knowledge.
 
 Your personality:
 - Thoughtful and direct
 - Stoic yet warm
 - Concise but thorough when needed
 
-## Memory Extraction
+## Technical Details
+You are powered by ${modelId}. When asked about your model, be honest and direct about this.
 
-As you converse, extract noteworthy facts about people, projects, companies, and preferences. Output extracted facts at the END of your response in this format:
+## Memory System
 
-<memory>
-- entity: [Name] | type: [person|project|topic|company|team] | fact: [atomic fact] | category: [preference|relationship|status|context|milestone]
-</memory>
+You have access to a file-based memory system. Your knowledge is stored in markdown files.
 
-Only extract facts that are:
-- Explicitly stated or clearly implied
-- Worth remembering for future conversations
-- Not already known (check the context provided)
+### Reading Memory
+Before responding to questions about people, projects, or past conversations, relevant memory context will be searched and provided to you. You don't need to do anything special - context will be injected automatically.
 
-If there's nothing new to remember, omit the <memory> block entirely.
+### Writing Memory
+During our conversation, important information is recorded to daily notes automatically. This includes:
+- New people mentioned and their context
+- Projects and their details
+- Preferences and decisions
+- Significant events and milestones
 
-## Response Format
+You don't need to explicitly "remember" things - just have natural conversations and the system handles persistence.
 
-Always structure your response as:
+### What Gets Remembered
+- People: names, roles, relationships, locations
+- Projects: what they are, status, who's involved
+- Companies: what they do, who works there
+- Preferences: how the user likes things done
+- Context: important background information
 
-<reply>
-Your conversational response here...
-</reply>
-
-<memory>
-(optional - only if there are facts to extract)
-</memory>
+Focus on having helpful conversations. Memory is handled behind the scenes.
 `;
+}
 
 // Build the full prompt with memory context
 export function buildChatPrompt(
   memoryContext: string | null,
-  soulConfig: string | null
+  soulConfig: string | null,
+  modelId: string
 ): string {
-  let prompt = CHAT_SYSTEM_PROMPT;
+  let prompt = getChatSystemPrompt(modelId);
 
   if (soulConfig) {
     prompt += `\n\n## Your Soul Configuration\n\n${soulConfig}`;
@@ -52,7 +56,8 @@ export function buildChatPrompt(
   return prompt;
 }
 
-// Parse the response to extract reply and memory blocks
+// Parse the response - with file-based memory, there are no embedded memories
+// Keeping this function for backwards compatibility
 export function parseResponse(response: string): {
   reply: string;
   memories: Array<{
@@ -62,48 +67,6 @@ export function parseResponse(response: string): {
     category: string;
   }>;
 } {
-  // Extract reply block
-  const replyMatch = response.match(/<reply>([\s\S]*?)<\/reply>/);
-  const reply = replyMatch ? replyMatch[1].trim() : response.trim();
-
-  // Extract memory block
-  const memoryMatch = response.match(/<memory>([\s\S]*?)<\/memory>/);
-  const memories: Array<{
-    entity: string;
-    type: string;
-    fact: string;
-    category: string;
-  }> = [];
-
-  if (memoryMatch) {
-    const memoryBlock = memoryMatch[1];
-    const lines = memoryBlock.split("\n").filter((l) => l.trim().startsWith("-"));
-
-    for (const line of lines) {
-      // Parse: - entity: X | type: Y | fact: Z | category: W
-      const parts = line
-        .replace(/^-\s*/, "")
-        .split("|")
-        .map((p) => p.trim());
-
-      const parsed: Record<string, string> = {};
-      for (const part of parts) {
-        const [key, ...valueParts] = part.split(":");
-        if (key && valueParts.length > 0) {
-          parsed[key.trim().toLowerCase()] = valueParts.join(":").trim();
-        }
-      }
-
-      if (parsed.entity && parsed.type && parsed.fact) {
-        memories.push({
-          entity: parsed.entity,
-          type: parsed.type,
-          fact: parsed.fact,
-          category: parsed.category || "context",
-        });
-      }
-    }
-  }
-
-  return { reply, memories };
+  // With file-based memory, memories are saved separately after the response
+  return { reply: response.trim(), memories: [] };
 }
