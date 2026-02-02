@@ -139,6 +139,97 @@ function ConfigViewPanel({ content }: { content: ConfigViewContent }) {
   );
 }
 
+// Simple diff line type
+type DiffLine = {
+  type: "context" | "added" | "removed";
+  content: string;
+  lineNumber?: number;
+};
+
+// Compute a simple line-based diff
+function computeDiff(oldText: string | null, newText: string): DiffLine[] {
+  const oldLines = (oldText || "").split("\n");
+  const newLines = newText.split("\n");
+  const result: DiffLine[] = [];
+
+  // Use a simple LCS-based approach for small texts
+  const oldSet = new Set(oldLines);
+  const newSet = new Set(newLines);
+
+  let oldIdx = 0;
+  let newIdx = 0;
+
+  while (oldIdx < oldLines.length || newIdx < newLines.length) {
+    const oldLine = oldLines[oldIdx];
+    const newLine = newLines[newIdx];
+
+    if (oldIdx >= oldLines.length) {
+      // Remaining new lines are additions
+      result.push({ type: "added", content: newLine });
+      newIdx++;
+    } else if (newIdx >= newLines.length) {
+      // Remaining old lines are removals
+      result.push({ type: "removed", content: oldLine });
+      oldIdx++;
+    } else if (oldLine === newLine) {
+      // Lines match - context
+      result.push({ type: "context", content: oldLine });
+      oldIdx++;
+      newIdx++;
+    } else if (!newSet.has(oldLine) && oldSet.has(newLine)) {
+      // Old line was removed
+      result.push({ type: "removed", content: oldLine });
+      oldIdx++;
+    } else if (newSet.has(oldLine) && !oldSet.has(newLine)) {
+      // New line was added
+      result.push({ type: "added", content: newLine });
+      newIdx++;
+    } else {
+      // Both changed - show removal then addition
+      result.push({ type: "removed", content: oldLine });
+      result.push({ type: "added", content: newLine });
+      oldIdx++;
+      newIdx++;
+    }
+  }
+
+  return result;
+}
+
+// Collapse unchanged context lines, keeping only N lines around changes
+function collapseDiff(diff: DiffLine[], contextLines: number = 2): (DiffLine | { type: "collapse"; count: number })[] {
+  const result: (DiffLine | { type: "collapse"; count: number })[] = [];
+
+  // Find indices of changed lines
+  const changedIndices = new Set<number>();
+  diff.forEach((line, i) => {
+    if (line.type !== "context") {
+      for (let j = Math.max(0, i - contextLines); j <= Math.min(diff.length - 1, i + contextLines); j++) {
+        changedIndices.add(j);
+      }
+    }
+  });
+
+  let collapsedCount = 0;
+  diff.forEach((line, i) => {
+    if (changedIndices.has(i)) {
+      if (collapsedCount > 0) {
+        result.push({ type: "collapse", count: collapsedCount });
+        collapsedCount = 0;
+      }
+      result.push(line);
+    } else {
+      collapsedCount++;
+    }
+  });
+
+  if (collapsedCount > 0) {
+    result.push({ type: "collapse", count: collapsedCount });
+  }
+
+  return result;
+}
+
 function ConfigDiffPanel({
   content,
   onApprove,
@@ -149,8 +240,6 @@ function ConfigDiffPanel({
   onReject?: (id: string) => Promise<void>;
 }) {
   const [processing, setProcessing] = useState<"approve" | "reject" | null>(null);
-  const [showCurrent, setShowCurrent] = useState(true);
-  const [showProposed, setShowProposed] = useState(true);
 
   const handleApprove = async () => {
     if (!onApprove) return;
@@ -178,6 +267,14 @@ function ConfigDiffPanel({
     }
   };
 
+  // Compute diff
+  const diff = computeDiff(content.currentContent, content.proposedContent);
+  const collapsedDiff = collapseDiff(diff);
+
+  // Count changes
+  const additions = diff.filter(d => d.type === "added").length;
+  const removals = diff.filter(d => d.type === "removed").length;
+
   return (
     <div className="p-4 space-y-4">
       {/* Reason */}
@@ -191,42 +288,61 @@ function ConfigDiffPanel({
         </div>
       </div>
 
-      {/* Current Content */}
-      <div>
-        <button
-          onClick={() => setShowCurrent(!showCurrent)}
-          className="flex items-center gap-2 text-xs text-muted-foreground font-medium mb-2 hover:text-foreground"
-        >
-          {showCurrent ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-red-500/50" />
-            Current Content
-          </span>
-        </button>
-        {showCurrent && (
-          <pre className="text-sm p-3 rounded-lg bg-red-500/5 border border-red-500/20 overflow-x-auto whitespace-pre-wrap font-mono max-h-48">
-            {content.currentContent || "(not set)"}
-          </pre>
+      {/* Stats */}
+      <div className="flex gap-3 text-xs">
+        {additions > 0 && (
+          <span className="text-green-500">+{additions} added</span>
+        )}
+        {removals > 0 && (
+          <span className="text-red-500">-{removals} removed</span>
         )}
       </div>
 
-      {/* Proposed Content */}
-      <div>
-        <button
-          onClick={() => setShowProposed(!showProposed)}
-          className="flex items-center gap-2 text-xs text-muted-foreground font-medium mb-2 hover:text-foreground"
-        >
-          {showProposed ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-green-500/50" />
-            Proposed Content
-          </span>
-        </button>
-        {showProposed && (
-          <pre className="text-sm p-3 rounded-lg bg-green-500/5 border border-green-500/20 overflow-x-auto whitespace-pre-wrap font-mono max-h-48">
-            {content.proposedContent}
+      {/* Diff View */}
+      <div className="rounded-lg border border-border overflow-hidden">
+        <div className="bg-secondary/30 px-3 py-1.5 text-xs text-muted-foreground border-b border-border font-mono">
+          {content.key}
+        </div>
+        <div className="overflow-x-auto max-h-80 overflow-y-auto">
+          <pre className="text-sm font-mono">
+            {collapsedDiff.map((line, i) => {
+              if ("count" in line) {
+                return (
+                  <div
+                    key={i}
+                    className="px-3 py-1 text-muted-foreground bg-secondary/20 text-center text-xs"
+                  >
+                    ... {line.count} unchanged lines ...
+                  </div>
+                );
+              }
+
+              const bgClass =
+                line.type === "added"
+                  ? "bg-green-500/10"
+                  : line.type === "removed"
+                  ? "bg-red-500/10"
+                  : "";
+              const textClass =
+                line.type === "added"
+                  ? "text-green-400"
+                  : line.type === "removed"
+                  ? "text-red-400"
+                  : "text-muted-foreground";
+              const prefix =
+                line.type === "added" ? "+" : line.type === "removed" ? "-" : " ";
+
+              return (
+                <div key={i} className={`px-3 py-0.5 ${bgClass}`}>
+                  <span className={`${textClass} select-none mr-2`}>{prefix}</span>
+                  <span className={line.type === "context" ? "text-foreground/70" : textClass}>
+                    {line.content}
+                  </span>
+                </div>
+              );
+            })}
           </pre>
-        )}
+        </div>
       </div>
 
       {/* Actions */}

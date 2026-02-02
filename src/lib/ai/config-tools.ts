@@ -1,12 +1,12 @@
 import { getConfig, getAllConfigs, proposePendingChange, CONFIG_DESCRIPTIONS, ConfigKey } from "@/lib/config";
 import { configKeyEnum } from "@/lib/db/schema";
 
-// Tool definitions for Claude
+// Tool definitions for Claude (OpenAI function calling format)
 export const CONFIG_TOOLS = [
   {
     name: "list_configs",
     description: "List all available configuration keys and their descriptions. Use this to see what configs can be modified.",
-    input_schema: {
+    parameters: {
       type: "object",
       properties: {},
       required: [],
@@ -15,7 +15,7 @@ export const CONFIG_TOOLS = [
   {
     name: "read_config",
     description: "Read the current content of a specific configuration. Use this to see the current state before proposing changes.",
-    input_schema: {
+    parameters: {
       type: "object",
       properties: {
         key: {
@@ -30,7 +30,7 @@ export const CONFIG_TOOLS = [
   {
     name: "propose_config_change",
     description: "Propose a change to a configuration. This will NOT apply immediately - it creates a pending change that the user must approve. Always explain what you're changing and why.",
-    input_schema: {
+    parameters: {
       type: "object",
       properties: {
         key: {
@@ -51,6 +51,11 @@ export const CONFIG_TOOLS = [
     },
   },
 ];
+
+// Helper to validate config key
+function isValidConfigKey(key: unknown): key is ConfigKey {
+  return typeof key === "string" && key !== "" && configKeyEnum.enumValues.includes(key as ConfigKey);
+}
 
 // Tool handlers
 export async function handleConfigTool(
@@ -81,7 +86,28 @@ export async function handleConfigTool(
     }
 
     case "read_config": {
-      const key = toolInput.key as ConfigKey;
+      const key = toolInput.key;
+
+      // Validate key is provided and non-empty
+      if (!key || typeof key !== "string" || key === "") {
+        return {
+          result: JSON.stringify({
+            error: "Missing required parameter: key. Please specify which configuration to read.",
+            validKeys: configKeyEnum.enumValues,
+          }),
+        };
+      }
+
+      // Validate key is a valid config key
+      if (!isValidConfigKey(key)) {
+        return {
+          result: JSON.stringify({
+            error: `Invalid config key: "${key}". Valid keys are: ${configKeyEnum.enumValues.join(", ")}`,
+            validKeys: configKeyEnum.enumValues,
+          }),
+        };
+      }
+
       const config = await getConfig(key);
 
       if (!config) {
@@ -108,11 +134,48 @@ export async function handleConfigTool(
     }
 
     case "propose_config_change": {
-      const key = toolInput.key as ConfigKey;
-      const proposedContent = toolInput.proposedContent as string;
-      const reason = toolInput.reason as string;
+      console.log("[Config Tool] propose_config_change called with:", JSON.stringify(toolInput, null, 2));
+      const key = toolInput.key;
+      const proposedContent = toolInput.proposedContent;
+      const reason = toolInput.reason;
+
+      // Validate all required parameters
+      if (!key || typeof key !== "string" || key === "") {
+        return {
+          result: JSON.stringify({
+            error: "Missing required parameter: key. Please specify which configuration to modify.",
+            validKeys: configKeyEnum.enumValues,
+          }),
+        };
+      }
+
+      if (!isValidConfigKey(key)) {
+        return {
+          result: JSON.stringify({
+            error: `Invalid config key: "${key}". Valid keys are: ${configKeyEnum.enumValues.join(", ")}`,
+            validKeys: configKeyEnum.enumValues,
+          }),
+        };
+      }
+
+      if (!proposedContent || typeof proposedContent !== "string") {
+        return {
+          result: JSON.stringify({
+            error: "Missing required parameter: proposedContent. Please provide the new content for the configuration.",
+          }),
+        };
+      }
+
+      if (!reason || typeof reason !== "string") {
+        return {
+          result: JSON.stringify({
+            error: "Missing required parameter: reason. Please explain why this change is being made.",
+          }),
+        };
+      }
 
       const pending = await proposePendingChange(key, proposedContent, reason, conversationId);
+      console.log("[Config Tool] Pending change created:", pending.id);
 
       return {
         result: JSON.stringify({

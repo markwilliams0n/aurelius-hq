@@ -7,7 +7,15 @@ type Message = {
   content: string;
 };
 
-export function ChatMessage({ message }: { message: Message }) {
+type WaveState = "thinking" | "error" | "streaming";
+
+interface ChatMessageProps {
+  message: Message;
+  isStreaming?: boolean;
+  hasError?: boolean;
+}
+
+export function ChatMessage({ message, isStreaming = false, hasError = false }: ChatMessageProps) {
   const isUser = message.role === "user";
 
   // Strip <reply> tags from content for display
@@ -16,6 +24,17 @@ export function ChatMessage({ message }: { message: Message }) {
     .replace(/<\/reply>/g, "")
     .replace(/<memory>[\s\S]*?<\/memory>/g, "")
     .trim();
+
+  // Determine wave state
+  const getWaveState = (): WaveState => {
+    if (hasError) return "error";
+    if (isStreaming && displayContent) return "streaming";
+    return "thinking";
+  };
+
+  // Only show waves if actively streaming with no content yet
+  // Dead/old empty messages just show nothing
+  const showWaves = !isUser && !displayContent && isStreaming;
 
   return (
     <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
@@ -27,11 +46,14 @@ export function ChatMessage({ message }: { message: Message }) {
       )}
 
       {/* Content */}
-      {!isUser && !displayContent ? (
-        // Thinking state - waves extend across full width, no chat bubble
+      {showWaves ? (
+        // Active thinking/streaming state - waves extend across full width
         <div className="flex-1 -ml-3">
-          <ThinkingWaves />
+          <ThinkingWaves state={getWaveState()} />
         </div>
+      ) : !isUser && !displayContent ? (
+        // Dead empty message - show minimal placeholder
+        <div className="text-muted-foreground text-sm italic">...</div>
       ) : (
         <div className={`flex flex-col gap-2 max-w-[80%] ${isUser ? "items-end" : ""}`}>
           <div

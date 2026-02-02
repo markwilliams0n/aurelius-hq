@@ -1,5 +1,5 @@
 import { OpenRouter } from "@openrouter/sdk";
-import { CONFIG_TOOLS, handleConfigTool, isConfigTool } from "./config-tools";
+import { CONFIG_TOOLS, handleConfigTool } from "./config-tools";
 
 // OpenRouter client singleton
 export const ai = new OpenRouter({
@@ -34,6 +34,9 @@ export const DEFAULT_MODEL =
 // Model that supports tool use (Claude is reliable for this)
 const TOOL_MODEL = "anthropic/claude-sonnet-4";
 
+// Max tool call iterations to prevent infinite loops
+const MAX_TOOL_ITERATIONS = 5;
+
 // Simple chat completion
 export async function chat(
   input: string | Message[],
@@ -51,10 +54,10 @@ export async function chat(
 export type ChatStreamEvent =
   | { type: "text"; content: string }
   | { type: "tool_use"; toolName: string; toolInput: Record<string, unknown> }
-  | { type: "tool_result"; result: string }
+  | { type: "tool_result"; toolName: string; result: string }
   | { type: "pending_change"; changeId: string };
 
-// Streaming chat completion with tool support
+// Streaming chat completion with tool support (multi-turn)
 export async function* chatStreamWithTools(
   input: string | Message[],
   instructions?: string,
@@ -64,143 +67,127 @@ export async function* chatStreamWithTools(
     ? [{ role: "user" as const, content: input }]
     : input;
 
-  // First, make a non-streaming call to check if tools are needed
-  // Use a model that reliably supports tools
-  const toolCheckResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-    },
-    body: JSON.stringify({
-      model: TOOL_MODEL,
-      messages: [
-        { role: "system", content: instructions || "" },
-        ...messages,
-      ],
-      tools: CONFIG_TOOLS.map(t => ({
-        type: "function",
-        function: t,
-      })),
-      tool_choice: "auto",
-    }),
-  });
+  // Build conversation messages with tool history
+  let conversationMessages: MessageWithTools[] = [
+    { role: "system", content: instructions || "" },
+    ...messages,
+  ];
 
-  if (!toolCheckResponse.ok) {
-    const error = await toolCheckResponse.text();
-    console.error("OpenRouter tool check error:", error);
-    // Fall back to regular streaming without tools
-    yield* streamWithoutTools(messages, instructions);
-    return;
-  }
+  let iterations = 0;
 
-  const toolCheckResult = await toolCheckResponse.json();
-  const choice = toolCheckResult.choices?.[0];
-  const toolCalls = choice?.message?.tool_calls;
+  // Loop to handle multiple tool calls
+  while (iterations < MAX_TOOL_ITERATIONS) {
+    iterations++;
 
-  // If there are tool calls, process them
-  if (toolCalls && toolCalls.length > 0) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+
+    let response: Response;
+    try {
+      response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+        },
+        body: JSON.stringify({
+          model: TOOL_MODEL,
+          messages: conversationMessages,
+          tools: CONFIG_TOOLS.map(t => ({
+            type: "function",
+            function: t,
+          })),
+          tool_choice: "auto",
+        }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      console.error("[AI Client] Request failed:", error);
+      yield* streamWithoutTools(messages, instructions);
+      return;
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error("[AI Client] API error:", error);
+      yield* streamWithoutTools(messages, instructions);
+      return;
+    }
+
+    const result = await response.json();
+    const choice = result.choices?.[0];
+    const message = choice?.message;
+    const toolCalls = message?.tool_calls;
+
+    console.log("[AI Client] Response:", JSON.stringify({
+      iteration: iterations,
+      finishReason: choice?.finish_reason,
+      hasToolCalls: !!toolCalls,
+      toolCalls: toolCalls?.map((t: { function?: { name?: string } }) => t.function?.name),
+      contentPreview: message?.content?.slice(0, 50),
+    }));
+
+    // If no tool calls, we're done - output the text content
+    if (!toolCalls || toolCalls.length === 0) {
+      if (message?.content) {
+        yield { type: "text", content: message.content };
+      }
+      return;
+    }
+
+    // Process tool calls
     for (const toolCall of toolCalls) {
       const toolName = toolCall.function?.name;
       const toolArgs = toolCall.function?.arguments;
 
-      if (toolName) {
-        yield { type: "tool_use", toolName, toolInput: JSON.parse(toolArgs || "{}") };
+      if (!toolName) continue;
 
-        // Execute the tool
-        try {
-          const { result, pendingChangeId } = await handleConfigTool(
-            toolName,
-            JSON.parse(toolArgs || "{}"),
-            conversationId
-          );
+      yield { type: "tool_use", toolName, toolInput: JSON.parse(toolArgs || "{}") };
 
-          yield { type: "tool_result", result };
+      try {
+        const { result: toolResult, pendingChangeId } = await handleConfigTool(
+          toolName,
+          JSON.parse(toolArgs || "{}"),
+          conversationId
+        );
 
-          if (pendingChangeId) {
-            yield { type: "pending_change", changeId: pendingChangeId };
-          }
+        yield { type: "tool_result", toolName, result: toolResult };
+        console.log("[AI Client] Tool executed:", toolName);
 
-          // Continue the conversation with tool result - stream this part
-          const continueMessages: MessageWithTools[] = [
-            { role: "system", content: instructions || "" },
-            ...messages,
-            {
-              role: "assistant",
-              content: null,
-              tool_calls: [{
-                id: toolCall.id,
-                type: "function",
-                function: { name: toolName, arguments: toolArgs },
-              }],
-            },
-            {
-              role: "tool",
-              content: result,
-              tool_call_id: toolCall.id,
-            },
-          ];
-
-          // Stream the follow-up response
-          const followUp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-              "Content-Type": "application/json",
-              "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-            },
-            body: JSON.stringify({
-              model: TOOL_MODEL,
-              messages: continueMessages,
-              stream: true,
-            }),
-          });
-
-          if (followUp.ok) {
-            const reader = followUp.body?.getReader();
-            if (reader) {
-              const decoder = new TextDecoder();
-              let buffer = "";
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split("\n");
-                buffer = lines.pop() || "";
-
-                for (const line of lines) {
-                  if (!line.startsWith("data: ")) continue;
-                  const data = line.slice(6);
-                  if (data === "[DONE]") continue;
-
-                  try {
-                    const json = JSON.parse(data);
-                    const delta = json.choices?.[0]?.delta;
-                    if (delta?.content) {
-                      yield { type: "text", content: delta.content };
-                    }
-                  } catch {
-                    // Skip malformed JSON
-                  }
-                }
-              }
-            }
-          }
-        } catch (error) {
-          console.error("Tool execution error:", error);
-          yield { type: "tool_result", result: JSON.stringify({ error: String(error) }) };
+        if (pendingChangeId) {
+          console.log("[AI Client] Pending change created:", pendingChangeId);
+          yield { type: "pending_change", changeId: pendingChangeId };
         }
+
+        // Add assistant message with tool call and tool result to conversation
+        conversationMessages.push({
+          role: "assistant",
+          content: null,
+          tool_calls: [{
+            id: toolCall.id,
+            type: "function",
+            function: { name: toolName, arguments: toolArgs },
+          }],
+        });
+        conversationMessages.push({
+          role: "tool",
+          content: toolResult,
+          tool_call_id: toolCall.id,
+        });
+
+      } catch (error) {
+        console.error("[AI Client] Tool error:", error);
+        yield { type: "tool_result", toolName, result: JSON.stringify({ error: String(error) }) };
       }
     }
-  } else {
-    // No tool calls - just output the text response
-    const textContent = choice?.message?.content;
-    if (textContent) {
-      yield { type: "text", content: textContent };
-    }
+
+    // Continue loop to see if AI wants to call more tools
   }
+
+  console.warn("[AI Client] Max tool iterations reached");
 }
 
 // Fallback streaming without tools

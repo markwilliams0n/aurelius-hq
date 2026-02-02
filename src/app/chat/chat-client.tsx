@@ -90,10 +90,13 @@ export function ChatClient() {
   };
 
   const fetchPendingChange = async (changeId: string) => {
+    console.log("[Chat] fetchPendingChange called with:", changeId);
     try {
       const response = await fetch(`/api/config/pending/${changeId}`);
+      console.log("[Chat] fetchPendingChange response status:", response.status);
       if (response.ok) {
         const data = await response.json();
+        console.log("[Chat] fetchPendingChange data:", data);
         const pending = data.pending;
         setToolPanelContent({
           type: "config_diff",
@@ -103,6 +106,8 @@ export function ChatClient() {
           proposedContent: pending.proposedContent,
           pendingChangeId: pending.id,
         });
+      } else {
+        console.error("[Chat] fetchPendingChange failed:", response.status, await response.text());
       }
     } catch (error) {
       console.error("Failed to fetch pending change:", error);
@@ -205,12 +210,20 @@ export function ChatClient() {
                     toolName: data.toolName,
                     result: "Loading...",
                   });
+                } else if (data.toolName === "propose_config_change") {
+                  setToolPanelContent({
+                    type: "tool_result",
+                    toolName: data.toolName,
+                    result: "Preparing proposed changes...",
+                  });
                 }
               } else if (data.type === "tool_result") {
                 // Parse the result and show appropriate panel
+                // Use data.toolName from the event (not React state) to avoid timing issues
+                const toolName = data.toolName || currentToolName || "unknown";
                 try {
                   const result = JSON.parse(data.result);
-                  if (currentToolName === "read_config" && result.content !== undefined) {
+                  if (toolName === "read_config" && result.content !== undefined) {
                     setToolPanelContent({
                       type: "config_view",
                       key: result.key,
@@ -220,25 +233,27 @@ export function ChatClient() {
                       createdBy: result.createdBy,
                       createdAt: result.createdAt,
                     });
-                  } else if (currentToolName === "propose_config_change" && result.pendingChangeId) {
+                  } else if (toolName === "propose_config_change" && result.pendingChangeId) {
                     // Fetch the pending change details
+                    console.log("[Chat] propose_config_change result, fetching pending:", result.pendingChangeId);
                     fetchPendingChange(result.pendingChangeId);
                   } else {
                     setToolPanelContent({
                       type: "tool_result",
-                      toolName: currentToolName || "unknown",
+                      toolName,
                       result: data.result,
                     });
                   }
                 } catch {
                   setToolPanelContent({
                     type: "tool_result",
-                    toolName: currentToolName || "unknown",
+                    toolName,
                     result: data.result,
                   });
                 }
                 setCurrentToolName(null);
               } else if (data.type === "pending_change") {
+                console.log("[Chat] pending_change event received:", data.changeId);
                 fetchPendingChange(data.changeId);
               } else if (data.type === "memories") {
                 setStats((prev) => ({
@@ -335,9 +350,17 @@ export function ChatClient() {
             </div>
           ) : (
             <div className="max-w-3xl mx-auto space-y-4">
-              {messages.map((message, index) => (
-                <ChatMessage key={index} message={message} />
-              ))}
+              {messages.map((message, index) => {
+                const isLastMessage = index === messages.length - 1;
+                const isAssistantStreaming = isStreaming && isLastMessage && message.role === "assistant";
+                return (
+                  <ChatMessage
+                    key={index}
+                    message={message}
+                    isStreaming={isAssistantStreaming}
+                  />
+                );
+              })}
               <div ref={messagesEndRef} />
             </div>
           )}

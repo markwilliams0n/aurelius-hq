@@ -100,7 +100,13 @@ export async function POST(request: NextRequest) {
           } else if (event.type === "tool_use") {
             controller.enqueue(
               encoder.encode(
-                `data: ${JSON.stringify({ type: "tool_use", toolName: event.toolName })}\n\n`
+                `data: ${JSON.stringify({ type: "tool_use", toolName: event.toolName, toolInput: event.toolInput })}\n\n`
+              )
+            );
+          } else if (event.type === "tool_result") {
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({ type: "tool_result", toolName: event.toolName, result: event.result })}\n\n`
               )
             );
           } else if (event.type === "pending_change") {
