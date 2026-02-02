@@ -31,13 +31,13 @@ export function AppSidebar() {
     <aside className="w-16 border-r border-border bg-background flex flex-col items-center py-4 gap-2">
       {/* Logo - Aurelius Avatar */}
       <Link href="/" className="mb-4">
-        <div className="w-10 h-10 rounded-full overflow-hidden border border-gold/30">
+        <div className="w-10 h-10 rounded-full overflow-hidden">
           <Image
-            src="/avatars/aurelius.svg"
+            src="/avatars/agent.png"
             alt="Aurelius"
             width={40}
             height={40}
-            className="w-full h-full"
+            className="w-full h-full object-cover"
           />
         </div>
       </Link>
