@@ -7,7 +7,7 @@ import { ChatStatus } from "@/components/aurelius/chat-status";
 import { AppShell } from "@/components/aurelius/app-shell";
 import { ChatMemoryPanel } from "@/components/aurelius/chat-memory-panel";
 import { ToolPanel, PanelContent } from "@/components/aurelius/tool-panel";
-import { DailyNotesPopover } from "@/components/aurelius/daily-notes-popover";
+import { FileText } from "lucide-react";
 import { toast } from "sonner";
 
 type Message = {
@@ -38,6 +38,7 @@ export function ChatClient() {
     factsSaved: 0,
   });
   const [toolPanelContent, setToolPanelContent] = useState<PanelContent>(null);
+  const [panelWidth, setPanelWidth] = useState(384);
   const [currentToolName, setCurrentToolName] = useState<string | null>(null);
   const [hasError, setHasError] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -353,6 +354,10 @@ export function ChatClient() {
     );
   }
 
+  const handleOpenDailyNotes = () => {
+    setToolPanelContent({ type: "daily_notes" });
+  };
+
   // Determine which sidebar to show
   const rightSidebar = toolPanelContent ? (
     <ToolPanel
@@ -360,13 +365,15 @@ export function ChatClient() {
       onClose={handleCloseToolPanel}
       onApprove={handleApproveChange}
       onReject={handleRejectChange}
+      width={panelWidth}
+      onWidthChange={setPanelWidth}
     />
   ) : (
     <ChatMemoryPanel />
   );
 
   return (
-    <AppShell rightSidebar={rightSidebar} wideSidebar={!!toolPanelContent}>
+    <AppShell rightSidebar={rightSidebar} wideSidebar={!!toolPanelContent} sidebarWidth={panelWidth}>
       <div className="flex flex-col h-screen">
         {/* Status bar - sticky header */}
         <div className="shrink-0 border-b border-border bg-background/80 backdrop-blur-sm px-6 py-2 sticky top-0 z-10">
@@ -378,7 +385,13 @@ export function ChatClient() {
               >
                 New chat
               </button>
-              <DailyNotesPopover />
+              <button
+                onClick={handleOpenDailyNotes}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                Notes
+              </button>
             </div>
             <ChatStatus stats={stats} />
           </div>

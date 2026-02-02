@@ -7,9 +7,10 @@ type AppShellProps = {
   children: ReactNode;
   rightSidebar?: ReactNode;
   wideSidebar?: boolean;
+  sidebarWidth?: number;
 };
 
-export function AppShell({ children, rightSidebar, wideSidebar = false }: AppShellProps) {
+export function AppShell({ children, rightSidebar, wideSidebar = false, sidebarWidth }: AppShellProps) {
   return (
     <div className="min-h-screen flex">
       {/* Left Navigation Sidebar */}
@@ -20,9 +21,12 @@ export function AppShell({ children, rightSidebar, wideSidebar = false }: AppShe
         {children}
       </main>
 
-      {/* Right Sidebar (optional) - wider when showing tool panel */}
+      {/* Right Sidebar (optional) - uses dynamic width when provided */}
       {rightSidebar && (
-        <div className={wideSidebar ? "w-[480px]" : "w-80"}>
+        <div
+          className={!wideSidebar ? "w-80" : undefined}
+          style={wideSidebar && sidebarWidth ? { width: `${sidebarWidth}px` } : undefined}
+        >
           {rightSidebar}
         </div>
       )}

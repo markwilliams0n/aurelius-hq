@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   X,
   FileText,
@@ -9,6 +9,8 @@ import {
   Copy,
   Loader2,
   AlertTriangle,
+  Plus,
+  GripVertical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -39,30 +41,89 @@ export type ToolResultContent = {
   result: string;
 };
 
-export type PanelContent = ConfigViewContent | ConfigDiffContent | ToolResultContent | null;
+export type DailyNotesContent = {
+  type: "daily_notes";
+};
+
+export type PanelContent = ConfigViewContent | ConfigDiffContent | ToolResultContent | DailyNotesContent | null;
 
 interface ToolPanelProps {
   content: PanelContent;
   onClose: () => void;
   onApprove?: (id: string) => Promise<void>;
   onReject?: (id: string) => Promise<void>;
+  width?: number;
+  onWidthChange?: (width: number) => void;
 }
 
-export function ToolPanel({ content, onClose, onApprove, onReject }: ToolPanelProps) {
+const MIN_WIDTH = 280;
+const MAX_WIDTH = 800;
+const DEFAULT_WIDTH = 384;
+
+export function ToolPanel({ content, onClose, onApprove, onReject, width = DEFAULT_WIDTH, onWidthChange }: ToolPanelProps) {
+  const [isResizing, setIsResizing] = useState(false);
+  const panelRef = useRef<HTMLElement>(null);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!panelRef.current || !onWidthChange) return;
+      const rect = panelRef.current.getBoundingClientRect();
+      const newWidth = rect.right - e.clientX;
+      onWidthChange(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, newWidth)));
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizing, onWidthChange]);
+
   if (!content) return null;
 
   return (
-    <aside className="h-full border-l border-border bg-background flex flex-col">
+    <aside
+      ref={panelRef}
+      className="h-full border-l border-border bg-background flex flex-col relative"
+      style={{ width: `${width}px` }}
+    >
+      {/* Resize handle */}
+      {onWidthChange && (
+        <div
+          onMouseDown={handleMouseDown}
+          className={`absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-gold/30 transition-colors z-10 flex items-center ${
+            isResizing ? "bg-gold/50" : ""
+          }`}
+        >
+          <GripVertical className="w-3 h-3 text-muted-foreground/50 -ml-1" />
+        </div>
+      )}
+
       {/* Header */}
       <div className="px-4 py-3 border-b border-border flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
           {content.type === "config_view" && <FileText className="w-4 h-4 text-gold" />}
           {content.type === "config_diff" && <Settings className="w-4 h-4 text-yellow-500" />}
           {content.type === "tool_result" && <Settings className="w-4 h-4 text-muted-foreground" />}
+          {content.type === "daily_notes" && <FileText className="w-4 h-4 text-gold" />}
           <h3 className="font-medium text-sm">
             {content.type === "config_view" && `Config: ${content.key}`}
             {content.type === "config_diff" && `Proposed Change: ${content.key}`}
             {content.type === "tool_result" && `Tool: ${content.toolName}`}
+            {content.type === "daily_notes" && "Today's Notes"}
           </h3>
         </div>
         <Button variant="ghost" size="sm" onClick={onClose} className="h-7 w-7 p-0">
@@ -84,6 +145,9 @@ export function ToolPanel({ content, onClose, onApprove, onReject }: ToolPanelPr
         )}
         {content.type === "tool_result" && (
           <ToolResultPanel content={content} />
+        )}
+        {content.type === "daily_notes" && (
+          <DailyNotesPanel />
         )}
       </div>
     </aside>
@@ -418,6 +482,114 @@ function ToolResultPanel({ content }: { content: ToolResultContent }) {
       <pre className="text-sm p-3 rounded-lg bg-secondary/50 border border-border overflow-x-auto whitespace-pre-wrap font-mono">
         {displayContent}
       </pre>
+    </div>
+  );
+}
+
+function DailyNotesPanel() {
+  const [content, setContent] = useState("");
+  const [newNote, setNewNote] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const loadNotes = useCallback(async () => {
+    try {
+      const res = await fetch("/api/daily-notes");
+      if (res.ok) {
+        const data = await res.json();
+        setContent(data.content || "");
+      }
+    } catch {
+      toast.error("Failed to load daily notes");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadNotes();
+  }, [loadNotes]);
+
+  const handleSubmit = async () => {
+    if (!newNote.trim() || isSubmitting) return;
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch("/api/daily-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: newNote.trim() }),
+      });
+
+      if (res.ok) {
+        toast.success("Note added");
+        setNewNote("");
+        loadNotes();
+      } else {
+        toast.error("Failed to add note");
+      }
+    } catch {
+      toast.error("Failed to add note");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && e.metaKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="p-4 flex items-center justify-center">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Add new note */}
+      <div className="p-4 border-b border-border shrink-0">
+        <textarea
+          ref={textareaRef}
+          value={newNote}
+          onChange={(e) => setNewNote(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Add a note... (Cmd+Enter to save)"
+          className="w-full h-20 px-3 py-2 text-sm bg-muted/50 border border-border rounded resize-none focus:outline-none focus:ring-1 focus:ring-gold/50"
+        />
+        <Button
+          onClick={handleSubmit}
+          disabled={!newNote.trim() || isSubmitting}
+          size="sm"
+          className="mt-2 bg-gold/10 text-gold hover:bg-gold/20 border-0"
+        >
+          {isSubmitting ? (
+            <Loader2 className="w-3 h-3 animate-spin mr-1" />
+          ) : (
+            <Plus className="w-3 h-3 mr-1" />
+          )}
+          Add Note
+        </Button>
+      </div>
+
+      {/* Notes content */}
+      <div className="flex-1 overflow-y-auto p-4">
+        {content ? (
+          <pre className="whitespace-pre-wrap font-sans text-sm text-muted-foreground leading-relaxed">
+            {content}
+          </pre>
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-8">
+            No notes for today yet
+          </p>
+        )}
+      </div>
     </div>
   );
 }
