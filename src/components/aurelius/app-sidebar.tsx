@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
@@ -29,6 +30,11 @@ const navItems = [
 export function AppSidebar() {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const cycleTheme = () => {
     if (theme === "dark") {
@@ -101,10 +107,10 @@ export function AppSidebar() {
         <button
           onClick={cycleTheme}
           className="w-full flex flex-col items-center gap-1 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-          title={`Theme: ${themeLabel}`}
+          title={mounted ? `Theme: ${themeLabel}` : "Theme"}
         >
-          <ThemeIcon className="w-5 h-5" />
-          <span className="text-[10px]">{themeLabel}</span>
+          {mounted ? <ThemeIcon className="w-5 h-5" /> : <Monitor className="w-5 h-5" />}
+          <span className="text-[10px]">{mounted ? themeLabel : "Theme"}</span>
         </button>
       </div>
     </aside>
