@@ -1,5 +1,9 @@
 # Claude Code Rules for Aurelius HQ
 
+## Start Here
+
+**Read `ARCHITECTURE.md` at the start of each session** - it's a living document describing how the app works, key systems, and patterns for adding new features.
+
 ## Process Management Safety
 
 **NEVER use broad pattern matching to kill processes:**

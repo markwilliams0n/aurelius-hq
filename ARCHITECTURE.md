@@ -1,0 +1,201 @@
+# Aurelius Architecture
+
+> **Living document** - Update this when making structural changes.
+
+## Overview
+
+Aurelius is a personal AI assistant with persistent memory, multi-channel access (web + Telegram), and extensible integrations. Built with Next.js 15, PostgreSQL + pgvector, and OpenRouter for AI.
+
+## Directory Structure
+
+```
+src/
+├── app/                    # Next.js App Router
+│   ├── api/               # API routes
+│   │   ├── chat/          # Main chat endpoint (streaming)
+│   │   ├── conversation/  # Conversation CRUD
+│   │   ├── daily-notes/   # Daily notes read/write
+│   │   ├── memory/        # Memory search API
+│   │   ├── config/        # Config management + pending changes
+│   │   ├── telegram/      # Telegram webhook + setup
+│   │   └── triage/        # Inbox items management
+│   └── chat/              # Web chat UI
+│
+├── components/aurelius/   # UI components
+│   ├── chat-*.tsx         # Chat interface components
+│   ├── tool-panel.tsx     # Right sidebar (resizable)
+│   ├── app-shell.tsx      # Layout wrapper
+│   └── memory-*.tsx       # Memory display components
+│
+└── lib/                   # Core logic
+    ├── ai/                # AI client + tools
+    ├── db/                # Database connection + schema
+    ├── memory/            # Memory operations
+    ├── telegram/          # Telegram integration
+    └── config.ts          # Config management
+```
+
+## Core Systems
+
+### 1. AI Client (`lib/ai/client.ts`)
+
+- **Provider**: OpenRouter (supports multiple models)
+- **Default model**: `moonshotai/kimi-k2`
+- **Tool model**: `anthropic/claude-sonnet-4` (reliable function calling)
+- **Key function**: `chatStreamWithTools()` - streaming with tool loop (max 5 iterations)
+
+### 2. Memory System
+
+**Three storage layers:**
+
+| Layer | Location | Purpose |
+|-------|----------|---------|
+| Database | PostgreSQL + pgvector | Entities, facts, documents with embeddings |
+| Files | `memory/*.md` | Daily notes, conversation logs |
+| Search | QMD CLI | Hybrid BM25 + vector search |
+
+**Key files:**
+- `lib/memory/facts.ts` - Fact CRUD operations
+- `lib/memory/entities.ts` - Entity management (person, project, topic, etc.)
+- `lib/memory/documents.ts` - Document ingestion + chunking
+- `lib/memory/search.ts` - QMD-based hybrid search
+- `lib/memory/daily-notes.ts` - Append-only daily logs
+- `lib/memory/extraction.ts` - Extract memories from conversations
+
+### 3. Database Schema (`lib/db/schema/`)
+
+```
+entities          - People, projects, topics, companies
+facts             - Atomic facts linked to entities (with embeddings)
+documents         - Raw documents for ingestion
+document_chunks   - Chunked + embedded document pieces
+conversations     - Chat history (shared between web + Telegram)
+inbox_items       - Triage inbox from connectors
+triage_rules      - Automation rules for inbox
+configs           - Versioned configuration (soul, prompts, etc.)
+pending_changes   - Config changes awaiting approval
+```
+
+### 4. Chat Flow (`api/chat/route.ts`)
+
+```
+User message
+    ↓
+Load conversation history
+    ↓
+Build memory context (QMD search)
+    ↓
+Get soul config (personality)
+    ↓
+Stream AI response with tools
+    ↓
+Extract memories if notable
+    ↓
+Save to conversation
+    ↓
+Return streamed response
+```
+
+### 5. Configuration System (`lib/config.ts`)
+
+- **Keys**: `soul`, `system_prompt`, `agents`, `processes`
+- **Versioned**: Every change creates new version
+- **Approval workflow**: AI proposes → user approves/rejects
+- **Tools**: `list_configs`, `read_config`, `propose_config_change`
+
+## Integrations
+
+### Telegram (`lib/telegram/`)
+
+**Pattern for external integrations:**
+
+```
+lib/telegram/
+├── client.ts      # API wrapper (sendMessage, setWebhook, etc.)
+├── handler.ts     # Message processing + AI integration
+└── index.ts       # Exports
+
+api/telegram/
+├── webhook/route.ts  # Receives updates from Telegram
+└── setup/route.ts    # Configure webhook URL
+```
+
+**Key design decisions:**
+- Shared conversation ID (`00000000-0000-0000-0000-000000000000`) syncs with web
+- Full AI integration (same tools, memory, extraction as web)
+- Async processing (return 200 immediately)
+- Message splitting for Telegram's 4096 char limit
+
+### Triage/Inbox System (`lib/db/schema/triage.ts`)
+
+**Unified inbox for external sources:**
+- Connectors: `gmail`, `slack`, `linear`, `manual`
+- Stores raw payloads + normalized fields
+- AI enrichment: summary, priority, suggested actions
+- Rules engine for automation
+
+## UI Architecture
+
+### Web Chat (`app/chat/`)
+
+- `page.tsx` - Server component (auth check)
+- `chat-client.tsx` - Client component (state, streaming)
+- Polls every 3s for Telegram message sync
+
+### Tool Panel (`components/aurelius/tool-panel.tsx`)
+
+**Resizable right sidebar supporting:**
+- `config_view` - Display config content
+- `config_diff` - Show proposed changes with approve/reject
+- `tool_result` - Generic tool output
+- `daily_notes` - View/add daily notes
+
+### App Shell (`components/aurelius/app-shell.tsx`)
+
+```
+┌─────────────────────────────────────────────────┐
+│ AppSidebar │    Main Content    │  Right Panel  │
+│  (nav)     │    (children)      │  (optional)   │
+└─────────────────────────────────────────────────┘
+```
+
+## Environment Variables
+
+```bash
+DATABASE_URL          # PostgreSQL connection (Neon)
+OPENROUTER_API_KEY    # AI provider
+TELEGRAM_BOT_TOKEN    # Telegram bot
+WORKOS_*              # Authentication
+```
+
+## Adding New Integrations
+
+Follow the Telegram pattern:
+
+1. **Create connector module** (`lib/<name>/`)
+   - `client.ts` - API wrapper
+   - `handler.ts` - Message processing
+   - Types/interfaces for the external API
+
+2. **Create webhook endpoint** (`api/<name>/webhook/`)
+   - Return 200 immediately
+   - Process async with handler
+
+3. **Integrate with core systems**
+   - Use `buildMemoryContext()` for context
+   - Use `chatStreamWithTools()` for AI responses
+   - Call `extractAndSaveMemories()` for learning
+   - Decide: shared conversation ID or separate?
+
+4. **Optional: Add to triage**
+   - Register connector type
+   - Configure ingest rules
+
+## Key Patterns
+
+- **Streaming**: All AI responses stream via SSE
+- **Tool loops**: Max 5 iterations to prevent runaway
+- **Memory extraction**: Heuristic-based, saves to daily notes
+- **Config approval**: AI proposes, human approves
+- **Shared state**: Web + Telegram use same conversation
+- **Polling sync**: Web polls for external messages (3s interval)
