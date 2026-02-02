@@ -150,8 +150,12 @@ async function handleChatMessage(message: TelegramMessage): Promise<void> {
     return;
   }
 
-  // Show typing indicator
-  await sendTypingAction(chatId);
+  // Start typing indicator immediately and keep it active throughout processing
+  // Telegram typing indicator expires after 5 seconds, so we refresh every 3 seconds
+  sendTypingAction(chatId).catch(() => {});
+  const typingInterval = setInterval(() => {
+    sendTypingAction(chatId).catch(() => {});
+  }, 3000);
 
   const conversationId = getTelegramConversationId(chatId);
 
@@ -191,24 +195,15 @@ The user is ${message.from?.first_name || 'a user'}${message.from?.username ? ` 
     // Collect the full response from the streaming API
     let fullResponse = '';
 
-    // Keep typing indicator active during processing
-    const typingInterval = setInterval(() => {
-      sendTypingAction(chatId).catch(() => {});
-    }, 4000);
-
-    try {
-      for await (const event of chatStreamWithTools(
-        aiMessages,
-        telegramPrompt,
-        conversationId
-      )) {
-        if (event.type === 'text') {
-          fullResponse += event.content;
-        }
-        // Tool use/results are handled internally, we just collect the text output
+    for await (const event of chatStreamWithTools(
+      aiMessages,
+      telegramPrompt,
+      conversationId
+    )) {
+      if (event.type === 'text') {
+        fullResponse += event.content;
       }
-    } finally {
-      clearInterval(typingInterval);
+      // Tool use/results are handled internally, we just collect the text output
     }
 
     // If no response, provide a fallback
@@ -253,6 +248,9 @@ The user is ${message.from?.first_name || 'a user'}${message.from?.username ? ` 
       chatId,
       "I'm sorry, I encountered an error processing your message. Please try again."
     );
+  } finally {
+    // Always clear the typing indicator
+    clearInterval(typingInterval);
   }
 }
 
