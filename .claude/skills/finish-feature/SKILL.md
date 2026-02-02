@@ -164,3 +164,13 @@ Conflicts detected with main. Would you like to:
 2. Rebase on main first (recommended)
 3. Cancel and handle manually
 ```
+
+## After Merge
+
+Always suggest updating the worklog:
+```
+✓ Merged feature/calendar-integration → main
+
+Run /wrap-up to update the worklog? This keeps now.md current
+for the next session.
+```

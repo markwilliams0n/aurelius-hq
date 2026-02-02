@@ -67,9 +67,14 @@ When this skill is invoked:
    git checkout {branch-name}
    ```
 
-6. **Confirm:**
+6. **Confirm and suggest worklog update:**
    ```
    ✓ Switched to: {branch-name}
+   ```
+
+   **If switched TO main from a feature branch:**
+   ```
+   Back on main. Want to run /wrap-up to update the worklog?
    ```
 
 ## Showing Branch Info
