@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   X,
   ListTodo,
@@ -9,9 +9,11 @@ import {
   Flag,
   Zap,
   AlertTriangle,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TriageItem } from "./triage-card";
+import { TriageSnoozePicker } from "./triage-snooze-picker";
 
 interface TriageActionMenuProps {
   item: TriageItem;
@@ -38,6 +40,27 @@ export function TriageActionMenu({
   onAction,
   onClose,
 }: TriageActionMenuProps) {
+  const [showSnoozePicker, setShowSnoozePicker] = useState(false);
+
+  // Handle snooze from picker
+  const handleSnooze = (duration: string, customDate?: Date) => {
+    if (customDate) {
+      onAction("snooze", { duration: "custom", customDate: customDate.toISOString() });
+    } else {
+      onAction("snooze", { duration });
+    }
+  };
+
+  // Show snooze picker
+  if (showSnoozePicker) {
+    return (
+      <TriageSnoozePicker
+        onSnooze={handleSnooze}
+        onClose={() => setShowSnoozePicker(false)}
+      />
+    );
+  }
+
   // Keyboard shortcuts
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -134,9 +157,18 @@ export function TriageActionMenu({
 
         {/* Snooze section */}
         <div className="px-4 py-2 border-t border-border">
-          <div className="flex items-center gap-2 mb-2">
-            <Clock className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Snooze</span>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Snooze</span>
+            </div>
+            <button
+              onClick={() => setShowSnoozePicker(true)}
+              className="flex items-center gap-1 text-xs text-gold hover:underline"
+            >
+              More options
+              <ChevronRight className="w-3 h-3" />
+            </button>
           </div>
           <div className="grid grid-cols-2 gap-2">
             {SNOOZE_OPTIONS.map((opt) => (
