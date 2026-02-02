@@ -29,7 +29,8 @@ type StoredMessage = {
 
 // Use a shared conversation ID so Telegram and web chat share history
 // This ensures all messages appear in both interfaces
-const SHARED_CONVERSATION_ID = 'main';
+// Using a fixed UUID since the database column is uuid type
+const SHARED_CONVERSATION_ID = '00000000-0000-0000-0000-000000000000';
 
 /**
  * Get conversation history from the database

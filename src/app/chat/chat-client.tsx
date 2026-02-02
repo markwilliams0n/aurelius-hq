@@ -25,7 +25,7 @@ type ChatStats = {
 };
 
 const STORAGE_KEY = "aurelius_conversation_id";
-const SHARED_CONVERSATION_ID = "main"; // Shared between web and Telegram
+const SHARED_CONVERSATION_ID = "00000000-0000-0000-0000-000000000000"; // Shared between web and Telegram
 
 export function ChatClient() {
   const [messages, setMessages] = useState<Message[]>([]);
