@@ -1,8 +1,9 @@
 # Claude Code Rules for Aurelius HQ
 
-## Start Here
+## Session Start
 
-**Read `ARCHITECTURE.md` at the start of each session** - it's a living document describing how the app works, key systems, and patterns for adding new features.
+1. **Check `docs/worklog/now.md`** - Current context: what we just did, what's in progress, what's next
+2. **Read `ARCHITECTURE.md`** - How the app works, key systems, patterns
 
 ## Process Management Safety
 
