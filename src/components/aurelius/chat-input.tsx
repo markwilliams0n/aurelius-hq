@@ -40,7 +40,7 @@ export function ChatInput({
   };
 
   return (
-    <div className="flex gap-2 items-end">
+    <div className="flex gap-3 items-end">
       <div className="flex-1 relative">
         <textarea
           ref={textareaRef}
@@ -50,14 +50,14 @@ export function ChatInput({
           onInput={handleInput}
           placeholder="Type a message..."
           disabled={disabled}
-          className="w-full resize-none rounded-lg border border-border bg-secondary px-4 py-3 pr-12 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold disabled:opacity-50"
+          className="w-full resize-none rounded-lg border border-gold/50 bg-secondary px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold disabled:opacity-50 min-h-[48px]"
           rows={1}
         />
       </div>
       <Button
         onClick={handleSend}
         disabled={disabled || !value.trim()}
-        className="bg-gold hover:bg-gold-bright text-background h-12 w-12"
+        className="bg-gold hover:bg-gold-bright text-background h-[48px] w-[48px] shrink-0 rounded-lg"
       >
         <Send className="w-5 h-5" />
       </Button>
