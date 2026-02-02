@@ -7,6 +7,7 @@ import { ChatStatus } from "@/components/aurelius/chat-status";
 import { AppShell } from "@/components/aurelius/app-shell";
 import { ChatMemoryPanel } from "@/components/aurelius/chat-memory-panel";
 import { ToolPanel, PanelContent } from "@/components/aurelius/tool-panel";
+import { DailyNotesPopover } from "@/components/aurelius/daily-notes-popover";
 import { toast } from "sonner";
 
 type Message = {
@@ -370,12 +371,15 @@ export function ChatClient() {
         {/* Status bar - sticky header */}
         <div className="shrink-0 border-b border-border bg-background/80 backdrop-blur-sm px-6 py-2 sticky top-0 z-10">
           <div className="max-w-3xl mx-auto flex items-center justify-between">
-            <button
-              onClick={handleNewChat}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              New chat
-            </button>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleNewChat}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                New chat
+              </button>
+              <DailyNotesPopover />
+            </div>
             <ChatStatus stats={stats} />
           </div>
         </div>
