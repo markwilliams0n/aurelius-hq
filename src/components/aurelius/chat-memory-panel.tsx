@@ -65,9 +65,8 @@ export function ChatMemoryPanel() {
           <Button
             onClick={runQuickHeartbeat}
             disabled={heartbeatRunning}
-            variant="outline"
             size="sm"
-            className="w-full"
+            className="w-full bg-gold hover:bg-gold-bright text-primary-foreground"
           >
             {heartbeatRunning ? (
               <>

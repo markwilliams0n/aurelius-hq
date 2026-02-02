@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
+import { useTheme } from "next-themes";
 import {
   MessageSquare,
   Brain,
@@ -10,6 +11,9 @@ import {
   Settings,
   Inbox,
   CheckSquare,
+  Sun,
+  Moon,
+  Monitor,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +28,20 @@ const navItems = [
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const { theme, setTheme } = useTheme();
+
+  const cycleTheme = () => {
+    if (theme === "dark") {
+      setTheme("light");
+    } else if (theme === "light") {
+      setTheme("system");
+    } else {
+      setTheme("dark");
+    }
+  };
+
+  const ThemeIcon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor;
+  const themeLabel = theme === "dark" ? "Dark" : theme === "light" ? "Light" : "Auto";
 
   return (
     <aside className="w-20 border-r border-border bg-background flex flex-col items-center py-4 gap-1">
@@ -77,6 +95,18 @@ export function AppSidebar() {
           );
         })}
       </nav>
+
+      {/* Theme Toggle - at bottom */}
+      <div className="mt-auto w-full px-2">
+        <button
+          onClick={cycleTheme}
+          className="w-full flex flex-col items-center gap-1 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+          title={`Theme: ${themeLabel}`}
+        >
+          <ThemeIcon className="w-5 h-5" />
+          <span className="text-[10px]">{themeLabel}</span>
+        </button>
+      </div>
     </aside>
   );
 }
