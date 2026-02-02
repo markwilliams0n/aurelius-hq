@@ -25,6 +25,7 @@ type ChatStats = {
 };
 
 const STORAGE_KEY = "aurelius_conversation_id";
+const SHARED_CONVERSATION_ID = "main"; // Shared between web and Telegram
 
 export function ChatClient() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -46,34 +47,42 @@ export function ChatClient() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
-  // Load conversation on mount
+  // Load conversation on mount - use shared ID by default
   useEffect(() => {
     const loadConversation = async () => {
-      const savedId = localStorage.getItem(STORAGE_KEY);
-      if (savedId) {
-        try {
-          const response = await fetch(`/api/conversation/${savedId}`);
-          if (response.ok) {
-            const data = await response.json();
-            setConversationId(savedId);
-            // Add IDs to loaded messages if they don't have them
-            const loadedMessages = (data.messages || []).map((m: Partial<Message> & { role: Message["role"]; content: string }, i: number) => ({
-              ...m,
-              id: m.id || `loaded-${i}-${Date.now()}`,
-            }));
-            setMessages(loadedMessages);
-            setStats((prev) => ({
-              ...prev,
-              model: data.model || prev.model,
-              factsSaved: data.factsSaved || 0,
-            }));
-          } else {
-            localStorage.removeItem(STORAGE_KEY);
-          }
-        } catch (error) {
-          console.error("Failed to load conversation:", error);
-          localStorage.removeItem(STORAGE_KEY);
+      // Always use the shared conversation ID (synced with Telegram)
+      const targetId = localStorage.getItem(STORAGE_KEY) || SHARED_CONVERSATION_ID;
+
+      try {
+        const response = await fetch(`/api/conversation/${targetId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setConversationId(targetId);
+          localStorage.setItem(STORAGE_KEY, targetId);
+          // Add IDs to loaded messages if they don't have them
+          const loadedMessages = (data.messages || []).map((m: Partial<Message> & { role: Message["role"]; content: string }, i: number) => ({
+            ...m,
+            id: m.id || `loaded-${i}-${Date.now()}`,
+          }));
+          setMessages(loadedMessages);
+          setStats((prev) => ({
+            ...prev,
+            model: data.model || prev.model,
+            factsSaved: data.factsSaved || 0,
+          }));
+        } else if (targetId === SHARED_CONVERSATION_ID) {
+          // Shared conversation doesn't exist yet, that's fine - it will be created on first message
+          setConversationId(SHARED_CONVERSATION_ID);
+          localStorage.setItem(STORAGE_KEY, SHARED_CONVERSATION_ID);
+        } else {
+          // Non-shared conversation not found, fall back to shared
+          localStorage.setItem(STORAGE_KEY, SHARED_CONVERSATION_ID);
+          setConversationId(SHARED_CONVERSATION_ID);
         }
+      } catch (error) {
+        console.error("Failed to load conversation:", error);
+        setConversationId(SHARED_CONVERSATION_ID);
+        localStorage.setItem(STORAGE_KEY, SHARED_CONVERSATION_ID);
       }
       setIsLoading(false);
     };
@@ -91,12 +100,20 @@ export function ChatClient() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  const handleNewChat = () => {
+  const handleNewChat = async () => {
+    // Clear the shared conversation (affects both web and Telegram)
+    try {
+      await fetch(`/api/conversation/${SHARED_CONVERSATION_ID}`, {
+        method: "DELETE",
+      });
+    } catch (error) {
+      console.error("Failed to clear conversation:", error);
+    }
     setMessages([]);
-    setConversationId(null);
+    setConversationId(SHARED_CONVERSATION_ID);
     setStats((prev) => ({ ...prev, tokenCount: 0, factsSaved: 0 }));
     setToolPanelContent(null);
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.setItem(STORAGE_KEY, SHARED_CONVERSATION_ID);
     toast.success("Started new conversation");
   };
 

@@ -27,10 +27,9 @@ type StoredMessage = {
   timestamp: string;
 };
 
-// Get or create a conversation ID for a Telegram chat
-function getTelegramConversationId(chatId: number): string {
-  return `telegram-${chatId}`;
-}
+// Use a shared conversation ID so Telegram and web chat share history
+// This ensures all messages appear in both interfaces
+const SHARED_CONVERSATION_ID = 'main';
 
 /**
  * Get conversation history from the database
@@ -112,7 +111,7 @@ Just send me a message to start chatting!`;
  * Handle a /clear command
  */
 async function handleClearCommand(message: TelegramMessage): Promise<void> {
-  const conversationId = getTelegramConversationId(message.chat.id);
+  const conversationId = SHARED_CONVERSATION_ID;
   await saveConversation(conversationId, []);
   await sendMessage(message.chat.id, '✓ Conversation history cleared. Fresh start!');
 }
@@ -157,7 +156,7 @@ async function handleChatMessage(message: TelegramMessage): Promise<void> {
     sendTypingAction(chatId).catch(() => {});
   }, 3000);
 
-  const conversationId = getTelegramConversationId(chatId);
+  const conversationId = SHARED_CONVERSATION_ID;
 
   try {
     // Get conversation history from database

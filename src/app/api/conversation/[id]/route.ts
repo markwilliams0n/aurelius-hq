@@ -48,3 +48,34 @@ export async function GET(
     factsSaved,
   });
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+
+  // Clear the conversation by setting messages to empty array
+  const [existing] = await db
+    .select()
+    .from(conversations)
+    .where(eq(conversations.id, id))
+    .limit(1);
+
+  if (existing) {
+    await db
+      .update(conversations)
+      .set({
+        messages: [],
+        updatedAt: new Date(),
+      })
+      .where(eq(conversations.id, id));
+  }
+
+  return NextResponse.json({ success: true });
+}
