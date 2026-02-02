@@ -59,5 +59,65 @@
     "id": "adam-watson-1769997155072",
     "lastAccessed": "2026-02-02T01:52:35.072Z",
     "accessCount": 0
+  },
+  {
+    "fact": "CTO at ROSTR",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "adam-watson-1770060241752",
+    "lastAccessed": "2026-02-02T19:24:01.752Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "San Diego office",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "adam-watson-1770060241753",
+    "lastAccessed": "2026-02-02T19:24:01.753Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Leading architecture work from San Diego",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "adam-watson-1770060256232",
+    "lastAccessed": "2026-02-02T19:24:16.232Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "in San Diego",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "adam-watson-1770060340686",
+    "lastAccessed": "2026-02-02T19:25:40.686Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "San Diego location",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "adam-watson-1770062025786",
+    "lastAccessed": "2026-02-02T19:53:45.786Z",
+    "accessCount": 0
   }
 ]

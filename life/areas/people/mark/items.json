@@ -1,0 +1,26 @@
+[
+  {
+    "fact": "Had a call with Danny Feldman at WME",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "mark-1770066680207-0",
+    "lastAccessed": "2026-02-02T21:11:20.207Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Had a call with Danny Feldman",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "mark-1770066852562",
+    "lastAccessed": "2026-02-02T21:14:12.562Z",
+    "accessCount": 0
+  }
+]

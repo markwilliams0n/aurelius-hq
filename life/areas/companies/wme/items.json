@@ -142,5 +142,77 @@
     "id": "wme-1769997691168",
     "lastAccessed": "2026-02-02T02:01:31.168Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Enterprise pilot discussion with Danny Feldman",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "wme-1770060241759",
+    "lastAccessed": "2026-02-02T19:24:01.759Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Label services analytics request",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "wme-1770060241760",
+    "lastAccessed": "2026-02-02T19:24:01.760Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "potential enterprise pilot with Danny Feldman",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "wme-1770060340694",
+    "lastAccessed": "2026-02-02T19:25:40.694Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "head of data strategy Priya Mehta",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "wme-1770060340695",
+    "lastAccessed": "2026-02-02T19:25:40.695Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Head of data strategy Priya Mehta evaluation",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "wme-1770062025792",
+    "lastAccessed": "2026-02-02T19:53:45.792Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Had a call with Mark about a potential enterprise pilot",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "wme-1770066852564",
+    "lastAccessed": "2026-02-02T21:14:12.564Z",
+    "accessCount": 0
   }
 ]

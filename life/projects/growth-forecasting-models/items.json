@@ -10,5 +10,29 @@
     "id": "growth-forecasting-models-1769996008397-0",
     "lastAccessed": "2026-02-02T01:33:28.397Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Recommended by Aurelius",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "growth-forecasting-models-1770060475586",
+    "lastAccessed": "2026-02-02T19:27:55.586Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "AI Integration Point",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "growth-forecasting-models-1770060625889",
+    "lastAccessed": "2026-02-02T19:30:25.889Z",
+    "accessCount": 0
   }
 ]

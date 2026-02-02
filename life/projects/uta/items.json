@@ -58,5 +58,29 @@
     "id": "uta-1769997691175",
     "lastAccessed": "2026-02-02T02:01:31.175Z",
     "accessCount": 0
+  },
+  {
+    "fact": "deal stalled",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "uta-1770060340695",
+    "lastAccessed": "2026-02-02T19:25:40.695Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "post-mortem requested in Slack",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "uta-1770060340696",
+    "lastAccessed": "2026-02-02T19:25:40.696Z",
+    "accessCount": 0
   }
 ]

@@ -46,5 +46,17 @@
     "id": "fender-1769996008392",
     "lastAccessed": "2026-02-02T01:33:28.392Z",
     "accessCount": 0
+  },
+  {
+    "fact": "advertising locked with Wasserman for $45k",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-1770060340690",
+    "lastAccessed": "2026-02-02T19:25:40.690Z",
+    "accessCount": 0
   }
 ]

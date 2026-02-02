@@ -58,5 +58,17 @@
     "id": "wasserman-1769997691173",
     "lastAccessed": "2026-02-02T02:01:31.173Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Rachel Thornton\"s company",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "wasserman-1770060241764",
+    "lastAccessed": "2026-02-02T19:24:01.764Z",
+    "accessCount": 0
   }
 ]

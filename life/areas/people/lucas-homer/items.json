@@ -46,5 +46,113 @@
     "id": "lucas-homer-1769997155073",
     "lastAccessed": "2026-02-02T01:52:35.073Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Ojai office",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1770060241754",
+    "lastAccessed": "2026-02-02T19:24:01.754Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "ROSTR Pro focus",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1770060241755",
+    "lastAccessed": "2026-02-02T19:24:01.755Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "in Ojai",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1770060340687",
+    "lastAccessed": "2026-02-02T19:25:40.687Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "part of ROSTR team",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1770060340687",
+    "lastAccessed": "2026-02-02T19:25:40.687Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Coordinating daily with Adam Watson on backend systems",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1770060348640",
+    "lastAccessed": "2026-02-02T19:25:48.640Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Engineer at ROSTR",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1770060475577",
+    "lastAccessed": "2026-02-02T19:27:55.577Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Backend systems",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1770060635686",
+    "lastAccessed": "2026-02-02T19:30:35.686Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "coordinating daily with Adam Watson in San Diego",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1770060635687",
+    "lastAccessed": "2026-02-02T19:30:35.687Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Ojai location",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1770062025787",
+    "lastAccessed": "2026-02-02T19:53:45.787Z",
+    "accessCount": 0
   }
 ]

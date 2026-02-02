@@ -95,5 +95,29 @@
     "id": "marcus-webb-1769996382521",
     "lastAccessed": "2026-02-02T01:39:42.521Z",
     "accessCount": 0
+  },
+  {
+    "fact": "joined in January",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-webb-1770060422036",
+    "lastAccessed": "2026-02-02T19:27:02.036Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Jan hire",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-webb-1770060486471",
+    "lastAccessed": "2026-02-02T19:28:06.471Z",
+    "accessCount": 0
   }
 ]

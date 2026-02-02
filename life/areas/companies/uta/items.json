@@ -34,5 +34,65 @@
     "id": "uta-1769996089943",
     "lastAccessed": "2026-02-02T01:34:49.943Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Deal stalled due to internal-build decision by Marcus Lane",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "uta-1770060241763",
+    "lastAccessed": "2026-02-02T19:24:01.763Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "officially dead",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "uta-1770060412076",
+    "lastAccessed": "2026-02-02T19:26:52.076Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "officially dead (internal-build decision)",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "uta-1770060625868",
+    "lastAccessed": "2026-02-02T19:30:25.868Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Deal stalled",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "uta-1770062025794",
+    "lastAccessed": "2026-02-02T19:53:45.794Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "post-mortem requested in Slack",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "uta-1770062025795",
+    "lastAccessed": "2026-02-02T19:53:45.795Z",
+    "accessCount": 0
   }
 ]

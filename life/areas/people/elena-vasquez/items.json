@@ -94,5 +94,29 @@
     "id": "elena-vasquez-1769997700440",
     "lastAccessed": "2026-02-02T02:01:40.440Z",
     "accessCount": 0
+  },
+  {
+    "fact": "opened Shopify pilot talks",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "elena-vasquez-1770060348644",
+    "lastAccessed": "2026-02-02T19:25:48.644Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Opened Shopify pilot talks in Toronto meetup",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "elena-vasquez-1770060486470",
+    "lastAccessed": "2026-02-02T19:28:06.470Z",
+    "accessCount": 0
   }
 ]

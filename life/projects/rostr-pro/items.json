@@ -118,5 +118,65 @@
     "id": "rostr-pro-1769997700416",
     "lastAccessed": "2026-02-02T02:01:40.416Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Professional tier of main ROSTR product",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-pro-1770060241769",
+    "lastAccessed": "2026-02-02T19:24:01.769Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Focus across engineering and product teams",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-pro-1770060241770",
+    "lastAccessed": "2026-02-02T19:24:01.770Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "professional tier of ROSTR",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-pro-1770060340692",
+    "lastAccessed": "2026-02-02T19:25:40.692Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "focus on label services analytics",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-pro-1770060340693",
+    "lastAccessed": "2026-02-02T19:25:40.693Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Enterprise interest from WME",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-pro-1770060475581",
+    "lastAccessed": "2026-02-02T19:27:55.581Z",
+    "accessCount": 0
   }
 ]

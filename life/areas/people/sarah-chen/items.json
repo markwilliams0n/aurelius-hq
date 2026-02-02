@@ -95,5 +95,29 @@
     "id": "sarah-chen-1769997700442",
     "lastAccessed": "2026-02-02T02:01:40.442Z",
     "accessCount": 0
+  },
+  {
+    "fact": "works from Austin and San Francisco",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "sarah-chen-1770060256242",
+    "lastAccessed": "2026-02-02T19:24:16.242Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Lead engineer of Project Atlas",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "sarah-chen-1770060422034",
+    "lastAccessed": "2026-02-02T19:27:02.034Z",
+    "accessCount": 0
   }
 ]

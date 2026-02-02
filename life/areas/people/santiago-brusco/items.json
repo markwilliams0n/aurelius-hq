@@ -118,5 +118,17 @@
     "id": "santiago-brusco-1769997700421",
     "lastAccessed": "2026-02-02T02:01:40.421Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Project Manager at BA",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "santiago-brusco-1770060422033",
+    "lastAccessed": "2026-02-02T19:27:02.033Z",
+    "accessCount": 0
   }
 ]

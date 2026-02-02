@@ -94,5 +94,53 @@
     "id": "celso-cardenas-1769996382531",
     "lastAccessed": "2026-02-02T01:39:42.531Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Front-end",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1770060635689",
+    "lastAccessed": "2026-02-02T19:30:35.689Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "3-month tenure",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1770060635690",
+    "lastAccessed": "2026-02-02T19:30:35.690Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "UI ramp-up",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1770060635691",
+    "lastAccessed": "2026-02-02T19:30:35.691Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Ramping up on the codebase and picking up smaller UI tickets, new hire in January",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1770061992853",
+    "lastAccessed": "2026-02-02T19:53:12.853Z",
+    "accessCount": 0
   }
 ]

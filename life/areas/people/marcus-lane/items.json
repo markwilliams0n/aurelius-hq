@@ -58,5 +58,53 @@
     "id": "marcus-lane-1769996089940",
     "lastAccessed": "2026-02-02T01:34:49.940Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Internal-build decision on UTA deal",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-lane-1770060241748",
+    "lastAccessed": "2026-02-02T19:24:01.748Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "made an internal-build decision on the UTA deal",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-lane-1770060340683",
+    "lastAccessed": "2026-02-02T19:25:40.683Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "made the internal-build decision for UTA deal",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-lane-1770060625856",
+    "lastAccessed": "2026-02-02T19:30:25.856Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Part of internal-build decision on UTA deal",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-lane-1770061982327",
+    "lastAccessed": "2026-02-02T19:53:02.327Z",
+    "accessCount": 0
   }
 ]

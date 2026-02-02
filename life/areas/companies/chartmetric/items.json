@@ -1,1 +1,26 @@
-[]
+[
+  {
+    "fact": "Mentioned in ROSTR Pro evaluation by Priya Mehta",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chartmetric-1770060241761",
+    "lastAccessed": "2026-02-02T19:24:01.761Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "being evaluated by Priya Mehta",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chartmetric-1770060412070",
+    "lastAccessed": "2026-02-02T19:26:52.070Z",
+    "accessCount": 0
+  }
+]

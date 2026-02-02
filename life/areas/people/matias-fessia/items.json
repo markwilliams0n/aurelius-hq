@@ -46,5 +46,89 @@
     "id": "matias-fessia-1769993916205",
     "lastAccessed": "2026-02-02T00:58:36.205Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Córdoba office",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "matias-fessia-1770060241756",
+    "lastAccessed": "2026-02-02T19:24:01.756Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "ROSTR Pro focus",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "matias-fessia-1770060241757",
+    "lastAccessed": "2026-02-02T19:24:01.757Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Rebuilding artist profile components in Córdoba",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "matias-fessia-1770060256234",
+    "lastAccessed": "2026-02-02T19:24:16.234Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "in Córdoba",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "matias-fessia-1770060340688",
+    "lastAccessed": "2026-02-02T19:25:40.688Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "part of ROSTR team",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "matias-fessia-1770060340689",
+    "lastAccessed": "2026-02-02T19:25:40.689Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Engineer at ROSTR",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "matias-fessia-1770060475578",
+    "lastAccessed": "2026-02-02T19:27:55.578Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Córdoba location",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "matias-fessia-1770062025790",
+    "lastAccessed": "2026-02-02T19:53:45.790Z",
+    "accessCount": 0
   }
 ]

@@ -10,5 +10,29 @@
     "id": "competitor-tracking-feeds-1769996008399-0",
     "lastAccessed": "2026-02-02T01:33:28.399Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Recommended by Aurelius",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "competitor-tracking-feeds-1770060475588",
+    "lastAccessed": "2026-02-02T19:27:55.588Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "AI Integration Point",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "competitor-tracking-feeds-1770060625892",
+    "lastAccessed": "2026-02-02T19:30:25.892Z",
+    "accessCount": 0
   }
 ]

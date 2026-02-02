@@ -1,0 +1,26 @@
+[
+  {
+    "fact": "Scope lock at BA",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "linear-cycles-1770060486478-0",
+    "lastAccessed": "2026-02-02T19:28:06.478Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "2-week Linear cycles",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "linear-cycles-1770060486478-1",
+    "lastAccessed": "2026-02-02T19:28:06.478Z",
+    "accessCount": 0
+  }
+]

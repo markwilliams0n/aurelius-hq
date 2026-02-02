@@ -1,0 +1,26 @@
+[
+  {
+    "fact": "Leading the architecture work from San Diego",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "adam-watson-1770060486475-0",
+    "lastAccessed": "2026-02-02T19:28:06.475Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "CTO leading the architecture work from San Diego",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "adam-watson-1770061992860",
+    "lastAccessed": "2026-02-02T19:53:12.860Z",
+    "accessCount": 0
+  }
+]

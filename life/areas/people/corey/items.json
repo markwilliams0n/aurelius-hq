@@ -22,5 +22,65 @@
     "id": "corey-1769996008374",
     "lastAccessed": "2026-02-02T01:33:28.374Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Building custom deck on label-services analytics for Priya\"s team",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "corey-1770060241748",
+    "lastAccessed": "2026-02-02T19:24:01.748Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "putting together a custom deck focused on label services analytics",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "corey-1770060340682",
+    "lastAccessed": "2026-02-02T19:25:40.682Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Building custom deck for Priya\"s team",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "corey-1770060475573",
+    "lastAccessed": "2026-02-02T19:27:55.573Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Building custom deck for demo walkthrough",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "corey-1770061982324",
+    "lastAccessed": "2026-02-02T19:53:02.324Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Putting together a custom deck for Priya\"s team",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "corey-1770066852561",
+    "lastAccessed": "2026-02-02T21:14:12.561Z",
+    "accessCount": 0
   }
 ]

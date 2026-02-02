@@ -1,0 +1,98 @@
+[
+  {
+    "fact": "Professional tier with ROSTR Pro",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-1770060241768-0",
+    "lastAccessed": "2026-02-02T19:24:01.768Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "pro tier",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-1770060412074",
+    "lastAccessed": "2026-02-02T19:26:52.074Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "professional tier of the main product",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-1770060412075",
+    "lastAccessed": "2026-02-02T19:26:52.075Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "professional tier of main product",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-1770060625866",
+    "lastAccessed": "2026-02-02T19:30:25.866Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Professional tier with Pro version",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-1770062025799",
+    "lastAccessed": "2026-02-02T19:53:45.799Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Enterprise interest from WME",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-1770062025799",
+    "lastAccessed": "2026-02-02T19:53:45.799Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Professional tier of ROSTR product",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-1770066680212",
+    "lastAccessed": "2026-02-02T21:11:20.212Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Professional tier of the main ROSTR product",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-1770066852565",
+    "lastAccessed": "2026-02-02T21:14:12.565Z",
+    "accessCount": 0
+  }
+]

@@ -34,5 +34,41 @@
     "id": "vivian-donahue-1769996089941",
     "lastAccessed": "2026-02-02T01:34:49.941Z",
     "accessCount": 0
+  },
+  {
+    "fact": "AI support priority",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "vivian-donahue-1770060241752",
+    "lastAccessed": "2026-02-02T19:24:01.752Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Onboarding as Chrif Growth officer",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "vivian-donahue-1770060475576",
+    "lastAccessed": "2026-02-02T19:27:55.576Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "New Chrif Growth officer",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "vivian-donahue-1770066680196",
+    "lastAccessed": "2026-02-02T21:11:20.196Z",
+    "accessCount": 0
   }
 ]

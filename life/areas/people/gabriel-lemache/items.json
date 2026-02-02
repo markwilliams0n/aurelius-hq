@@ -46,5 +46,17 @@
     "id": "gabriel-lemache-1769997155075",
     "lastAccessed": "2026-02-02T01:52:35.075Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Integrating full-stack dashboard in Rio",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "gabriel-lemache-1770060256235",
+    "lastAccessed": "2026-02-02T19:24:16.235Z",
+    "accessCount": 0
   }
 ]

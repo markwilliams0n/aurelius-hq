@@ -1,0 +1,26 @@
+[
+  {
+    "fact": "StubHub CEO",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "michelle-swing-1770066680210-0",
+    "lastAccessed": "2026-02-02T21:11:20.210Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "former Noise Pop CEO",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "michelle-swing-1770066680210-1",
+    "lastAccessed": "2026-02-02T21:11:20.210Z",
+    "accessCount": 0
+  }
+]
