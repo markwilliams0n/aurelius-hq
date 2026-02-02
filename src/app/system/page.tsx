@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppShell } from "@/components/aurelius/app-shell";
 import {
   HeartPulse,
@@ -17,6 +17,7 @@ import {
   Clock,
   Trash2,
   Activity,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -31,6 +32,7 @@ type EntityDetail = {
 
 type HeartbeatResult = {
   id: string;
+  type: "heartbeat";
   success: boolean;
   entitiesCreated: number;
   entitiesUpdated: number;
@@ -40,11 +42,11 @@ type HeartbeatResult = {
   error?: string;
   entities?: EntityDetail[];
   extractionMethod?: "ollama" | "pattern";
-  rawOutput?: string;
 };
 
 type SynthesisResult = {
   id: string;
+  type: "synthesis";
   success: boolean;
   entitiesProcessed: number;
   factsArchived: number;
@@ -54,54 +56,46 @@ type SynthesisResult = {
   error?: string;
 };
 
+type ActivityEntry = HeartbeatResult | SynthesisResult;
+
 export default function SystemPage() {
   const [heartbeatRunning, setHeartbeatRunning] = useState(false);
-  const [heartbeatResults, setHeartbeatResults] = useState<HeartbeatResult[]>([]);
   const [synthesisRunning, setSynthesisRunning] = useState(false);
-  const [synthesisResults, setSynthesisResults] = useState<SynthesisResult[]>([]);
+  const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Load activity log on mount
+  useEffect(() => {
+    loadActivityLog();
+  }, []);
+
+  const loadActivityLog = async () => {
+    try {
+      const response = await fetch("/api/activity");
+      const data = await response.json();
+      setActivityLog(data.entries || []);
+    } catch (error) {
+      console.error("Failed to load activity log:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const runHeartbeat = async () => {
     setHeartbeatRunning(true);
-    const startTime = Date.now();
 
     try {
       const response = await fetch("/api/heartbeat", { method: "POST" });
       const data = await response.json();
-      const duration = Date.now() - startTime;
 
-      const result: HeartbeatResult = {
-        id: `hb-${Date.now()}`,
-        success: data.success ?? response.ok,
-        entitiesCreated: data.entitiesCreated ?? 0,
-        entitiesUpdated: data.entitiesUpdated ?? 0,
-        reindexed: data.reindexed ?? false,
-        timestamp: new Date().toISOString(),
-        duration,
-        error: data.error,
-        entities: data.entities ?? [],
-        extractionMethod: data.extractionMethod,
-      };
+      toast.success(`Heartbeat complete: ${data.entitiesCreated ?? 0} created, ${data.entitiesUpdated ?? 0} updated`);
 
-      setHeartbeatResults((prev) => [result, ...prev]);
-      toast.success(`Heartbeat complete: ${result.entitiesCreated} created, ${result.entitiesUpdated} updated`);
+      // Reload activity log to get the persisted entry
+      await loadActivityLog();
     } catch (error) {
-      const duration = Date.now() - startTime;
-      setHeartbeatResults((prev) => [
-        {
-          id: `hb-${Date.now()}`,
-          success: false,
-          entitiesCreated: 0,
-          entitiesUpdated: 0,
-          reindexed: false,
-          timestamp: new Date().toISOString(),
-          duration,
-          error: String(error),
-          entities: [],
-        },
-        ...prev,
-      ]);
       toast.error("Heartbeat failed");
+      await loadActivityLog();
     } finally {
       setHeartbeatRunning(false);
     }
@@ -109,42 +103,18 @@ export default function SystemPage() {
 
   const runSynthesis = async () => {
     setSynthesisRunning(true);
-    const startTime = Date.now();
 
     try {
       const response = await fetch("/api/synthesis", { method: "POST" });
       const data = await response.json();
-      const duration = Date.now() - startTime;
 
-      const result: SynthesisResult = {
-        id: `syn-${Date.now()}`,
-        success: data.success ?? response.ok,
-        entitiesProcessed: data.entitiesProcessed ?? 0,
-        factsArchived: data.factsArchived ?? 0,
-        summariesRegenerated: data.summariesRegenerated ?? 0,
-        timestamp: new Date().toISOString(),
-        duration,
-        error: data.error,
-      };
+      toast.success(`Synthesis complete: ${data.factsArchived ?? 0} facts archived`);
 
-      setSynthesisResults((prev) => [result, ...prev]);
-      toast.success(`Synthesis complete: ${result.factsArchived} facts archived`);
+      // Reload activity log to get the persisted entry
+      await loadActivityLog();
     } catch (error) {
-      const duration = Date.now() - startTime;
-      setSynthesisResults((prev) => [
-        {
-          id: `syn-${Date.now()}`,
-          success: false,
-          entitiesProcessed: 0,
-          factsArchived: 0,
-          summariesRegenerated: 0,
-          timestamp: new Date().toISOString(),
-          duration,
-          error: String(error),
-        },
-        ...prev,
-      ]);
       toast.error("Synthesis failed");
+      await loadActivityLog();
     } finally {
       setSynthesisRunning(false);
     }
@@ -158,10 +128,14 @@ export default function SystemPage() {
     toast.success("Copied to clipboard");
   };
 
-  const clearResults = () => {
-    setHeartbeatResults([]);
-    setSynthesisResults([]);
-    toast.success("Cleared all results");
+  const clearResults = async () => {
+    try {
+      await fetch("/api/activity", { method: "DELETE" });
+      setActivityLog([]);
+      toast.success("Cleared activity log");
+    } catch (error) {
+      toast.error("Failed to clear activity log");
+    }
   };
 
   return (
@@ -248,36 +222,43 @@ export default function SystemPage() {
           <div>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-serif text-lg text-gold">Activity Log</h2>
-              {(heartbeatResults.length > 0 || synthesisResults.length > 0) && (
-                <Button variant="ghost" size="sm" onClick={clearResults}>
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Clear
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={loadActivityLog}>
+                  <RefreshCw className="w-4 h-4" />
                 </Button>
-              )}
+                {activityLog.length > 0 && (
+                  <Button variant="ghost" size="sm" onClick={clearResults}>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Clear
+                  </Button>
+                )}
+              </div>
             </div>
 
-            {heartbeatResults.length === 0 && synthesisResults.length === 0 ? (
+            {loading ? (
+              <div className="text-center py-12 text-muted-foreground border border-dashed border-border rounded-lg">
+                <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin opacity-50" />
+                <p>Loading activity log...</p>
+              </div>
+            ) : activityLog.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground border border-dashed border-border rounded-lg">
                 <Activity className="w-8 h-8 mx-auto mb-2 opacity-50" />
                 <p>No activity yet. Run heartbeat or synthesis to see results.</p>
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Merge and sort all results by timestamp */}
-                {[...heartbeatResults, ...synthesisResults]
-                  .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                  .map((result) =>
-                    "entitiesCreated" in result ? (
-                      <HeartbeatResultCard
-                        key={result.id}
-                        result={result}
-                        onCopy={() => copyHeartbeatToClipboard(result)}
-                        copied={copiedId === result.id}
-                      />
-                    ) : (
-                      <SynthesisResultCard key={result.id} result={result} />
-                    )
-                  )}
+                {activityLog.map((entry) =>
+                  entry.type === "heartbeat" ? (
+                    <HeartbeatResultCard
+                      key={entry.id}
+                      result={entry as HeartbeatResult}
+                      onCopy={() => copyHeartbeatToClipboard(entry as HeartbeatResult)}
+                      copied={copiedId === entry.id}
+                    />
+                  ) : (
+                    <SynthesisResultCard key={entry.id} result={entry as SynthesisResult} />
+                  )
+                )}
               </div>
             )}
           </div>
