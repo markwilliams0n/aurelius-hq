@@ -8,8 +8,9 @@ import {
   unique,
 } from "drizzle-orm/pg-core";
 
-export const configKeyEnum = pgEnum("config_key", ["soul", "agents", "processes"]);
+export const configKeyEnum = pgEnum("config_key", ["soul", "system_prompt", "agents", "processes"]);
 export const actorEnum = pgEnum("actor", ["system", "user", "aurelius"]);
+export const pendingStatusEnum = pgEnum("pending_status", ["pending", "approved", "rejected"]);
 
 export const configs = pgTable("configs", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -21,3 +22,16 @@ export const configs = pgTable("configs", {
 }, (table) => [
   unique().on(table.key, table.version),
 ]);
+
+// Pending config changes proposed by the agent
+export const pendingConfigChanges = pgTable("pending_config_changes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  key: configKeyEnum("key").notNull(),
+  currentContent: text("current_content"), // null if creating new
+  proposedContent: text("proposed_content").notNull(),
+  reason: text("reason").notNull(), // Why the agent is proposing this change
+  status: pendingStatusEnum("status").notNull().default("pending"),
+  conversationId: uuid("conversation_id"), // Which conversation this was proposed in
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+});

@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
   // Create streaming response
   const encoder = new TextEncoder();
   let fullResponse = "";
+  let pendingChangeId: string | null = null;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -94,6 +95,19 @@ export async function POST(request: NextRequest) {
             controller.enqueue(
               encoder.encode(
                 `data: ${JSON.stringify({ type: "text", content: event.content })}\n\n`
+              )
+            );
+          } else if (event.type === "tool_use") {
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({ type: "tool_use", toolName: event.toolName })}\n\n`
+              )
+            );
+          } else if (event.type === "pending_change") {
+            pendingChangeId = event.changeId;
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({ type: "pending_change", changeId: event.changeId })}\n\n`
               )
             );
           }

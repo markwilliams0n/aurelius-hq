@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { AppShell } from "@/components/aurelius/app-shell";
+import { PendingChanges } from "@/components/aurelius/pending-changes";
 import {
   HeartPulse,
   Sparkles,
@@ -169,6 +170,9 @@ export default function SystemPage() {
         </div>
 
         <div className="p-6 space-y-6">
+          {/* Pending Config Changes */}
+          <PendingChanges />
+
           {/* Quick Actions */}
           <div className="flex gap-3">
             <Button
