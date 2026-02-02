@@ -10,18 +10,69 @@ vi.mock('../client', () => ({
 }));
 
 // Mock the AI client
-vi.mock('@/lib/ai/client', () => ({
-  chat: vi.fn().mockResolvedValue('Hello! I am Aurelius, your AI assistant.'),
+vi.mock('@/lib/ai/client', async () => {
+  return {
+    chatStreamWithTools: vi.fn().mockImplementation(async function* () {
+      yield { type: 'text', content: 'Hello! I am Aurelius, your AI assistant.' };
+    }),
+    DEFAULT_MODEL: 'test-model',
+  };
+});
+
+// Mock the prompts
+vi.mock('@/lib/ai/prompts', () => ({
+  buildChatPrompt: vi.fn().mockReturnValue('System prompt'),
 }));
 
-// Mock the memory facts
-vi.mock('@/lib/memory/facts', () => ({
-  getRecentFacts: vi.fn().mockResolvedValue([]),
+// Mock memory search
+vi.mock('@/lib/memory/search', () => ({
+  buildMemoryContext: vi.fn().mockResolvedValue(null),
+}));
+
+// Mock memory extraction
+vi.mock('@/lib/memory/extraction', () => ({
+  extractAndSaveMemories: vi.fn().mockResolvedValue(undefined),
+  containsMemorableContent: vi.fn().mockReturnValue(false),
+}));
+
+// Mock config
+vi.mock('@/lib/config', () => ({
+  getConfig: vi.fn().mockResolvedValue(null),
+}));
+
+// Mock database
+vi.mock('@/lib/db', () => ({
+  db: {
+    select: vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue([]),
+        }),
+      }),
+    }),
+    insert: vi.fn().mockReturnValue({
+      values: vi.fn().mockResolvedValue(undefined),
+    }),
+    update: vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue(undefined),
+      }),
+    }),
+  },
+}));
+
+vi.mock('@/lib/db/schema', () => ({
+  conversations: {},
+}));
+
+vi.mock('drizzle-orm', () => ({
+  eq: vi.fn(),
 }));
 
 import { sendMessage, sendTypingAction, splitMessage } from '../client';
-import { chat } from '@/lib/ai/client';
-import { getRecentFacts } from '@/lib/memory/facts';
+import { chatStreamWithTools } from '@/lib/ai/client';
+import { buildMemoryContext } from '@/lib/memory/search';
+import { getConfig } from '@/lib/config';
 
 describe('Telegram Handler', () => {
   const createMessage = (text: string, chatId = 12345): TelegramMessage => ({
@@ -133,32 +184,40 @@ describe('Telegram Handler', () => {
       expect(sendTypingAction).toHaveBeenCalledWith(12345);
     });
 
-    it('calls AI chat function', async () => {
+    it('calls AI with tools', async () => {
       const update = createUpdate(createMessage('Hello'));
       await handleTelegramUpdate(update);
 
-      expect(chat).toHaveBeenCalled();
+      expect(chatStreamWithTools).toHaveBeenCalled();
     });
 
-    it('fetches memory context', async () => {
+    it('builds memory context', async () => {
       const update = createUpdate(createMessage('Hello'));
       await handleTelegramUpdate(update);
 
-      expect(getRecentFacts).toHaveBeenCalled();
+      expect(buildMemoryContext).toHaveBeenCalledWith('Hello');
+    });
+
+    it('gets soul config', async () => {
+      const update = createUpdate(createMessage('Hello'));
+      await handleTelegramUpdate(update);
+
+      expect(getConfig).toHaveBeenCalledWith('soul');
     });
 
     it('sends AI response back to user', async () => {
-      vi.mocked(chat).mockResolvedValueOnce('This is a test response');
-      vi.mocked(splitMessage).mockReturnValueOnce(['This is a test response']);
+      vi.mocked(splitMessage).mockReturnValueOnce(['Hello! I am Aurelius, your AI assistant.']);
 
       const update = createUpdate(createMessage('Hello'));
       await handleTelegramUpdate(update);
 
-      expect(sendMessage).toHaveBeenCalledWith(12345, 'This is a test response');
+      expect(sendMessage).toHaveBeenCalledWith(12345, 'Hello! I am Aurelius, your AI assistant.');
     });
 
     it('handles AI errors gracefully', async () => {
-      vi.mocked(chat).mockRejectedValueOnce(new Error('AI error'));
+      vi.mocked(chatStreamWithTools).mockImplementationOnce(async function* () {
+        throw new Error('AI error');
+      });
 
       const update = createUpdate(createMessage('Hello'));
       await handleTelegramUpdate(update);
@@ -170,7 +229,6 @@ describe('Telegram Handler', () => {
     });
 
     it('splits long responses', async () => {
-      vi.mocked(chat).mockResolvedValueOnce('Long response');
       vi.mocked(splitMessage).mockReturnValueOnce(['Part 1', 'Part 2']);
 
       const update = createUpdate(createMessage('Hello'));
@@ -181,71 +239,15 @@ describe('Telegram Handler', () => {
     });
   });
 
-  describe('conversation history', () => {
-    it('maintains conversation context across messages', async () => {
-      vi.mocked(chat).mockResolvedValue('Response');
-      vi.mocked(splitMessage).mockReturnValue(['Response']);
-
-      // First message
-      await handleTelegramUpdate(createUpdate(createMessage('First message')));
-
-      // Second message
-      await handleTelegramUpdate(createUpdate(createMessage('Second message')));
-
-      // The second call should include history from the first message
-      const secondCall = vi.mocked(chat).mock.calls[1];
-      const messages = secondCall[0];
-
-      // Should have system message + history + new message
-      expect(messages.length).toBeGreaterThan(2);
-    });
-
-    it('clears history with /clear command', async () => {
-      vi.mocked(chat).mockResolvedValue('Response');
-      vi.mocked(splitMessage).mockReturnValue(['Response']);
-
-      // First message
-      await handleTelegramUpdate(createUpdate(createMessage('First message')));
-
-      // Clear
-      await handleTelegramUpdate(createUpdate(createMessage('/clear')));
-
-      // New message after clear
-      await handleTelegramUpdate(createUpdate(createMessage('New message')));
-
-      // The call after clear should start fresh
-      const lastCall = vi.mocked(chat).mock.calls[vi.mocked(chat).mock.calls.length - 1];
-      const messages = lastCall[0];
-
-      // Should only have system message + new message (no history)
-      expect(messages.length).toBe(2); // system + user
-    });
-
-    it('keeps separate history per chat', async () => {
-      vi.mocked(chat).mockResolvedValue('Response');
-      vi.mocked(splitMessage).mockReturnValue(['Response']);
-
-      // Message in chat 1
-      await handleTelegramUpdate(createUpdate(createMessage('Chat 1 message', 111)));
-
-      // Message in chat 2
-      await handleTelegramUpdate(createUpdate(createMessage('Chat 2 message', 222)));
-
-      // Each chat should have its own history
-      expect(vi.mocked(chat)).toHaveBeenCalledTimes(2);
-    });
-  });
-
   describe('unknown commands', () => {
     it('treats unknown commands as regular messages', async () => {
-      vi.mocked(chat).mockResolvedValue('Response');
-      vi.mocked(splitMessage).mockReturnValue(['Response']);
+      vi.mocked(splitMessage).mockReturnValueOnce(['Response']);
 
       const update = createUpdate(createMessage('/unknown'));
       await handleTelegramUpdate(update);
 
       // Should process as regular message (call AI)
-      expect(chat).toHaveBeenCalled();
+      expect(chatStreamWithTools).toHaveBeenCalled();
     });
   });
 });

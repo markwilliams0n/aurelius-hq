@@ -1,11 +1,17 @@
 /**
  * Telegram Message Handler for Aurelius
  *
- * Processes incoming Telegram messages and routes them to the AI chat
+ * Full integration with Aurelius HQ - same AI, memory, tools, and conversation storage
  */
 
-import { chat } from '@/lib/ai/client';
-import { getRecentFacts } from '@/lib/memory/facts';
+import { chatStreamWithTools, DEFAULT_MODEL, type Message } from '@/lib/ai/client';
+import { buildChatPrompt } from '@/lib/ai/prompts';
+import { buildMemoryContext } from '@/lib/memory/search';
+import { extractAndSaveMemories, containsMemorableContent } from '@/lib/memory/extraction';
+import { getConfig } from '@/lib/config';
+import { db } from '@/lib/db';
+import { conversations } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
 import {
   sendMessage,
   sendTypingAction,
@@ -14,48 +20,71 @@ import {
   type TelegramMessage,
 } from './client';
 
-// Simple in-memory conversation store for context
-// In production, you'd want to persist this
-const conversationHistory = new Map<
-  number,
-  Array<{ role: 'user' | 'assistant'; content: string }>
->();
+// Stored message type (matches web chat format)
+type StoredMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+};
 
-const MAX_HISTORY_LENGTH = 20;
-
-/**
- * Get conversation history for a chat
- */
-function getHistory(
-  chatId: number
-): Array<{ role: 'user' | 'assistant'; content: string }> {
-  return conversationHistory.get(chatId) || [];
+// Get or create a conversation ID for a Telegram chat
+function getTelegramConversationId(chatId: number): string {
+  return `telegram-${chatId}`;
 }
 
 /**
- * Add a message to conversation history
+ * Get conversation history from the database
  */
-function addToHistory(
-  chatId: number,
-  role: 'user' | 'assistant',
-  content: string
-): void {
-  const history = getHistory(chatId);
-  history.push({ role, content });
+async function getConversationHistory(
+  conversationId: string
+): Promise<StoredMessage[]> {
+  try {
+    const [conv] = await db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.id, conversationId))
+      .limit(1);
 
-  // Trim history to max length
-  while (history.length > MAX_HISTORY_LENGTH) {
-    history.shift();
+    if (conv) {
+      return (conv.messages as StoredMessage[]) || [];
+    }
+  } catch (error) {
+    console.error('Failed to get conversation history:', error);
   }
-
-  conversationHistory.set(chatId, history);
+  return [];
 }
 
 /**
- * Clear conversation history for a chat
+ * Save conversation to the database
  */
-function clearHistory(chatId: number): void {
-  conversationHistory.delete(chatId);
+async function saveConversation(
+  conversationId: string,
+  messages: StoredMessage[]
+): Promise<void> {
+  try {
+    const [existing] = await db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.id, conversationId))
+      .limit(1);
+
+    if (existing) {
+      await db
+        .update(conversations)
+        .set({
+          messages: messages,
+          updatedAt: new Date(),
+        })
+        .where(eq(conversations.id, conversationId));
+    } else {
+      await db.insert(conversations).values({
+        id: conversationId,
+        messages: messages,
+      });
+    }
+  } catch (error) {
+    console.error('Failed to save conversation:', error);
+  }
 }
 
 /**
@@ -64,9 +93,13 @@ function clearHistory(chatId: number): void {
 async function handleStartCommand(message: TelegramMessage): Promise<void> {
   const welcomeText = `Hello${message.from?.first_name ? ` ${message.from.first_name}` : ''}! I'm Aurelius, your AI assistant.
 
-I can help you with questions, tasks, and conversations. Here are some commands:
+I have full access to your HQ - memories, triage, and more. I can help you with:
+• Questions and conversations (with full memory context)
+• Managing your knowledge and notes
+• Accessing and updating your configuration
 
-/start - Show this welcome message
+Commands:
+/start - Show this message
 /clear - Clear conversation history
 /help - Get help
 
@@ -79,7 +112,8 @@ Just send me a message to start chatting!`;
  * Handle a /clear command
  */
 async function handleClearCommand(message: TelegramMessage): Promise<void> {
-  clearHistory(message.chat.id);
+  const conversationId = getTelegramConversationId(message.chat.id);
+  await saveConversation(conversationId, []);
   await sendMessage(message.chat.id, '✓ Conversation history cleared. Fresh start!');
 }
 
@@ -89,26 +123,24 @@ async function handleClearCommand(message: TelegramMessage): Promise<void> {
 async function handleHelpCommand(message: TelegramMessage): Promise<void> {
   const helpText = `*Aurelius Help*
 
-I'm an AI assistant that can help you with:
-• Answering questions
-• Having conversations
-• Providing information
+I'm your AI assistant with full access to HQ:
+
+*Memory:* I remember our conversations and can search your knowledge base
+
+*Configuration:* I can view and propose changes to my own behavior
 
 *Commands:*
 /start - Welcome message
 /clear - Clear conversation history
 /help - This help message
 
-*Tips:*
-• Just type naturally to chat with me
-• I remember our conversation context
-• Use /clear to start fresh if needed`;
+Just chat naturally - I have the same capabilities as the web interface.`;
 
   await sendMessage(message.chat.id, helpText, { parseMode: 'Markdown' });
 }
 
 /**
- * Handle a regular chat message
+ * Handle a regular chat message - full Aurelius integration
  */
 async function handleChatMessage(message: TelegramMessage): Promise<void> {
   const chatId = message.chat.id;
@@ -121,50 +153,97 @@ async function handleChatMessage(message: TelegramMessage): Promise<void> {
   // Show typing indicator
   await sendTypingAction(chatId);
 
-  try {
-    // Get conversation history
-    const history = getHistory(chatId);
+  const conversationId = getTelegramConversationId(chatId);
 
-    // Get memory context from recent facts
-    let memoryContext = '';
+  try {
+    // Get conversation history from database
+    const storedHistory = await getConversationHistory(conversationId);
+
+    // Convert stored history to AI message format
+    const aiHistory: Message[] = storedHistory.map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+
+    // Build memory context using QMD search (same as web chat)
+    const memoryContext = await buildMemoryContext(userText);
+
+    // Get soul config
+    const soulConfig = await getConfig('soul');
+
+    // Build system prompt (same as web chat)
+    const systemPrompt = buildChatPrompt(
+      memoryContext,
+      soulConfig?.content || null,
+      DEFAULT_MODEL
+    );
+
+    // Add Telegram-specific context to the prompt
+    const telegramPrompt = systemPrompt + `
+
+## Telegram Context
+You're responding via Telegram. Keep responses concise and mobile-friendly.
+The user is ${message.from?.first_name || 'a user'}${message.from?.username ? ` (@${message.from.username})` : ''}.`;
+
+    // Build messages for AI
+    const aiMessages: Message[] = [...aiHistory, { role: 'user', content: userText }];
+
+    // Collect the full response from the streaming API
+    let fullResponse = '';
+
+    // Keep typing indicator active during processing
+    const typingInterval = setInterval(() => {
+      sendTypingAction(chatId).catch(() => {});
+    }, 4000);
+
     try {
-      const recentFacts = await getRecentFacts(10);
-      if (recentFacts.length > 0) {
-        memoryContext = recentFacts.map((f) => `- ${f.content}`).join('\n');
+      for await (const event of chatStreamWithTools(
+        aiMessages,
+        telegramPrompt,
+        conversationId
+      )) {
+        if (event.type === 'text') {
+          fullResponse += event.content;
+        }
+        // Tool use/results are handled internally, we just collect the text output
       }
-    } catch {
-      // Memory context is optional, continue without it
+    } finally {
+      clearInterval(typingInterval);
     }
 
-    // Build system prompt with memory
-    const systemPrompt = `You are Aurelius, a helpful AI assistant accessible via Telegram.
+    // If no response, provide a fallback
+    if (!fullResponse.trim()) {
+      fullResponse = "I processed your message but didn't have a response. Could you rephrase?";
+    }
 
-Keep your responses concise and mobile-friendly since users are on Telegram.
-Be helpful, friendly, and to the point.
-
-${memoryContext ? `\nHere is some context about the user and their preferences:\n${memoryContext}` : ''}`;
-
-    // Add user message to history
-    addToHistory(chatId, 'user', userText);
-
-    // Build messages array (get fresh history after adding user message)
-    const updatedHistory = getHistory(chatId);
-    const messages = [
-      { role: 'system' as const, content: systemPrompt },
-      ...updatedHistory.map((h) => ({
-        role: h.role as 'user' | 'assistant',
-        content: h.content,
-      })),
+    // Save the conversation to the database
+    const newStoredMessages: StoredMessage[] = [
+      ...storedHistory,
+      {
+        role: 'user',
+        content: userText,
+        timestamp: new Date().toISOString(),
+      },
+      {
+        role: 'assistant',
+        content: fullResponse,
+        timestamp: new Date().toISOString(),
+      },
     ];
 
-    // Get AI response (non-streaming for Telegram)
-    const response = await chat(messages);
+    await saveConversation(conversationId, newStoredMessages);
 
-    // Add assistant response to history
-    addToHistory(chatId, 'assistant', response);
+    // Extract and save memories if the message contains memorable content
+    if (containsMemorableContent(userText)) {
+      try {
+        await extractAndSaveMemories(userText, fullResponse);
+      } catch (error) {
+        console.error('Failed to extract memories:', error);
+      }
+    }
 
     // Split long messages and send
-    const chunks = splitMessage(response);
+    const chunks = splitMessage(fullResponse);
     for (const chunk of chunks) {
       await sendMessage(chatId, chunk);
     }
