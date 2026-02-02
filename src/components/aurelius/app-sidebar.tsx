@@ -8,14 +8,12 @@ import {
   Brain,
   Activity,
   Settings,
-  Home,
   Inbox,
   CheckSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/", icon: Home, label: "Home" },
   { href: "/chat", icon: MessageSquare, label: "Chat" },
   { href: "/memory", icon: Brain, label: "Memory" },
   { href: "/system", icon: Activity, label: "System" },
@@ -28,9 +26,9 @@ export function AppSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-16 border-r border-border bg-background flex flex-col items-center py-4 gap-2">
+    <aside className="w-20 border-r border-border bg-background flex flex-col items-center py-4 gap-1">
       {/* Logo - Aurelius Avatar */}
-      <Link href="/" className="mb-4">
+      <Link href="/chat" className="mb-4">
         <div className="w-10 h-10 rounded-full overflow-hidden">
           <Image
             src="/avatars/agent.png"
@@ -43,7 +41,7 @@ export function AppSidebar() {
       </Link>
 
       {/* Nav Items */}
-      <nav className="flex flex-col gap-1">
+      <nav className="flex flex-col gap-1 w-full px-2">
         {navItems.map((item) => {
           const isActive = pathname === item.href ||
             (item.href !== "/" && pathname.startsWith(item.href));
@@ -53,10 +51,11 @@ export function AppSidebar() {
             return (
               <div
                 key={item.href}
-                className="w-10 h-10 rounded-lg flex items-center justify-center opacity-30 cursor-not-allowed"
+                className="flex flex-col items-center gap-1 py-2 rounded-lg opacity-30 cursor-not-allowed"
                 title={`${item.label} (coming soon)`}
               >
                 <Icon className="w-5 h-5" />
+                <span className="text-[10px]">{item.label}</span>
               </div>
             );
           }
@@ -66,14 +65,14 @@ export function AppSidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "w-10 h-10 rounded-lg flex items-center justify-center transition-colors",
+                "flex flex-col items-center gap-1 py-2 rounded-lg transition-colors",
                 isActive
                   ? "bg-gold/20 text-gold"
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary"
               )}
-              title={item.label}
             >
               <Icon className="w-5 h-5" />
+              <span className="text-[10px]">{item.label}</span>
             </Link>
           );
         })}
