@@ -14,6 +14,7 @@ export const connectorTypeEnum = pgEnum("connector_type", [
   "gmail",
   "slack",
   "linear",
+  "granola",
   "manual",
 ]);
 

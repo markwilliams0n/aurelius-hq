@@ -126,10 +126,32 @@ api/telegram/
 - Async processing (return 200 immediately)
 - Message splitting for Telegram's 4096 char limit
 
+### Granola (`lib/granola/`)
+
+**Meeting notes sync from Granola app:**
+
+```
+lib/granola/
+├── client.ts      # API wrapper + OAuth token rotation
+├── sync.ts        # Sync meetings to triage inbox
+└── index.ts       # Exports
+
+api/connectors/granola/
+└── setup/route.ts # Initial token setup (POST/GET/DELETE)
+```
+
+**Key design decisions:**
+- Uses WorkOS OAuth with rotating refresh tokens (single-use)
+- Tokens stored in `configs` table as `connector:granola`
+- Sync runs during heartbeat (fetches meetings since last sync)
+- Full meeting transcripts stored in triage `rawPayload`
+
+**Setup:** Extract `refresh_token` and `client_id` from Granola app, POST to `/api/connectors/granola/setup`.
+
 ### Triage/Inbox System (`lib/db/schema/triage.ts`)
 
 **Unified inbox for external sources:**
-- Connectors: `gmail`, `slack`, `linear`, `manual`
+- Connectors: `gmail`, `slack`, `linear`, `granola`, `manual`
 - Stores raw payloads + normalized fields
 - AI enrichment: summary, priority, suggested actions
 - Rules engine for automation

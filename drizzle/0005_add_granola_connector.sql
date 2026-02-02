@@ -1,0 +1,1 @@
+ALTER TYPE "public"."connector_type" ADD VALUE 'granola';

@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { listDailyNotes, readDailyNote } from './daily-notes';
 import { isOllamaAvailable, extractEntitiesWithLLM } from './ollama';
+import { syncGranolaMeetings, type GranolaSyncResult } from '@/lib/granola';
 
 const LIFE_DIR = path.join(process.cwd(), 'life');
 
@@ -145,6 +146,7 @@ export interface HeartbeatResult {
   reindexed: boolean;
   entities: EntityDetail[];
   extractionMethod: 'ollama' | 'pattern';
+  granola?: GranolaSyncResult;
 }
 
 /**
@@ -242,7 +244,18 @@ export async function runHeartbeat(): Promise<HeartbeatResult> {
     }
   }
 
-  // 4. Reindex QMD
+  // 4. Sync Granola meetings to triage
+  let granolaResult: GranolaSyncResult | undefined;
+  try {
+    granolaResult = await syncGranolaMeetings();
+    if (granolaResult.synced > 0) {
+      console.log(`[Heartbeat] Granola: synced ${granolaResult.synced} meetings`);
+    }
+  } catch (error) {
+    console.error('[Heartbeat] Granola sync failed:', error);
+  }
+
+  // 5. Reindex QMD
   const reindexed = await reindexQMD();
 
   console.log(`[Heartbeat] Complete - created: ${entitiesCreated}, updated: ${entitiesUpdated}`);
@@ -252,7 +265,8 @@ export async function runHeartbeat(): Promise<HeartbeatResult> {
     entitiesUpdated,
     reindexed,
     entities: entityDetails,
-    extractionMethod: useOllama ? 'ollama' : 'pattern'
+    extractionMethod: useOllama ? 'ollama' : 'pattern',
+    granola: granolaResult,
   };
 }
 
