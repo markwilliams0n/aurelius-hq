@@ -4,7 +4,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { ChatMessage } from "@/components/aurelius/chat-message";
 import { ChatInput } from "@/components/aurelius/chat-input";
 import { ChatStatus } from "@/components/aurelius/chat-status";
-import { MemorySidebar } from "@/components/aurelius/memory-sidebar";
+import { AppShell } from "@/components/aurelius/app-shell";
+import { ChatMemoryPanel } from "@/components/aurelius/chat-memory-panel";
 import { toast } from "sonner";
 import { RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,6 @@ import { Button } from "@/components/ui/button";
 type Message = {
   role: "user" | "assistant";
   content: string;
-  memories?: Array<{ factId: string; content: string }>;
 };
 
 type ChatStats = {
@@ -33,7 +33,6 @@ export function ChatClient() {
     tokenCount: 0,
     factsSaved: 0,
   });
-  const [isMemorySidebarOpen, setIsMemorySidebarOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingContentRef = useRef("");
 
@@ -58,7 +57,6 @@ export function ChatClient() {
               factsSaved: data.factsSaved || 0,
             }));
           } else {
-            // Conversation not found, clear storage
             localStorage.removeItem(STORAGE_KEY);
           }
         } catch (error) {
@@ -72,7 +70,6 @@ export function ChatClient() {
     loadConversation();
   }, []);
 
-  // Save conversationId to localStorage when it changes
   useEffect(() => {
     if (conversationId) {
       localStorage.setItem(STORAGE_KEY, conversationId);
@@ -118,7 +115,6 @@ export function ChatClient() {
       if (!reader) throw new Error("No response body");
 
       const decoder = new TextDecoder();
-      let currentMemories: Array<{ factId: string; content: string }> = [];
       let buffer = "";
 
       while (true) {
@@ -150,7 +146,6 @@ export function ChatClient() {
                   return prev;
                 });
               } else if (data.type === "memories") {
-                currentMemories = data.memories;
                 setStats((prev) => ({
                   ...prev,
                   factsSaved: prev.factsSaved + data.memories.length,
@@ -163,20 +158,6 @@ export function ChatClient() {
                   model: data.model || prev.model,
                   tokenCount: data.tokenCount || prev.tokenCount,
                 }));
-              } else if (data.type === "done") {
-                if (currentMemories.length > 0) {
-                  setMessages((prev) => {
-                    const lastIdx = prev.length - 1;
-                    const lastMessage = prev[lastIdx];
-                    if (lastMessage?.role === "assistant") {
-                      return [
-                        ...prev.slice(0, lastIdx),
-                        { ...lastMessage, memories: currentMemories },
-                      ];
-                    }
-                    return prev;
-                  });
-                }
               } else if (data.type === "error") {
                 toast.error(data.message);
               }
@@ -219,94 +200,59 @@ export function ChatClient() {
     }
   };
 
-  const handleUndo = async (factId: string) => {
-    try {
-      const response = await fetch(`/api/memory/${factId}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to undo");
-      }
-
-      setMessages((prev) =>
-        prev.map((msg) => ({
-          ...msg,
-          memories: msg.memories?.filter((m) => m.factId !== factId),
-        }))
-      );
-      setStats((prev) => ({
-        ...prev,
-        factsSaved: Math.max(0, prev.factsSaved - 1),
-      }));
-
-      toast.success("Memory removed");
-    } catch (error) {
-      console.error("Undo error:", error);
-      toast.error("Failed to undo memory");
-    }
-  };
-
   if (isLoading) {
     return (
-      <main className="flex-1 flex items-center justify-center">
-        <div className="text-muted-foreground">Loading...</div>
-      </main>
+      <AppShell>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-muted-foreground">Loading...</div>
+        </div>
+      </AppShell>
     );
   }
 
   return (
-    <main className="flex-1 flex flex-col max-w-4xl mx-auto w-full px-4">
-      {/* Memory Sidebar */}
-      <MemorySidebar
-        isOpen={isMemorySidebarOpen}
-        onClose={() => setIsMemorySidebarOpen(false)}
-        conversationId={conversationId}
-      />
+    <AppShell rightSidebar={<ChatMemoryPanel />}>
+      <div className="flex-1 flex flex-col h-screen">
+        {/* Status bar */}
+        <div className="flex items-center justify-between px-6 py-3 border-b border-border">
+          <ChatStatus stats={stats} />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleNewChat}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <RotateCcw className="w-4 h-4 mr-2" />
+            New Chat
+          </Button>
+        </div>
 
-      {/* Status bar - sticky */}
-      <div className="sticky top-0 z-10 flex items-center justify-between py-2 border-b border-border bg-background">
-        <ChatStatus stats={stats} onMemoriesClick={() => setIsMemorySidebarOpen(true)} />
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleNewChat}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <RotateCcw className="w-4 h-4 mr-2" />
-          New Chat
-        </Button>
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto py-4 space-y-4">
-        {messages.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center h-full min-h-[400px]">
-            <div className="text-center">
-              <h2 className="font-serif text-2xl text-gold mb-2">
-                Aurelius
-              </h2>
-              <p className="text-muted-foreground">
-                Start a conversation...
-              </p>
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          {messages.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center h-full min-h-[400px]">
+              <div className="text-center">
+                <h2 className="font-serif text-2xl text-gold mb-2">
+                  Aurelius
+                </h2>
+                <p className="text-muted-foreground">
+                  Start a conversation...
+                </p>
+              </div>
             </div>
-          </div>
-        ) : (
-          messages.map((message, index) => (
-            <ChatMessage
-              key={index}
-              message={message}
-              onUndo={handleUndo}
-            />
-          ))
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+          ) : (
+            messages.map((message, index) => (
+              <ChatMessage key={index} message={message} />
+            ))
+          )}
+          <div ref={messagesEndRef} />
+        </div>
 
-      {/* Input */}
-      <div className="sticky bottom-0 py-4 bg-background">
-        <ChatInput onSend={handleSend} disabled={isStreaming} />
+        {/* Input */}
+        <div className="px-6 py-4 border-t border-border">
+          <ChatInput onSend={handleSend} disabled={isStreaming} />
+        </div>
       </div>
-    </main>
+    </AppShell>
   );
 }

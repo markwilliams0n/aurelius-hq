@@ -19,13 +19,7 @@ const CONTEXT_WINDOWS: Record<string, number> = {
 
 const DEFAULT_CONTEXT_WINDOW = 128000;
 
-export function ChatStatus({
-  stats,
-  onMemoriesClick,
-}: {
-  stats: ChatStats;
-  onMemoriesClick?: () => void;
-}) {
+export function ChatStatus({ stats }: { stats: ChatStats }) {
   // Format model name for display
   const modelDisplay = stats.model
     ? stats.model.split("/").pop() || stats.model
@@ -54,14 +48,13 @@ export function ChatStatus({
         <Brain className="w-3.5 h-3.5" />
         <span>{tokenDisplay}</span>
       </div>
-      <button
-        onClick={onMemoriesClick}
-        className="flex items-center gap-1.5 hover:text-foreground transition-colors"
-        title="Facts saved this session - click to view"
+      <div
+        className="flex items-center gap-1.5"
+        title="Facts saved this session"
       >
         <Database className="w-3.5 h-3.5" />
         <span>{stats.factsSaved}</span>
-      </button>
+      </div>
     </div>
   );
 }

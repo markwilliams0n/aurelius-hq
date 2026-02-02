@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChatMessage } from "./chat-message";
@@ -10,7 +10,6 @@ import { toast } from "sonner";
 type Message = {
   role: "user" | "assistant";
   content: string;
-  memories?: Array<{ factId: string; content: string }>;
 };
 
 export function ChatPanel({
@@ -99,7 +98,6 @@ export function ChatPanel({
       if (!reader) throw new Error("No response body");
 
       const decoder = new TextDecoder();
-      let currentMemories: Array<{ factId: string; content: string }> = [];
 
       while (true) {
         const { done, value } = await reader.read();
@@ -122,21 +120,8 @@ export function ChatPanel({
                   }
                   return newMessages;
                 });
-              } else if (data.type === "memories") {
-                currentMemories = data.memories;
               } else if (data.type === "conversation") {
                 setConversationId(data.id);
-              } else if (data.type === "done") {
-                if (currentMemories.length > 0) {
-                  setMessages((prev) => {
-                    const newMessages = [...prev];
-                    const lastMessage = newMessages[newMessages.length - 1];
-                    if (lastMessage.role === "assistant") {
-                      lastMessage.memories = currentMemories;
-                    }
-                    return newMessages;
-                  });
-                }
               } else if (data.type === "error") {
                 toast.error(data.message);
               }
@@ -152,30 +137,6 @@ export function ChatPanel({
       setMessages((prev) => prev.slice(0, -1));
     } finally {
       setIsStreaming(false);
-    }
-  };
-
-  const handleUndo = async (factId: string) => {
-    try {
-      const response = await fetch(`/api/memory/${factId}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to undo");
-      }
-
-      setMessages((prev) =>
-        prev.map((msg) => ({
-          ...msg,
-          memories: msg.memories?.filter((m) => m.factId !== factId),
-        }))
-      );
-
-      toast.success("Memory removed");
-    } catch (error) {
-      console.error("Undo error:", error);
-      toast.error("Failed to undo memory");
     }
   };
 
@@ -207,7 +168,7 @@ export function ChatPanel({
             </div>
           ) : (
             messages.map((message, index) => (
-              <ChatMessage key={index} message={message} onUndo={handleUndo} />
+              <ChatMessage key={index} message={message} />
             ))
           )}
           <div ref={messagesEndRef} />
