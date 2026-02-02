@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock the fake data module
-vi.mock('@/lib/triage/fake-data', () => ({
-  generateFakeInboxItems: vi.fn(() => [
+const { mockDbItems } = vi.hoisted(() => ({
+  mockDbItems: [
     {
+      id: '1',
       connector: 'gmail',
       externalId: 'item-1',
       sender: 'test1@example.com',
@@ -16,6 +16,7 @@ vi.mock('@/lib/triage/fake-data', () => ({
       receivedAt: new Date('2024-01-15T10:00:00Z'),
     },
     {
+      id: '2',
       connector: 'slack',
       externalId: 'item-2',
       sender: '#general',
@@ -28,6 +29,7 @@ vi.mock('@/lib/triage/fake-data', () => ({
       receivedAt: new Date('2024-01-15T11:00:00Z'),
     },
     {
+      id: '3',
       connector: 'linear',
       externalId: 'item-3',
       sender: 'Project X',
@@ -39,7 +41,41 @@ vi.mock('@/lib/triage/fake-data', () => ({
       tags: [],
       receivedAt: new Date('2024-01-15T09:00:00Z'),
     },
-  ]),
+  ],
+}));
+
+// Mock database - create a chainable mock that returns mockDbItems
+vi.mock('@/lib/db', () => {
+  const createChainMock = () => {
+    const chain: any = {
+      from: vi.fn(() => chain),
+      where: vi.fn(() => chain),
+      orderBy: vi.fn(() => chain),
+      limit: vi.fn(() => chain),
+      then: (resolve: (items: any[]) => void) => resolve(mockDbItems),
+    };
+    return chain;
+  };
+
+  return {
+    db: {
+      select: vi.fn(() => createChainMock()),
+    },
+  };
+});
+
+vi.mock('@/lib/db/schema', () => ({
+  inboxItems: {
+    status: 'status',
+    connector: 'connector',
+    priority: 'priority',
+    receivedAt: 'receivedAt',
+  },
+}));
+
+// Mock the fake data module
+vi.mock('@/lib/triage/fake-data', () => ({
+  generateFakeInboxItems: vi.fn(() => mockDbItems),
   getTriageQueue: vi.fn((items) =>
     items
       .filter((i: any) => i.status === 'new')

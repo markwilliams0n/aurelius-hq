@@ -7,6 +7,9 @@ import { TriageActionMenu } from "@/components/aurelius/triage-action-menu";
 import { TriageReplyComposer } from "@/components/aurelius/triage-reply-composer";
 import { TriageSidebar } from "@/components/aurelius/triage-sidebar";
 import { TriageDetailModal } from "@/components/aurelius/triage-detail-modal";
+import { TriageChat } from "@/components/aurelius/triage-chat";
+import { SuggestedTasksBox } from "@/components/aurelius/suggested-tasks-box";
+import { TriageSnoozeMenu } from "@/components/aurelius/triage-snooze-menu";
 import { toast } from "sonner";
 import {
   Archive,
@@ -18,11 +21,27 @@ import {
   Mail,
   LayoutList,
   Filter,
+  CalendarDays,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type ViewMode = "triage" | "action" | "reply" | "detail";
-type ConnectorFilter = "all" | "gmail" | "slack" | "linear";
+type ViewMode = "triage" | "action" | "reply" | "detail" | "chat" | "snooze";
+type ConnectorFilter = "all" | "gmail" | "slack" | "linear" | "granola";
+
+// Define which actions are available for each connector
+const CONNECTOR_ACTIONS: Record<string, {
+  canReply: boolean;
+  canArchive: boolean;
+  canAddToMemory: boolean;
+  canTakeActions: boolean;
+  canChat: boolean;
+}> = {
+  gmail: { canReply: true, canArchive: true, canAddToMemory: true, canTakeActions: true, canChat: true },
+  slack: { canReply: true, canArchive: true, canAddToMemory: true, canTakeActions: true, canChat: true },
+  linear: { canReply: false, canArchive: true, canAddToMemory: true, canTakeActions: true, canChat: true },
+  granola: { canReply: false, canArchive: true, canAddToMemory: true, canTakeActions: true, canChat: true },
+  manual: { canReply: false, canArchive: true, canAddToMemory: true, canTakeActions: true, canChat: true },
+};
 
 const CONNECTOR_FILTERS: Array<{
   value: ConnectorFilter;
@@ -33,6 +52,7 @@ const CONNECTOR_FILTERS: Array<{
   { value: "gmail", label: "Gmail", icon: Mail },
   { value: "slack", label: "Slack", icon: MessageSquare },
   { value: "linear", label: "Linear", icon: LayoutList },
+  { value: "granola", label: "Granola", icon: CalendarDays },
 ];
 
 export function TriageClient() {
@@ -48,7 +68,10 @@ export function TriageClient() {
   } | null>(null);
   const [stats, setStats] = useState({ new: 0, archived: 0, snoozed: 0, actioned: 0 });
   const [animatingOut, setAnimatingOut] = useState<"left" | "right" | "up" | null>(null);
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
+
+  const sidebarWidth = isSidebarExpanded ? 480 : 320;
 
   // Fetch triage items
   const fetchItems = useCallback(async () => {
@@ -94,6 +117,7 @@ export function TriageClient() {
     gmail: items.filter((i) => i.connector === "gmail").length,
     slack: items.filter((i) => i.connector === "slack").length,
     linear: items.filter((i) => i.connector === "linear").length,
+    granola: items.filter((i) => i.connector === "granola").length,
   };
 
   // Archive action (←)
@@ -107,6 +131,12 @@ export function TriageClient() {
     await new Promise((resolve) => setTimeout(resolve, 200));
 
     try {
+      // Dismiss any remaining suggested tasks
+      await fetch(`/api/triage/${currentItem.id}/tasks`, {
+        method: "DELETE",
+      });
+
+      // Archive the item
       await fetch(`/api/triage/${currentItem.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -142,9 +172,20 @@ export function TriageClient() {
       });
       const data = await response.json();
 
-      toast.success(`Saved ${data.facts.length} facts to memory`, {
-        description: data.facts[0]?.content?.slice(0, 60) + "...",
-      });
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to save to memory");
+      }
+
+      const facts = data.facts || [];
+      if (facts.length > 0) {
+        toast.success(`Saved ${facts.length} facts to memory`, {
+          description: facts[0]?.content?.slice(0, 60) + "...",
+        });
+      } else {
+        toast.info("No new facts extracted", {
+          description: "This item may have already been processed",
+        });
+      }
     } catch (error) {
       console.error("Failed to save to memory:", error);
       toast.error("Failed to save to memory");
@@ -154,15 +195,62 @@ export function TriageClient() {
     setAnimatingOut(null);
   }, [currentItem]);
 
+  // Memory + Archive action (Shift+↑)
+  const handleMemoryAndArchive = useCallback(async () => {
+    if (!currentItem) return;
+
+    setAnimatingOut("up");
+    setLastAction({ type: "memory-archive", itemId: currentItem.id, item: currentItem });
+
+    try {
+      // Save to memory
+      await fetch(`/api/triage/${currentItem.id}/memory`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      // Dismiss any remaining suggested tasks
+      await fetch(`/api/triage/${currentItem.id}/tasks`, {
+        method: "DELETE",
+      });
+
+      // Archive the item
+      await fetch(`/api/triage/${currentItem.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "archive" }),
+      });
+
+      // Wait for animation
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      // Remove from list
+      setItems((prev) => prev.filter((i) => i.id !== currentItem.id));
+      toast.success("Saved to memory and archived");
+    } catch (error) {
+      console.error("Failed to memory + archive:", error);
+      toast.error("Failed to complete action");
+    }
+
+    setAnimatingOut(null);
+  }, [currentItem]);
+
   // Open action menu (→)
   const handleOpenActions = useCallback(() => {
     if (!currentItem) return;
     setViewMode("action");
   }, [currentItem]);
 
-  // Open reply composer (↓)
+  // Open reply composer (↓) - only for connectors that support reply
   const handleOpenReply = useCallback(() => {
     if (!currentItem) return;
+    const actions = CONNECTOR_ACTIONS[currentItem.connector];
+    if (!actions?.canReply) {
+      toast.info("Reply not available", {
+        description: `${currentItem.connector} items don't support direct replies`,
+      });
+      return;
+    }
     setViewMode("reply");
   }, [currentItem]);
 
@@ -170,6 +258,58 @@ export function TriageClient() {
   const handleOpenDetail = useCallback(() => {
     if (!currentItem) return;
     setViewMode("detail");
+  }, [currentItem]);
+
+  // Open chat about this item (Space)
+  const handleOpenChat = useCallback(() => {
+    if (!currentItem) return;
+    setViewMode("chat");
+  }, [currentItem]);
+
+  // Open snooze menu (s)
+  const handleOpenSnooze = useCallback(() => {
+    if (!currentItem) return;
+    setViewMode("snooze");
+  }, [currentItem]);
+
+  // Handle snooze selection
+  const handleSnooze = useCallback(async (until: Date) => {
+    if (!currentItem) return;
+
+    setViewMode("triage");
+    setAnimatingOut("right");
+    setLastAction({ type: "snooze", itemId: currentItem.id, item: currentItem });
+
+    // Wait for animation
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    try {
+      // Dismiss any remaining suggested tasks
+      await fetch(`/api/triage/${currentItem.id}/tasks`, {
+        method: "DELETE",
+      });
+
+      // Snooze the item
+      await fetch(`/api/triage/${currentItem.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "snooze", snoozeUntil: until.toISOString() }),
+      });
+
+      // Remove from list
+      setItems((prev) => prev.filter((i) => i.id !== currentItem.id));
+      toast.success(`Snoozed until ${until.toLocaleDateString()} ${until.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, {
+        action: {
+          label: "Undo",
+          onClick: () => handleUndo(),
+        },
+      });
+    } catch (error) {
+      console.error("Failed to snooze:", error);
+      toast.error("Failed to snooze");
+    }
+
+    setAnimatingOut(null);
   }, [currentItem]);
 
   // Close overlays
@@ -268,7 +408,11 @@ export function TriageClient() {
           break;
         case "ArrowUp":
           e.preventDefault();
-          handleMemory();
+          if (e.shiftKey) {
+            handleMemoryAndArchive();
+          } else {
+            handleMemory();
+          }
           break;
         case "ArrowRight":
           e.preventDefault();
@@ -281,6 +425,14 @@ export function TriageClient() {
         case "Enter":
           e.preventDefault();
           handleOpenDetail();
+          break;
+        case " ":
+          e.preventDefault();
+          handleOpenChat();
+          break;
+        case "s":
+          e.preventDefault();
+          handleOpenSnooze();
           break;
         case "u":
           if (e.metaKey || e.ctrlKey) {
@@ -297,9 +449,12 @@ export function TriageClient() {
     viewMode,
     handleArchive,
     handleMemory,
+    handleMemoryAndArchive,
     handleOpenActions,
     handleOpenReply,
     handleOpenDetail,
+    handleOpenChat,
+    handleOpenSnooze,
     handleCloseOverlay,
     handleUndo,
   ]);
@@ -339,7 +494,18 @@ export function TriageClient() {
   }
 
   return (
-    <AppShell rightSidebar={<TriageSidebar item={currentItem} stats={stats} />}>
+    <AppShell
+      rightSidebar={
+        <TriageSidebar
+          item={currentItem}
+          stats={stats}
+          isExpanded={isSidebarExpanded}
+          onToggleExpand={() => setIsSidebarExpanded(!isSidebarExpanded)}
+        />
+      }
+      wideSidebar={true}
+      sidebarWidth={sidebarWidth}
+    >
       <div className="flex-1 flex flex-col h-screen">
         {/* Header */}
         <header className="px-6 py-4 border-b border-border shrink-0">
@@ -393,7 +559,7 @@ export function TriageClient() {
         </header>
 
         {/* Card area */}
-        <div className="flex-1 flex items-center justify-center p-6 relative overflow-hidden">
+        <div className="flex-1 flex items-start justify-center pt-12 p-6 relative overflow-hidden">
           {/* Card stack effect - show next cards behind */}
           {filteredItems.slice(currentIndex + 1, currentIndex + 3).map((item, idx) => (
             <div
@@ -409,16 +575,23 @@ export function TriageClient() {
             </div>
           ))}
 
-          {/* Active card */}
-          <div
-            className={cn(
-              "relative z-20 transition-all duration-200",
-              animatingOut === "left" && "animate-swipe-left",
-              animatingOut === "right" && "animate-swipe-right",
-              animatingOut === "up" && "animate-swipe-up"
+          {/* Active card and tasks box */}
+          <div className="flex flex-col items-center gap-4">
+            <div
+              className={cn(
+                "relative z-20 transition-all duration-200",
+                animatingOut === "left" && "animate-swipe-left",
+                animatingOut === "right" && "animate-swipe-right",
+                animatingOut === "up" && "animate-swipe-up"
+              )}
+            >
+              <TriageCard ref={cardRef} item={currentItem} isActive={true} />
+            </div>
+
+            {/* Suggested tasks box */}
+            {currentItem && !animatingOut && (
+              <SuggestedTasksBox itemId={currentItem.id} />
             )}
-          >
-            <TriageCard ref={cardRef} item={currentItem} isActive={true} />
           </div>
 
           {/* Action indicators - animated feedback */}
@@ -445,38 +618,63 @@ export function TriageClient() {
 
         {/* Bottom keyboard hints (always visible) */}
         <div className="px-6 py-3 border-t border-border bg-background shrink-0">
-          <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
-            <ActionButton
-              keyName="←"
-              label="Archive"
-              onClick={handleArchive}
-              color="text-red-400"
-            />
-            <ActionButton
-              keyName="↑"
-              label="Memory"
-              onClick={handleMemory}
-              color="text-gold"
-            />
-            <ActionButton
-              keyName="↵"
-              label="Expand"
-              onClick={handleOpenDetail}
-              color="text-foreground"
-            />
-            <ActionButton
-              keyName="→"
-              label="Actions"
-              onClick={handleOpenActions}
-              color="text-blue-400"
-            />
-            <ActionButton
-              keyName="↓"
-              label="Reply"
-              onClick={handleOpenReply}
-              color="text-green-400"
-            />
-          </div>
+          {(() => {
+            const connectorActions = currentItem ? CONNECTOR_ACTIONS[currentItem.connector] : null;
+            return (
+              <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
+                <ActionButton
+                  keyName="←"
+                  label="Archive"
+                  onClick={handleArchive}
+                  color="text-red-400"
+                />
+                <ActionButton
+                  keyName="↑"
+                  label="Memory"
+                  onClick={handleMemory}
+                  color="text-gold"
+                />
+                <ActionButton
+                  keyName="⇧↑"
+                  label="Mem+Archive"
+                  onClick={handleMemoryAndArchive}
+                  color="text-gold"
+                />
+                <ActionButton
+                  keyName="s"
+                  label="Snooze"
+                  onClick={handleOpenSnooze}
+                  color="text-orange-400"
+                />
+                <ActionButton
+                  keyName="␣"
+                  label="Chat"
+                  onClick={handleOpenChat}
+                  color="text-purple-400"
+                />
+                <ActionButton
+                  keyName="↵"
+                  label="Expand"
+                  onClick={handleOpenDetail}
+                  color="text-foreground"
+                />
+                <ActionButton
+                  keyName="→"
+                  label="Actions"
+                  onClick={handleOpenActions}
+                  color="text-blue-400"
+                />
+                {connectorActions?.canReply && (
+                  <ActionButton
+                    keyName="↓"
+                    label="Reply"
+                    onClick={handleOpenReply}
+                    color="text-green-400"
+                  />
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -505,6 +703,31 @@ export function TriageClient() {
       {/* Detail modal */}
       {viewMode === "detail" && currentItem && (
         <TriageDetailModal item={currentItem} onClose={handleCloseOverlay} />
+      )}
+
+      {/* Chat overlay */}
+      {viewMode === "chat" && currentItem && (
+        <TriageChat
+          item={currentItem}
+          onClose={handleCloseOverlay}
+          onAction={(action, data) => {
+            // Handle actions from chat (e.g., snooze, add to memory)
+            if (action === "snooze") {
+              handleActionComplete("snoozed");
+            } else if (action === "archive") {
+              handleActionComplete("archived");
+            }
+            // For memory actions, the chat API handles it directly
+          }}
+        />
+      )}
+
+      {/* Snooze menu overlay */}
+      {viewMode === "snooze" && currentItem && (
+        <TriageSnoozeMenu
+          onSnooze={handleSnooze}
+          onClose={handleCloseOverlay}
+        />
       )}
     </AppShell>
   );

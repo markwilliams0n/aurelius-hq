@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { getInboxItems } from "../../route";
+import { db } from "@/lib/db";
+import { inboxItems } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import { upsertEntity } from "@/lib/memory/entities";
 import { createFact } from "@/lib/memory/facts";
 import { appendToDailyNote } from "@/lib/memory/daily-notes";
@@ -10,8 +12,15 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const items = getInboxItems();
-  const item = items.find((i) => i.externalId === id);
+
+  // Query database for the item
+  const items = await db
+    .select()
+    .from(inboxItems)
+    .where(eq(inboxItems.externalId, id))
+    .limit(1);
+
+  const item = items[0];
 
   if (!item) {
     return NextResponse.json({ error: "Item not found" }, { status: 404 });

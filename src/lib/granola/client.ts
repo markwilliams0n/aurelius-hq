@@ -7,10 +7,17 @@
 
 import { promises as fs } from 'fs';
 import path from 'path';
+import os from 'os';
 
 const WORKOS_AUTH_URL = 'https://api.workos.com/user_management/authenticate';
 const GRANOLA_API_URL = 'https://api.granola.ai';
 const CREDENTIALS_PATH = path.join(process.cwd(), '.granola-credentials.json');
+
+// Path to Granola app's token file (macOS)
+const GRANOLA_APP_TOKEN_PATH = path.join(
+  os.homedir(),
+  'Library/Application Support/Granola/supabase.json'
+);
 
 // Granola document types
 export interface GranolaDocument {
@@ -46,15 +53,83 @@ export interface GranolaCredentials {
 }
 
 /**
- * Get stored Granola credentials
+ * Try to read fresh tokens from the Granola desktop app.
+ * This helps when the app has refreshed tokens and burned ours.
  */
-export async function getCredentials(): Promise<GranolaCredentials | null> {
+async function syncFromGranolaApp(): Promise<GranolaCredentials | null> {
+  try {
+    const content = await fs.readFile(GRANOLA_APP_TOKEN_PATH, 'utf-8');
+    const appData = JSON.parse(content);
+
+    // Check if the app has valid tokens
+    if (!appData.workos_tokens) return null;
+
+    const tokens = typeof appData.workos_tokens === 'string'
+      ? JSON.parse(appData.workos_tokens)
+      : appData.workos_tokens;
+
+    if (!tokens.refresh_token) return null;
+
+    // Extract client_id from the app data or use default
+    const userInfo = appData.user_info
+      ? (typeof appData.user_info === 'string' ? JSON.parse(appData.user_info) : appData.user_info)
+      : null;
+
+    // Get our existing credentials for the client_id and last_synced_at
+    const existing = await getCredentialsInternal();
+
+    const creds: GranolaCredentials = {
+      refresh_token: tokens.refresh_token,
+      access_token: tokens.access_token,
+      access_token_expires_at: tokens.obtained_at
+        ? tokens.obtained_at + (tokens.expires_in * 1000)
+        : undefined,
+      client_id: existing?.client_id || 'client_01JZJ0XBDAT8PHJWQY09Y0VD61',
+      last_synced_at: existing?.last_synced_at,
+    };
+
+    // Save the updated credentials
+    await saveCredentials(creds);
+    console.log('[Granola] Synced fresh tokens from Granola app');
+
+    return creds;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Internal: Get stored Granola credentials without syncing
+ */
+async function getCredentialsInternal(): Promise<GranolaCredentials | null> {
   try {
     const content = await fs.readFile(CREDENTIALS_PATH, 'utf-8');
     return JSON.parse(content);
   } catch {
     return null;
   }
+}
+
+/**
+ * Get stored Granola credentials, attempting to sync from app if needed
+ */
+export async function getCredentials(): Promise<GranolaCredentials | null> {
+  // First try our stored credentials
+  const creds = await getCredentialsInternal();
+
+  // If we have credentials with a valid access token, use them
+  if (creds?.access_token && creds.access_token_expires_at) {
+    const bufferMs = 5 * 60 * 1000; // 5 minutes
+    if (Date.now() < creds.access_token_expires_at - bufferMs) {
+      return creds;
+    }
+  }
+
+  // Try to sync from the Granola app (might have fresher tokens)
+  const appCreds = await syncFromGranolaApp();
+  if (appCreds) return appCreds;
+
+  return creds;
 }
 
 /**
@@ -73,57 +148,51 @@ export async function isConfigured(): Promise<boolean> {
 }
 
 /**
- * Get a valid access token, refreshing if necessary.
- * CRITICAL: Saves new refresh token immediately after rotation.
+ * Get a valid access token.
+ *
+ * IMPORTANT: We NEVER refresh tokens ourselves to avoid burning the
+ * Granola app's session. Instead, we read the access token from the
+ * Granola app's storage and use it directly.
+ *
+ * The Granola desktop app handles all token refreshing.
  */
 export async function getAccessToken(): Promise<string> {
-  const creds = await getCredentials();
-  if (!creds) {
-    throw new Error('Granola not configured. Call setup first.');
+  // Always try to get fresh tokens from the Granola app first
+  const appCreds = await syncFromGranolaApp();
+
+  if (appCreds?.access_token) {
+    // Check if the app's access token is still valid
+    if (appCreds.access_token_expires_at) {
+      const bufferMs = 2 * 60 * 1000; // 2 minutes buffer
+      if (Date.now() < appCreds.access_token_expires_at - bufferMs) {
+        return appCreds.access_token;
+      }
+    } else {
+      // No expiry info, try using it anyway
+      return appCreds.access_token;
+    }
   }
 
-  // Check if current access token is still valid (with 5min buffer)
-  if (creds.access_token && creds.access_token_expires_at) {
-    const bufferMs = 5 * 60 * 1000; // 5 minutes
-    if (Date.now() < creds.access_token_expires_at - bufferMs) {
+  // Fall back to our stored credentials
+  const creds = await getCredentialsInternal();
+
+  if (creds?.access_token) {
+    // Check if still valid
+    if (creds.access_token_expires_at) {
+      const bufferMs = 2 * 60 * 1000;
+      if (Date.now() < creds.access_token_expires_at - bufferMs) {
+        return creds.access_token;
+      }
+    } else {
       return creds.access_token;
     }
   }
 
-  // Refresh the token
-  console.log('[Granola] Refreshing access token...');
-
-  const response = await fetch(WORKOS_AUTH_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client_id: creds.client_id,
-      grant_type: 'refresh_token',
-      refresh_token: creds.refresh_token,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    console.error('[Granola] Token refresh failed:', error);
-    throw new Error(`Token refresh failed: ${response.status}`);
-  }
-
-  const data = await response.json();
-
-  // CRITICAL: Save new tokens immediately before returning
-  // The old refresh token is now invalid
-  const newCreds: GranolaCredentials = {
-    ...creds,
-    refresh_token: data.refresh_token,
-    access_token: data.access_token,
-    access_token_expires_at: Date.now() + (data.expires_in * 1000),
-  };
-
-  await saveCredentials(newCreds);
-  console.log('[Granola] Token refreshed and saved');
-
-  return data.access_token;
+  // No valid access token available
+  throw new Error(
+    'No valid Granola access token. Please ensure the Granola app is running ' +
+    'and you are logged in. The app needs to refresh the token.'
+  );
 }
 
 /**
@@ -199,6 +268,49 @@ export async function getDocument(documentId: string): Promise<GranolaDocumentFu
     throw new Error(`Document not found: ${documentId}`);
   }
   return docs[0];
+}
+
+/**
+ * Transcript utterance from Granola
+ */
+export interface GranolaTranscriptUtterance {
+  id: string;
+  document_id: string;
+  text: string;
+  start_timestamp: string;
+  source: 'microphone' | 'system_audio';
+}
+
+/**
+ * Fetch transcript for a document
+ */
+export async function getDocumentTranscript(documentId: string): Promise<GranolaTranscriptUtterance[]> {
+  const token = await getAccessToken();
+
+  const response = await fetch(`${GRANOLA_API_URL}/v1/get-document-transcript`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'User-Agent': 'Granola/5.354.0',
+      'X-Client-Version': '5.354.0',
+    },
+    body: JSON.stringify({
+      document_id: documentId,
+    }),
+  });
+
+  if (response.status === 404) {
+    // No transcript available
+    return [];
+  }
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch transcript: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.utterances || data || [];
 }
 
 /**

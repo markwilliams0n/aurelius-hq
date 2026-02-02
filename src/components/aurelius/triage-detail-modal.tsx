@@ -13,6 +13,7 @@ import {
   Zap,
   AlertTriangle,
   ArrowRight,
+  CalendarDays,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TriageItem } from "./triage-card";
@@ -51,6 +52,7 @@ const CONNECTOR_CONFIG = {
   gmail: { icon: Mail, label: "Gmail", color: "text-red-400" },
   slack: { icon: MessageSquare, label: "Slack", color: "text-purple-400" },
   linear: { icon: LayoutList, label: "Linear", color: "text-indigo-400" },
+  granola: { icon: CalendarDays, label: "Granola", color: "text-amber-400" },
   manual: { icon: Mail, label: "Manual", color: "text-muted-foreground" },
 };
 

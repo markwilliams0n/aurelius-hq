@@ -1,27 +1,59 @@
 import { NextResponse } from "next/server";
 import { generateFakeInboxItems, getTriageQueue } from "@/lib/triage/fake-data";
+import { db } from "@/lib/db";
+import { inboxItems as inboxItemsTable, suggestedTasks } from "@/lib/db/schema";
+import { eq, desc, and, or, lt, isNull } from "drizzle-orm";
+import { insertInboxItemWithTasks } from "@/lib/triage/insert-with-tasks";
 
-// In-memory store for development (will be replaced with database)
-// Using a module-level variable to persist between requests
-let inboxItems = generateFakeInboxItems();
+// Wake up snoozed items whose snooze time has passed
+async function wakeUpSnoozedItems() {
+  const now = new Date();
 
-// Get the in-memory items (exported for use by other routes)
-export function getInboxItems() {
-  return inboxItems;
+  // Find snoozed items where snoozedUntil has passed
+  await db
+    .update(inboxItemsTable)
+    .set({
+      status: "new",
+      snoozedUntil: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(inboxItemsTable.status, "snoozed"),
+        lt(inboxItemsTable.snoozedUntil, now)
+      )
+    );
 }
 
-// Update an item in the store
-export function updateInboxItem(id: string, updates: Partial<typeof inboxItems[0]>) {
-  inboxItems = inboxItems.map((item) =>
-    item.externalId === id ? { ...item, ...updates } : item
-  );
-  return inboxItems.find((item) => item.externalId === id);
-}
+// Fetch inbox items from database
+export async function getInboxItemsFromDb(options?: {
+  status?: string;
+  connector?: string;
+  limit?: number;
+  includeAll?: boolean; // For stats - include all items regardless of status
+}) {
+  const conditions = [];
 
-// Reset the store (useful for testing)
-export function resetInboxItems() {
-  inboxItems = generateFakeInboxItems();
-  return inboxItems;
+  if (!options?.includeAll) {
+    if (options?.status) {
+      conditions.push(eq(inboxItemsTable.status, options.status as any));
+    }
+  }
+  if (options?.connector) {
+    conditions.push(eq(inboxItemsTable.connector, options.connector as any));
+  }
+
+  const query = db
+    .select()
+    .from(inboxItemsTable)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(inboxItemsTable.receivedAt));
+
+  if (options?.limit) {
+    return query.limit(options.limit);
+  }
+
+  return query;
 }
 
 // GET /api/triage - List triage items
@@ -31,32 +63,75 @@ export async function GET(request: Request) {
   const connector = searchParams.get("connector");
   const limit = parseInt(searchParams.get("limit") || "50");
 
-  let filtered = inboxItems.filter((item) => item.status === status);
+  // First, wake up any snoozed items whose time has passed
+  await wakeUpSnoozedItems();
 
-  if (connector) {
-    filtered = filtered.filter((item) => item.connector === connector);
-  }
+  // Fetch from database
+  const dbItems = await getInboxItemsFromDb({
+    status,
+    connector: connector || undefined,
+    limit,
+  });
+
+  // Get all items for stats
+  const allItems = await getInboxItemsFromDb({ includeAll: true });
 
   // Sort by priority then date
-  const queue = getTriageQueue(filtered);
+  const queue = getTriageQueue(dbItems);
+
+  // Count snoozed items that are still snoozed (not yet woken up)
+  const snoozedCount = allItems.filter(
+    (i) => i.status === "snoozed" && i.snoozedUntil && new Date(i.snoozedUntil) > new Date()
+  ).length;
 
   return NextResponse.json({
     items: queue.slice(0, limit),
     total: queue.length,
     stats: {
-      new: inboxItems.filter((i) => i.status === "new").length,
-      archived: inboxItems.filter((i) => i.status === "archived").length,
-      snoozed: inboxItems.filter((i) => i.status === "snoozed").length,
-      actioned: inboxItems.filter((i) => i.status === "actioned").length,
+      new: allItems.filter((i) => i.status === "new").length,
+      archived: allItems.filter((i) => i.status === "archived").length,
+      snoozed: snoozedCount,
+      actioned: allItems.filter((i) => i.status === "actioned").length,
     },
   });
 }
 
 // POST /api/triage - Reset with fresh fake data (for development)
 export async function POST() {
-  const items = resetInboxItems();
+  // Clear existing fake items and their tasks (keep real connector data like granola)
+  // Tasks are cascade deleted when inbox items are deleted
+  await db.delete(inboxItemsTable).where(eq(inboxItemsTable.connector, 'gmail'));
+  await db.delete(inboxItemsTable).where(eq(inboxItemsTable.connector, 'slack'));
+  await db.delete(inboxItemsTable).where(eq(inboxItemsTable.connector, 'linear'));
+  await db.delete(inboxItemsTable).where(eq(inboxItemsTable.connector, 'manual'));
+
+  // Generate fresh fake data
+  const fakeItems = generateFakeInboxItems();
+
+  // Insert fake data - skip AI task extraction for performance
+  // Fake data could include simulated tasks later if needed
+  for (const item of fakeItems) {
+    await insertInboxItemWithTasks(
+      {
+        connector: item.connector as any,
+        externalId: item.externalId,
+        sender: item.sender,
+        senderName: item.senderName,
+        subject: item.subject,
+        content: item.content,
+        preview: item.preview,
+        status: item.status as any,
+        priority: item.priority as any,
+        tags: item.tags,
+        receivedAt: item.receivedAt,
+        enrichment: item.enrichment,
+      },
+      { skipAiExtraction: true }
+    );
+  }
+
   return NextResponse.json({
     message: "Inbox reset with fresh fake data",
-    count: items.length,
+    count: fakeItems.length,
   });
 }

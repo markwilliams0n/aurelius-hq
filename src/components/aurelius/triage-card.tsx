@@ -12,6 +12,7 @@ import {
   User,
   Building,
   FolderOpen,
+  CalendarDays,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -19,7 +20,7 @@ import { cn } from "@/lib/utils";
 export type TriageItem = {
   id: string;
   externalId: string;
-  connector: "gmail" | "slack" | "linear" | "manual";
+  connector: "gmail" | "slack" | "linear" | "granola" | "manual";
   sender: string;
   senderName?: string | null;
   senderAvatar?: string | null;
@@ -83,6 +84,7 @@ const CONNECTOR_CONFIG = {
   gmail: { icon: Mail, label: "Gmail", color: "text-red-400" },
   slack: { icon: MessageSquare, label: "Slack", color: "text-purple-400" },
   linear: { icon: LayoutList, label: "Linear", color: "text-indigo-400" },
+  granola: { icon: CalendarDays, label: "Granola", color: "text-amber-400" },
   manual: { icon: Mail, label: "Manual", color: "text-muted-foreground" },
 };
 
@@ -115,7 +117,7 @@ export const TriageCard = forwardRef<HTMLDivElement, TriageCardProps>(
       <div
         ref={ref}
         className={cn(
-          "relative w-full max-w-2xl bg-secondary border rounded-xl overflow-hidden transition-all duration-200",
+          "relative w-[640px] max-w-2xl bg-secondary border rounded-xl overflow-hidden transition-all duration-200",
           isActive
             ? "border-gold shadow-lg shadow-gold/10 scale-100"
             : "border-border scale-95 opacity-60",
@@ -242,8 +244,11 @@ export const TriageCard = forwardRef<HTMLDivElement, TriageCardProps>(
             <div className="flex items-center gap-4 text-xs text-muted-foreground">
               <KeyHint keyName="←" label="Archive" />
               <KeyHint keyName="↑" label="Memory" />
+              <KeyHint keyName="␣" label="Chat" />
               <KeyHint keyName="→" label="Action" />
-              <KeyHint keyName="↓" label="Reply" />
+              {(item.connector === "gmail" || item.connector === "slack") && (
+                <KeyHint keyName="↓" label="Reply" />
+              )}
             </div>
           </div>
         )}

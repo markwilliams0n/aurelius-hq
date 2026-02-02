@@ -78,6 +78,37 @@ export const inboxItems = pgTable(
         reason: string;
       }>;
       contextFromMemory?: string;
+      // Granola meeting specific
+      attendees?: string;
+      meetingTime?: string;
+      topics?: string[];
+      actionItems?: Array<{
+        description: string;
+        assignee?: string;
+        dueDate?: string;
+      }>;
+      // Extracted memory ready for review
+      extractedMemory?: {
+        entities?: Array<{
+          name: string;
+          type: string;
+          role?: string;
+          facts: string[];
+        }>;
+        facts?: Array<{
+          content: string;
+          category: string;
+          entityName?: string;
+          confidence: string;
+        }>;
+        actionItems?: Array<{
+          description: string;
+          assignee?: string;
+          dueDate?: string;
+        }>;
+        summary?: string;
+        topics?: string[];
+      };
     }>(),
 
     // Timestamps

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { getInboxItems, updateInboxItem } from "../route";
+import { db } from "@/lib/db";
+import { inboxItems } from "@/lib/db/schema";
+import { eq, or } from "drizzle-orm";
 
 // GET /api/triage/[id] - Get single item
 export async function GET(
@@ -7,8 +9,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const items = getInboxItems();
-  const item = items.find((i) => i.externalId === id);
+
+  // Find by id or externalId
+  const items = await db
+    .select()
+    .from(inboxItems)
+    .where(or(eq(inboxItems.id, id), eq(inboxItems.externalId, id)))
+    .limit(1);
+
+  const item = items[0];
 
   if (!item) {
     return NextResponse.json({ error: "Item not found" }, { status: 404 });
@@ -26,78 +35,69 @@ export async function POST(
   const body = await request.json();
   const { action, ...actionData } = body;
 
-  const items = getInboxItems();
-  const item = items.find((i) => i.externalId === id);
+  // Find by id or externalId
+  const items = await db
+    .select()
+    .from(inboxItems)
+    .where(or(eq(inboxItems.id, id), eq(inboxItems.externalId, id)))
+    .limit(1);
+
+  const item = items[0];
 
   if (!item) {
     return NextResponse.json({ error: "Item not found" }, { status: 404 });
   }
 
-  let updatedItem;
+  let updates: Partial<typeof inboxItems.$inferInsert> = {
+    updatedAt: new Date(),
+  };
 
   switch (action) {
     case "archive":
-      updatedItem = updateInboxItem(id, {
-        status: "archived",
-        updatedAt: new Date(),
-      });
+      updates.status = "archived";
+      updates.snoozedUntil = null;
       break;
 
     case "snooze":
-      const snoozeDuration = actionData.duration || "1h"; // 1h, 4h, 1d, 1w
-      const snoozeUntil = calculateSnoozeTime(snoozeDuration);
-      updatedItem = updateInboxItem(id, {
-        status: "snoozed",
-        snoozedUntil: snoozeUntil,
-        updatedAt: new Date(),
-      });
+      // Accept either snoozeUntil (ISO string) or duration
+      let snoozeUntil: Date;
+      if (actionData.snoozeUntil) {
+        snoozeUntil = new Date(actionData.snoozeUntil);
+      } else {
+        const duration = actionData.duration || "1h";
+        snoozeUntil = calculateSnoozeTime(duration);
+      }
+      updates.status = "snoozed";
+      updates.snoozedUntil = snoozeUntil;
       break;
 
     case "flag":
       const currentTags = item.tags || [];
-      const newTags = currentTags.includes("flagged")
+      updates.tags = currentTags.includes("flagged")
         ? currentTags.filter((t) => t !== "flagged")
         : [...currentTags, "flagged"];
-      updatedItem = updateInboxItem(id, {
-        tags: newTags,
-        updatedAt: new Date(),
-      });
       break;
 
     case "priority":
-      const newPriority = actionData.priority || "high";
-      updatedItem = updateInboxItem(id, {
-        priority: newPriority,
-        updatedAt: new Date(),
-      });
+      updates.priority = actionData.priority || "high";
       break;
 
     case "tag":
       const tag = actionData.tag;
       const existingTags = item.tags || [];
       if (!existingTags.includes(tag)) {
-        updatedItem = updateInboxItem(id, {
-          tags: [...existingTags, tag],
-          updatedAt: new Date(),
-        });
-      } else {
-        updatedItem = item;
+        updates.tags = [...existingTags, tag];
       }
       break;
 
     case "actioned":
-      updatedItem = updateInboxItem(id, {
-        status: "actioned",
-        updatedAt: new Date(),
-      });
+      updates.status = "actioned";
+      updates.snoozedUntil = null;
       break;
 
     case "restore":
-      updatedItem = updateInboxItem(id, {
-        status: "new",
-        snoozedUntil: undefined,
-        updatedAt: new Date(),
-      });
+      updates.status = "new";
+      updates.snoozedUntil = null;
       break;
 
     default:
@@ -107,6 +107,13 @@ export async function POST(
       );
   }
 
+  // Update in database
+  const [updatedItem] = await db
+    .update(inboxItems)
+    .set(updates)
+    .where(eq(inboxItems.id, item.id))
+    .returning();
+
   return NextResponse.json({
     success: true,
     action,
@@ -114,13 +121,15 @@ export async function POST(
   });
 }
 
-// Helper to calculate snooze time
+// Helper to calculate snooze time from duration string
 function calculateSnoozeTime(duration: string): Date {
   const now = new Date();
 
   switch (duration) {
     case "1h":
       return new Date(now.getTime() + 60 * 60 * 1000);
+    case "3h":
+      return new Date(now.getTime() + 3 * 60 * 60 * 1000);
     case "4h":
       return new Date(now.getTime() + 4 * 60 * 60 * 1000);
     case "1d":
