@@ -6,24 +6,41 @@ import { TriageCard, TriageItem } from "@/components/aurelius/triage-card";
 import { TriageActionMenu } from "@/components/aurelius/triage-action-menu";
 import { TriageReplyComposer } from "@/components/aurelius/triage-reply-composer";
 import { TriageSidebar } from "@/components/aurelius/triage-sidebar";
+import { TriageDetailModal } from "@/components/aurelius/triage-detail-modal";
 import { toast } from "sonner";
 import {
   Archive,
-  ArrowUp,
-  ArrowRight,
+  Brain,
+  Zap,
   MessageSquare,
   Inbox,
   RefreshCw,
+  Mail,
+  LayoutList,
+  Filter,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type ViewMode = "triage" | "action" | "reply";
+type ViewMode = "triage" | "action" | "reply" | "detail";
+type ConnectorFilter = "all" | "gmail" | "slack" | "linear";
+
+const CONNECTOR_FILTERS: Array<{
+  value: ConnectorFilter;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}> = [
+  { value: "all", label: "All", icon: Filter },
+  { value: "gmail", label: "Gmail", icon: Mail },
+  { value: "slack", label: "Slack", icon: MessageSquare },
+  { value: "linear", label: "Linear", icon: LayoutList },
+];
 
 export function TriageClient() {
   const [items, setItems] = useState<TriageItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("triage");
+  const [connectorFilter, setConnectorFilter] = useState<ConnectorFilter>("all");
   const [lastAction, setLastAction] = useState<{
     type: string;
     itemId: string;
@@ -56,10 +73,28 @@ export function TriageClient() {
     fetchItems();
   }, [fetchItems]);
 
-  // Current item
-  const currentItem = items[currentIndex];
-  const hasItems = items.length > 0;
-  const progress = hasItems ? `${currentIndex + 1} / ${items.length}` : "0 / 0";
+  // Filter items by connector
+  const filteredItems = connectorFilter === "all"
+    ? items
+    : items.filter((item) => item.connector === connectorFilter);
+
+  // Current item (from filtered list)
+  const currentItem = filteredItems[currentIndex];
+  const hasItems = filteredItems.length > 0;
+  const progress = hasItems ? `${currentIndex + 1} / ${filteredItems.length}` : "0 / 0";
+
+  // Reset index when filter changes
+  useEffect(() => {
+    setCurrentIndex(0);
+  }, [connectorFilter]);
+
+  // Get counts per connector
+  const connectorCounts = {
+    all: items.length,
+    gmail: items.filter((i) => i.connector === "gmail").length,
+    slack: items.filter((i) => i.connector === "slack").length,
+    linear: items.filter((i) => i.connector === "linear").length,
+  };
 
   // Archive action (←)
   const handleArchive = useCallback(async () => {
@@ -129,6 +164,12 @@ export function TriageClient() {
   const handleOpenReply = useCallback(() => {
     if (!currentItem) return;
     setViewMode("reply");
+  }, [currentItem]);
+
+  // Open detail view (Enter)
+  const handleOpenDetail = useCallback(() => {
+    if (!currentItem) return;
+    setViewMode("detail");
   }, [currentItem]);
 
   // Close overlays
@@ -237,6 +278,10 @@ export function TriageClient() {
           e.preventDefault();
           handleOpenReply();
           break;
+        case "Enter":
+          e.preventDefault();
+          handleOpenDetail();
+          break;
         case "u":
           if (e.metaKey || e.ctrlKey) {
             e.preventDefault();
@@ -254,6 +299,7 @@ export function TriageClient() {
     handleMemory,
     handleOpenActions,
     handleOpenReply,
+    handleOpenDetail,
     handleCloseOverlay,
     handleUndo,
   ]);
@@ -296,27 +342,60 @@ export function TriageClient() {
     <AppShell rightSidebar={<TriageSidebar item={currentItem} stats={stats} />}>
       <div className="flex-1 flex flex-col h-screen">
         {/* Header */}
-        <header className="px-6 py-4 border-b border-border flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <h1 className="font-serif text-xl text-gold">Triage</h1>
-            <span className="text-sm text-muted-foreground font-mono">
-              {progress}
-            </span>
+        <header className="px-6 py-4 border-b border-border shrink-0">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <h1 className="font-serif text-xl text-gold">Triage</h1>
+              <span className="text-sm text-muted-foreground font-mono">
+                {progress}
+              </span>
+            </div>
+            <button
+              onClick={handleReset}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              title="Reset with fake data"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Reset
+            </button>
           </div>
-          <button
-            onClick={handleReset}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-            title="Reset with fake data"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            Reset
-          </button>
+
+          {/* Connector filters */}
+          <div className="flex items-center gap-2">
+            {CONNECTOR_FILTERS.map((filter) => {
+              const Icon = filter.icon;
+              const count = connectorCounts[filter.value];
+              const isActive = connectorFilter === filter.value;
+
+              return (
+                <button
+                  key={filter.value}
+                  onClick={() => setConnectorFilter(filter.value)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                    isActive
+                      ? "bg-gold/20 text-gold border border-gold/30"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary border border-transparent"
+                  )}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{filter.label}</span>
+                  <span className={cn(
+                    "px-1.5 py-0.5 rounded-full text-[10px]",
+                    isActive ? "bg-gold/30" : "bg-secondary"
+                  )}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </header>
 
         {/* Card area */}
         <div className="flex-1 flex items-center justify-center p-6 relative overflow-hidden">
           {/* Card stack effect - show next cards behind */}
-          {items.slice(currentIndex + 1, currentIndex + 3).map((item, idx) => (
+          {filteredItems.slice(currentIndex + 1, currentIndex + 3).map((item, idx) => (
             <div
               key={item.id}
               className="absolute"
@@ -342,22 +421,22 @@ export function TriageClient() {
             <TriageCard ref={cardRef} item={currentItem} isActive={true} />
           </div>
 
-          {/* Action indicators */}
+          {/* Action indicators - animated feedback */}
           {animatingOut && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
               {animatingOut === "left" && (
-                <div className="bg-red-500/20 text-red-400 rounded-full p-6">
+                <div className="animate-action-pop bg-red-500/20 text-red-400 rounded-full p-6 border-2 border-red-500/40 shadow-lg shadow-red-500/20">
                   <Archive className="w-12 h-12" />
                 </div>
               )}
               {animatingOut === "up" && (
-                <div className="bg-gold/20 text-gold rounded-full p-6">
-                  <ArrowUp className="w-12 h-12" />
+                <div className="animate-action-pop bg-gold/20 text-gold rounded-full p-6 border-2 border-gold/40 shadow-lg shadow-gold/20">
+                  <Brain className="w-12 h-12" />
                 </div>
               )}
               {animatingOut === "right" && (
-                <div className="bg-blue-500/20 text-blue-400 rounded-full p-6">
-                  <ArrowRight className="w-12 h-12" />
+                <div className="animate-action-pop bg-blue-500/20 text-blue-400 rounded-full p-6 border-2 border-blue-500/40 shadow-lg shadow-blue-500/20">
+                  <Zap className="w-12 h-12" />
                 </div>
               )}
             </div>
@@ -366,7 +445,7 @@ export function TriageClient() {
 
         {/* Bottom keyboard hints (always visible) */}
         <div className="px-6 py-3 border-t border-border bg-background shrink-0">
-          <div className="flex items-center justify-center gap-8 text-sm text-muted-foreground">
+          <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
             <ActionButton
               keyName="←"
               label="Archive"
@@ -375,9 +454,15 @@ export function TriageClient() {
             />
             <ActionButton
               keyName="↑"
-              label="Save to Memory"
+              label="Memory"
               onClick={handleMemory}
               color="text-gold"
+            />
+            <ActionButton
+              keyName="↵"
+              label="Expand"
+              onClick={handleOpenDetail}
+              color="text-foreground"
             />
             <ActionButton
               keyName="→"
@@ -415,6 +500,11 @@ export function TriageClient() {
           }}
           onClose={handleCloseOverlay}
         />
+      )}
+
+      {/* Detail modal */}
+      {viewMode === "detail" && currentItem && (
+        <TriageDetailModal item={currentItem} onClose={handleCloseOverlay} />
       )}
     </AppShell>
   );
