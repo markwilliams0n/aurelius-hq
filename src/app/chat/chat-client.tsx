@@ -56,7 +56,7 @@ export function ChatClient() {
             const data = await response.json();
             setConversationId(savedId);
             // Add IDs to loaded messages if they don't have them
-            const loadedMessages = (data.messages || []).map((m: Omit<Message, "id">, i: number) => ({
+            const loadedMessages = (data.messages || []).map((m: Partial<Message> & { role: Message["role"]; content: string }, i: number) => ({
               ...m,
               id: m.id || `loaded-${i}-${Date.now()}`,
             }));

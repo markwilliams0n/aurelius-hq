@@ -29,6 +29,13 @@
       "when": 1769999213593,
       "tag": "0003_nosy_eternals",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1770014340673,
+      "tag": "0004_steady_omega_flight",
+      "breakpoints": true
     }
   ]
 }
