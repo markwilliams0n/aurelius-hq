@@ -1,0 +1,50 @@
+[
+  {
+    "fact": "Rio, full",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "gabriel-lemache-1769990901577-0",
+    "lastAccessed": "2026-02-02T00:08:21.577Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "full-stack dashboard integration",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "gabriel-lemache-1769991487896",
+    "lastAccessed": "2026-02-02T00:18:07.896Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Ramping up on the codebase and picking up smaller UI tickets in Rio",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "gabriel-lemache-1769993916206",
+    "lastAccessed": "2026-02-02T00:58:36.206Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Full-stack dashboard integration in Rio",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "gabriel-lemache-1769997155075",
+    "lastAccessed": "2026-02-02T01:52:35.075Z",
+    "accessCount": 0
+  }
+]

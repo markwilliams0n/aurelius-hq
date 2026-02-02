@@ -1,0 +1,38 @@
+[
+  {
+    "fact": "Elena Vasquez opened pilot talks (Toronto meetup)",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "shopify-1769991487889-0",
+    "lastAccessed": "2026-02-02T00:18:07.889Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Elena Vasquez opened Shopify pilot talks",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "shopify-1769996097504",
+    "lastAccessed": "2026-02-02T01:34:57.504Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Elena Vasquez opened Shopify pilot talks (Toronto meetup)",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "shopify-1769997155066",
+    "lastAccessed": "2026-02-02T01:52:35.066Z",
+    "accessCount": 0
+  }
+]

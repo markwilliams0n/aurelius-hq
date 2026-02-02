@@ -1,0 +1,50 @@
+[
+  {
+    "fact": "Advertising locked for $45k",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-1769993904617-0",
+    "lastAccessed": "2026-02-02T00:58:24.617Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "6-mo NI",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-1769993904618-1",
+    "lastAccessed": "2026-02-02T00:58:24.618Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Advertising locked: $45k",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-1769996008391",
+    "lastAccessed": "2026-02-02T01:33:28.391Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "6-mo NI...",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-1769996008392",
+    "lastAccessed": "2026-02-02T01:33:28.392Z",
+    "accessCount": 0
+  }
+]

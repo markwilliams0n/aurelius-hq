@@ -1,0 +1,14 @@
+[
+  {
+    "fact": "Sarah flies back to San Francisco every other week",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "san-francisco-1769991487891-0",
+    "lastAccessed": "2026-02-02T00:18:07.891Z",
+    "accessCount": 0
+  }
+]

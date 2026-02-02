@@ -1,0 +1,50 @@
+[
+  {
+    "fact": "Booked call with Wasserman SVP Music",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rachel-thornton-1769993904615-0",
+    "lastAccessed": "2026-02-02T00:58:24.615Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Wasserman SVP Music",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rachel-thornton-1769996008377",
+    "lastAccessed": "2026-02-02T01:33:28.377Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "call booked on February 6th via NIF web-form.",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rachel-thornton-1769996008377",
+    "lastAccessed": "2026-02-02T01:33:28.377Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Call booked 6 Feb (routed via NIF web-form)",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rachel-thornton-1769996089941",
+    "lastAccessed": "2026-02-02T01:34:49.941Z",
+    "accessCount": 0
+  }
+]

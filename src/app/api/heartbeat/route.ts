@@ -1,12 +1,23 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { runHeartbeat } from '@/lib/memory/heartbeat';
 import { appendActivityLog, HeartbeatLogEntry } from '@/lib/memory/activity-log';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120; // Allow up to 2 minutes for heartbeat
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   const startTime = Date.now();
+
+  // Get trigger type from request body (default to manual)
+  let trigger: 'manual' | 'auto' | 'scheduled' = 'manual';
+  try {
+    const body = await request.json().catch(() => ({}));
+    if (body.trigger === 'auto' || body.trigger === 'scheduled') {
+      trigger = body.trigger;
+    }
+  } catch {
+    // No body, use default
+  }
 
   try {
     const result = await runHeartbeat();
@@ -16,6 +27,7 @@ export async function POST() {
     const logEntry: HeartbeatLogEntry = {
       id: `hb-${Date.now()}`,
       type: 'heartbeat',
+      trigger,
       success: true,
       entitiesCreated: result.entitiesCreated,
       entitiesUpdated: result.entitiesUpdated,
@@ -40,6 +52,7 @@ export async function POST() {
     const logEntry: HeartbeatLogEntry = {
       id: `hb-${Date.now()}`,
       type: 'heartbeat',
+      trigger,
       success: false,
       entitiesCreated: 0,
       entitiesUpdated: 0,
@@ -60,6 +73,6 @@ export async function POST() {
 }
 
 // Also allow GET for easy testing
-export async function GET() {
-  return POST();
+export async function GET(request: NextRequest) {
+  return POST(request);
 }

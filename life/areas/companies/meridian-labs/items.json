@@ -1,0 +1,63 @@
+[
+  {
+    "fact": "Mentioned on 2026-02-01",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "meridian-labs-1769989834259-0",
+    "lastAccessed": "2026-02-01T23:50:34.259Z",
+    "accessCount": 0,
+    "tier": "hot"
+  },
+  {
+    "fact": "Project Atlas",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "meridian-labs-1769991487888",
+    "lastAccessed": "2026-02-02T00:18:07.888Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Heads-down on Project Atlas for the past six weeks",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "meridian-labs-1769993916199",
+    "lastAccessed": "2026-02-02T00:58:36.199Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Project Atlas is a project at Meridian Labs",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "meridian-labs-1769996097503",
+    "lastAccessed": "2026-02-02T01:34:57.503Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Project Atlas is a project of Meridian Labs",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "meridian-labs-1769997700411",
+    "lastAccessed": "2026-02-02T02:01:40.411Z",
+    "accessCount": 0
+  }
+]

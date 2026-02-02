@@ -16,8 +16,13 @@ import {
   FolderKanban,
   Clock,
   Trash2,
-  Activity,
   RefreshCw,
+  ChevronRight,
+  MessageSquare,
+  Zap,
+  Calendar,
+  AlertTriangle,
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -30,42 +35,60 @@ type EntityDetail = {
   source: string;
 };
 
-type HeartbeatResult = {
+type HeartbeatEntry = {
   id: string;
   type: "heartbeat";
+  trigger: "manual" | "auto" | "scheduled";
   success: boolean;
   entitiesCreated: number;
   entitiesUpdated: number;
   reindexed: boolean;
-  timestamp: string;
-  duration?: number;
-  error?: string;
   entities?: EntityDetail[];
   extractionMethod?: "ollama" | "pattern";
+  duration?: number;
+  timestamp: string;
+  error?: string;
 };
 
-type SynthesisResult = {
+type SynthesisEntry = {
   id: string;
   type: "synthesis";
+  trigger: "manual" | "auto" | "scheduled";
   success: boolean;
   entitiesProcessed: number;
   factsArchived: number;
   summariesRegenerated: number;
-  timestamp: string;
   duration?: number;
+  timestamp: string;
   error?: string;
 };
 
-type ActivityEntry = HeartbeatResult | SynthesisResult;
+type SessionEntry = {
+  id: string;
+  type: "session";
+  action: "started" | "ended";
+  conversationId?: string;
+  timestamp: string;
+};
+
+type SystemEntry = {
+  id: string;
+  type: "system";
+  action: "startup" | "shutdown" | "error" | "config_change";
+  message: string;
+  timestamp: string;
+};
+
+type ActivityEntry = HeartbeatEntry | SynthesisEntry | SessionEntry | SystemEntry;
 
 export default function SystemPage() {
   const [heartbeatRunning, setHeartbeatRunning] = useState(false);
   const [synthesisRunning, setSynthesisRunning] = useState(false);
   const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Load activity log on mount
   useEffect(() => {
     loadActivityLog();
   }, []);
@@ -84,16 +107,12 @@ export default function SystemPage() {
 
   const runHeartbeat = async () => {
     setHeartbeatRunning(true);
-
     try {
       const response = await fetch("/api/heartbeat", { method: "POST" });
       const data = await response.json();
-
-      toast.success(`Heartbeat complete: ${data.entitiesCreated ?? 0} created, ${data.entitiesUpdated ?? 0} updated`);
-
-      // Reload activity log to get the persisted entry
+      toast.success(`Heartbeat: ${data.entitiesCreated ?? 0} created, ${data.entitiesUpdated ?? 0} updated`);
       await loadActivityLog();
-    } catch (error) {
+    } catch {
       toast.error("Heartbeat failed");
       await loadActivityLog();
     } finally {
@@ -103,16 +122,12 @@ export default function SystemPage() {
 
   const runSynthesis = async () => {
     setSynthesisRunning(true);
-
     try {
       const response = await fetch("/api/synthesis", { method: "POST" });
       const data = await response.json();
-
-      toast.success(`Synthesis complete: ${data.factsArchived ?? 0} facts archived`);
-
-      // Reload activity log to get the persisted entry
+      toast.success(`Synthesis: ${data.factsArchived ?? 0} facts archived`);
       await loadActivityLog();
-    } catch (error) {
+    } catch {
       toast.error("Synthesis failed");
       await loadActivityLog();
     } finally {
@@ -120,22 +135,26 @@ export default function SystemPage() {
     }
   };
 
-  const copyHeartbeatToClipboard = async (result: HeartbeatResult) => {
-    const output = formatHeartbeatForCopy(result);
-    await navigator.clipboard.writeText(output);
-    setCopiedId(result.id);
-    setTimeout(() => setCopiedId(null), 2000);
-    toast.success("Copied to clipboard");
-  };
-
   const clearResults = async () => {
     try {
       await fetch("/api/activity", { method: "DELETE" });
       setActivityLog([]);
       toast.success("Cleared activity log");
-    } catch (error) {
+    } catch {
       toast.error("Failed to clear activity log");
     }
+  };
+
+  const copyToClipboard = async (entry: HeartbeatEntry) => {
+    const output = formatHeartbeatForCopy(entry);
+    await navigator.clipboard.writeText(output);
+    setCopiedId(entry.id);
+    setTimeout(() => setCopiedId(null), 2000);
+    toast.success("Copied to clipboard");
+  };
+
+  const toggleExpand = (id: string) => {
+    setExpandedId(expandedId === id ? null : id);
   };
 
   return (
@@ -145,120 +164,76 @@ export default function SystemPage() {
         <div className="border-b border-border px-6 py-4">
           <h1 className="font-serif text-2xl text-gold">System</h1>
           <p className="text-sm text-muted-foreground">
-            Monitor and control memory system operations
+            Memory system control center
           </p>
         </div>
 
-        <div className="p-6 space-y-8">
-          {/* Controls */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Heartbeat Control */}
-            <div className="p-4 rounded-lg border border-border bg-card">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-lg bg-gold/10 flex items-center justify-center">
-                  <HeartPulse className="w-5 h-5 text-gold" />
-                </div>
-                <div>
-                  <h3 className="font-medium">Heartbeat</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Extract entities from daily notes
-                  </p>
-                </div>
-              </div>
-              <Button
-                onClick={runHeartbeat}
-                disabled={heartbeatRunning || synthesisRunning}
-                className="w-full"
-              >
-                {heartbeatRunning ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Running...
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-4 h-4 mr-2" />
-                    Run Heartbeat
-                  </>
-                )}
+        <div className="p-6 space-y-6">
+          {/* Quick Actions */}
+          <div className="flex gap-3">
+            <Button
+              onClick={runHeartbeat}
+              disabled={heartbeatRunning || synthesisRunning}
+              size="sm"
+              className="bg-gold hover:bg-gold-bright text-primary-foreground"
+            >
+              {heartbeatRunning ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <HeartPulse className="w-4 h-4 mr-2" />
+              )}
+              Heartbeat
+            </Button>
+            <Button
+              onClick={runSynthesis}
+              disabled={synthesisRunning || heartbeatRunning}
+              size="sm"
+              variant="outline"
+            >
+              {synthesisRunning ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Sparkles className="w-4 h-4 mr-2" />
+              )}
+              Synthesis
+            </Button>
+            <div className="ml-auto flex gap-2">
+              <Button variant="ghost" size="sm" onClick={loadActivityLog}>
+                <RefreshCw className="w-4 h-4" />
               </Button>
-            </div>
-
-            {/* Synthesis Control */}
-            <div className="p-4 rounded-lg border border-border bg-card">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                  <Sparkles className="w-5 h-5 text-purple-400" />
-                </div>
-                <div>
-                  <h3 className="font-medium">Synthesis</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Process memory decay and archive cold facts
-                  </p>
-                </div>
-              </div>
-              <Button
-                onClick={runSynthesis}
-                disabled={synthesisRunning || heartbeatRunning}
-                variant="outline"
-                className="w-full"
-              >
-                {synthesisRunning ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Running...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    Run Synthesis
-                  </>
-                )}
-              </Button>
+              {activityLog.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={clearResults}>
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
             </div>
           </div>
 
-          {/* Activity Log */}
+          {/* Activity Feed */}
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-serif text-lg text-gold">Activity Log</h2>
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={loadActivityLog}>
-                  <RefreshCw className="w-4 h-4" />
-                </Button>
-                {activityLog.length > 0 && (
-                  <Button variant="ghost" size="sm" onClick={clearResults}>
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Clear
-                  </Button>
-                )}
-              </div>
-            </div>
+            <h2 className="font-serif text-lg text-gold mb-4">Activity Feed</h2>
 
             {loading ? (
-              <div className="text-center py-12 text-muted-foreground border border-dashed border-border rounded-lg">
-                <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin opacity-50" />
-                <p>Loading activity log...</p>
+              <div className="text-center py-8 text-muted-foreground">
+                <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin opacity-50" />
+                <p className="text-sm">Loading...</p>
               </div>
             ) : activityLog.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground border border-dashed border-border rounded-lg">
-                <Activity className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p>No activity yet. Run heartbeat or synthesis to see results.</p>
+              <div className="text-center py-8 text-muted-foreground border border-dashed border-border rounded-lg">
+                <p className="text-sm">No activity yet</p>
               </div>
             ) : (
-              <div className="space-y-4">
-                {activityLog.map((entry) =>
-                  entry.type === "heartbeat" ? (
-                    <HeartbeatResultCard
-                      key={entry.id}
-                      result={entry as HeartbeatResult}
-                      onCopy={() => copyHeartbeatToClipboard(entry as HeartbeatResult)}
-                      copied={copiedId === entry.id}
-                    />
-                  ) : (
-                    <SynthesisResultCard key={entry.id} result={entry as SynthesisResult} />
-                  )
-                )}
+              <div className="space-y-1">
+                {activityLog.map((entry) => (
+                  <FeedItem
+                    key={entry.id}
+                    entry={entry}
+                    expanded={expandedId === entry.id}
+                    onToggle={() => toggleExpand(entry.id)}
+                    onCopy={entry.type === "heartbeat" ? () => copyToClipboard(entry as HeartbeatEntry) : undefined}
+                    copied={copiedId === entry.id}
+                  />
+                ))}
               </div>
             )}
           </div>
@@ -268,30 +243,351 @@ export default function SystemPage() {
   );
 }
 
-function formatHeartbeatForCopy(result: HeartbeatResult): string {
+function FeedItem({
+  entry,
+  expanded,
+  onToggle,
+  onCopy,
+  copied,
+}: {
+  entry: ActivityEntry;
+  expanded: boolean;
+  onToggle: () => void;
+  onCopy?: () => void;
+  copied?: boolean;
+}) {
+  const getIcon = () => {
+    switch (entry.type) {
+      case "heartbeat":
+        return <HeartPulse className="w-4 h-4" />;
+      case "synthesis":
+        return <Sparkles className="w-4 h-4" />;
+      case "session":
+        return <MessageSquare className="w-4 h-4" />;
+      case "system":
+        return <Settings className="w-4 h-4" />;
+    }
+  };
+
+  const getIconColor = () => {
+    if ("success" in entry && !entry.success) return "text-red-500";
+    switch (entry.type) {
+      case "heartbeat":
+        return "text-gold";
+      case "synthesis":
+        return "text-purple-400";
+      case "session":
+        return "text-blue-400";
+      case "system":
+        return "text-muted-foreground";
+    }
+  };
+
+  const getTriggerIcon = () => {
+    if (!("trigger" in entry)) return null;
+    switch (entry.trigger) {
+      case "auto":
+        return <Zap className="w-3 h-3 text-yellow-500" />;
+      case "scheduled":
+        return <Calendar className="w-3 h-3 text-blue-400" />;
+      default:
+        return null;
+    }
+  };
+
+  const getSummary = () => {
+    switch (entry.type) {
+      case "heartbeat": {
+        const e = entry as HeartbeatEntry;
+        if (!e.success) return <span className="text-red-400">Failed</span>;
+        return (
+          <span>
+            <span className="text-gold">{e.entitiesCreated}</span> created,{" "}
+            <span className="text-gold">{e.entitiesUpdated}</span> updated
+          </span>
+        );
+      }
+      case "synthesis": {
+        const e = entry as SynthesisEntry;
+        if (!e.success) return <span className="text-red-400">Failed</span>;
+        return (
+          <span>
+            <span className="text-purple-400">{e.factsArchived}</span> archived
+          </span>
+        );
+      }
+      case "session": {
+        const e = entry as SessionEntry;
+        return <span>Session {e.action}</span>;
+      }
+      case "system": {
+        const e = entry as SystemEntry;
+        return <span className="truncate">{e.message}</span>;
+      }
+    }
+  };
+
+  const formatTime = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return "just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
+  return (
+    <div className="rounded-lg border border-border bg-card overflow-hidden">
+      {/* Compact row */}
+      <button
+        onClick={onToggle}
+        className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-secondary/50 transition-colors text-left"
+      >
+        <div className={`${getIconColor()}`}>{getIcon()}</div>
+
+        <div className="flex-1 min-w-0 flex items-center gap-2">
+          <span className="font-medium text-sm capitalize">{entry.type}</span>
+          {getTriggerIcon()}
+          {"extractionMethod" in entry && entry.extractionMethod && (
+            <span className={`text-[10px] px-1 py-0.5 rounded ${
+              entry.extractionMethod === "ollama"
+                ? "bg-purple-500/20 text-purple-400"
+                : "bg-gray-500/20 text-gray-400"
+            }`}>
+              {entry.extractionMethod === "ollama" ? "LLM" : "Pattern"}
+            </span>
+          )}
+          <span className="text-muted-foreground text-sm">—</span>
+          <span className="text-sm text-muted-foreground truncate">{getSummary()}</span>
+        </div>
+
+        <span className="text-xs text-muted-foreground whitespace-nowrap">
+          {formatTime(entry.timestamp)}
+        </span>
+
+        <ChevronRight
+          className={`w-4 h-4 text-muted-foreground transition-transform ${
+            expanded ? "rotate-90" : ""
+          }`}
+        />
+      </button>
+
+      {/* Expanded details */}
+      {expanded && (
+        <div className="px-3 pb-3 pt-1 border-t border-border/50 bg-background/50">
+          {entry.type === "heartbeat" && (
+            <HeartbeatDetails entry={entry as HeartbeatEntry} onCopy={onCopy} copied={copied} />
+          )}
+          {entry.type === "synthesis" && <SynthesisDetails entry={entry as SynthesisEntry} />}
+          {entry.type === "session" && <SessionDetails entry={entry as SessionEntry} />}
+          {entry.type === "system" && <SystemDetails entry={entry as SystemEntry} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HeartbeatDetails({
+  entry,
+  onCopy,
+  copied,
+}: {
+  entry: HeartbeatEntry;
+  onCopy?: () => void;
+  copied?: boolean;
+}) {
+  return (
+    <div className="space-y-3">
+      {/* Stats row */}
+      <div className="flex items-center gap-4 text-sm">
+        <div className="flex items-center gap-1.5">
+          <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+          <span>{new Date(entry.timestamp).toLocaleString()}</span>
+        </div>
+        {entry.duration && (
+          <span className="text-muted-foreground">{entry.duration}ms</span>
+        )}
+        <span className={`px-1.5 py-0.5 rounded text-xs ${
+          entry.trigger === "manual"
+            ? "bg-secondary text-muted-foreground"
+            : entry.trigger === "auto"
+            ? "bg-yellow-500/20 text-yellow-500"
+            : "bg-blue-500/20 text-blue-400"
+        }`}>
+          {entry.trigger}
+        </span>
+        {onCopy && (
+          <button onClick={onCopy} className="ml-auto p-1 hover:bg-secondary rounded">
+            {copied ? (
+              <Check className="w-4 h-4 text-green-500" />
+            ) : (
+              <Copy className="w-4 h-4 text-muted-foreground" />
+            )}
+          </button>
+        )}
+      </div>
+
+      {/* Stats grid */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="p-2 rounded bg-secondary/50 text-center">
+          <div className="text-lg font-bold text-gold">{entry.entitiesCreated}</div>
+          <div className="text-xs text-muted-foreground">Created</div>
+        </div>
+        <div className="p-2 rounded bg-secondary/50 text-center">
+          <div className="text-lg font-bold text-gold">{entry.entitiesUpdated}</div>
+          <div className="text-xs text-muted-foreground">Updated</div>
+        </div>
+        <div className="p-2 rounded bg-secondary/50 text-center">
+          <div className="text-lg font-bold text-gold">{entry.reindexed ? "Yes" : "No"}</div>
+          <div className="text-xs text-muted-foreground">Reindexed</div>
+        </div>
+      </div>
+
+      {/* Error */}
+      {entry.error && (
+        <div className="p-2 rounded bg-red-500/10 text-red-400 text-sm flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>{entry.error}</span>
+        </div>
+      )}
+
+      {/* Entities */}
+      {entry.entities && entry.entities.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="text-xs text-muted-foreground font-medium">
+            {entry.entities.length} entities extracted
+          </div>
+          <div className="max-h-48 overflow-y-auto space-y-1">
+            {entry.entities.map((entity, i) => (
+              <EntityRow key={i} entity={entity} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EntityRow({ entity }: { entity: EntityDetail }) {
+  const TypeIcon =
+    entity.type === "person" ? User : entity.type === "company" ? Building : FolderKanban;
+
+  return (
+    <div className="flex items-center gap-2 p-1.5 rounded bg-secondary/30 text-sm">
+      <TypeIcon className="w-3.5 h-3.5 text-muted-foreground" />
+      <span className="text-gold font-medium">{entity.name}</span>
+      <span className={`text-[10px] px-1 py-0.5 rounded ${
+        entity.action === "created"
+          ? "bg-green-500/20 text-green-400"
+          : "bg-blue-500/20 text-blue-400"
+      }`}>
+        {entity.action}
+      </span>
+      {entity.facts.length > 0 && (
+        <span className="text-xs text-muted-foreground ml-auto">
+          {entity.facts.length} fact{entity.facts.length > 1 ? "s" : ""}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function SynthesisDetails({ entry }: { entry: SynthesisEntry }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-4 text-sm">
+        <div className="flex items-center gap-1.5">
+          <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+          <span>{new Date(entry.timestamp).toLocaleString()}</span>
+        </div>
+        {entry.duration && (
+          <span className="text-muted-foreground">{entry.duration}ms</span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div className="p-2 rounded bg-secondary/50 text-center">
+          <div className="text-lg font-bold text-purple-400">{entry.entitiesProcessed}</div>
+          <div className="text-xs text-muted-foreground">Processed</div>
+        </div>
+        <div className="p-2 rounded bg-secondary/50 text-center">
+          <div className="text-lg font-bold text-purple-400">{entry.factsArchived}</div>
+          <div className="text-xs text-muted-foreground">Archived</div>
+        </div>
+        <div className="p-2 rounded bg-secondary/50 text-center">
+          <div className="text-lg font-bold text-purple-400">{entry.summariesRegenerated}</div>
+          <div className="text-xs text-muted-foreground">Regenerated</div>
+        </div>
+      </div>
+
+      {entry.error && (
+        <div className="p-2 rounded bg-red-500/10 text-red-400 text-sm flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>{entry.error}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SessionDetails({ entry }: { entry: SessionEntry }) {
+  return (
+    <div className="text-sm">
+      <div className="flex items-center gap-1.5">
+        <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+        <span>{new Date(entry.timestamp).toLocaleString()}</span>
+      </div>
+      {entry.conversationId && (
+        <div className="mt-2 text-xs text-muted-foreground">
+          Conversation: {entry.conversationId}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SystemDetails({ entry }: { entry: SystemEntry }) {
+  return (
+    <div className="text-sm">
+      <div className="flex items-center gap-1.5">
+        <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+        <span>{new Date(entry.timestamp).toLocaleString()}</span>
+      </div>
+      <div className="mt-2 text-muted-foreground">{entry.message}</div>
+    </div>
+  );
+}
+
+function formatHeartbeatForCopy(entry: HeartbeatEntry): string {
   const lines: string[] = [
     "# Heartbeat Report",
     "",
-    `**Timestamp:** ${result.timestamp}`,
-    `**Status:** ${result.success ? "Success" : "Failed"}`,
-    `**Extraction Method:** ${result.extractionMethod || "unknown"}`,
-    `**Duration:** ${result.duration ? `${result.duration}ms` : "unknown"}`,
+    `**Timestamp:** ${entry.timestamp}`,
+    `**Trigger:** ${entry.trigger}`,
+    `**Status:** ${entry.success ? "Success" : "Failed"}`,
+    `**Extraction Method:** ${entry.extractionMethod || "unknown"}`,
+    `**Duration:** ${entry.duration ? `${entry.duration}ms` : "unknown"}`,
     "",
     "## Summary",
-    `- Entities Created: ${result.entitiesCreated}`,
-    `- Entities Updated: ${result.entitiesUpdated}`,
-    `- Reindexed: ${result.reindexed ? "Yes" : "No"}`,
+    `- Entities Created: ${entry.entitiesCreated}`,
+    `- Entities Updated: ${entry.entitiesUpdated}`,
+    `- Reindexed: ${entry.reindexed ? "Yes" : "No"}`,
     "",
   ];
 
-  if (result.error) {
-    lines.push("## Error", result.error, "");
+  if (entry.error) {
+    lines.push("## Error", entry.error, "");
   }
 
-  if (result.entities && result.entities.length > 0) {
+  if (entry.entities && entry.entities.length > 0) {
     lines.push("## Entities Extracted", "");
-
-    for (const entity of result.entities) {
+    for (const entity of entry.entities) {
       lines.push(`### ${entity.name} (${entity.type}) - ${entity.action}`);
       lines.push(`Source: ${entity.source}`);
       if (entity.facts.length > 0) {
@@ -305,228 +601,4 @@ function formatHeartbeatForCopy(result: HeartbeatResult): string {
   }
 
   return lines.join("\n");
-}
-
-function HeartbeatResultCard({
-  result,
-  onCopy,
-  copied,
-}: {
-  result: HeartbeatResult;
-  onCopy: () => void;
-  copied: boolean;
-}) {
-  const [expanded, setExpanded] = useState(true);
-
-  return (
-    <div
-      className={`rounded-lg border ${
-        result.success
-          ? "bg-green-500/5 border-green-500/30"
-          : "bg-red-500/5 border-red-500/30"
-      }`}
-    >
-      {/* Header */}
-      <div className="p-4 flex items-start justify-between">
-        <div className="flex items-start gap-3">
-          <div
-            className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-              result.success ? "bg-green-500/20" : "bg-red-500/20"
-            }`}
-          >
-            {result.success ? (
-              <HeartPulse className="w-4 h-4 text-green-500" />
-            ) : (
-              <AlertCircle className="w-4 h-4 text-red-500" />
-            )}
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-medium">Heartbeat</span>
-              {result.extractionMethod && (
-                <span
-                  className={`text-xs px-1.5 py-0.5 rounded ${
-                    result.extractionMethod === "ollama"
-                      ? "bg-purple-500/20 text-purple-400"
-                      : "bg-gray-500/20 text-gray-400"
-                  }`}
-                >
-                  {result.extractionMethod === "ollama" ? "LLM" : "Pattern"}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                {new Date(result.timestamp).toLocaleString()}
-              </span>
-              {result.duration && <span>{result.duration}ms</span>}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={onCopy}>
-            {copied ? (
-              <Check className="w-4 h-4 text-green-500" />
-            ) : (
-              <Copy className="w-4 h-4" />
-            )}
-          </Button>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="px-4 pb-4">
-        <div className="grid grid-cols-3 gap-4 p-3 rounded-lg bg-background/50">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-gold">
-              {result.entitiesCreated}
-            </div>
-            <div className="text-xs text-muted-foreground">Created</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-gold">
-              {result.entitiesUpdated}
-            </div>
-            <div className="text-xs text-muted-foreground">Updated</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-gold">
-              {result.reindexed ? "Yes" : "No"}
-            </div>
-            <div className="text-xs text-muted-foreground">Reindexed</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Entities */}
-      {result.entities && result.entities.length > 0 && (
-        <div className="border-t border-border/50">
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="w-full px-4 py-2 text-left text-sm text-muted-foreground hover:text-foreground flex items-center justify-between"
-          >
-            <span>{result.entities.length} entities extracted</span>
-            <span>{expanded ? "−" : "+"}</span>
-          </button>
-
-          {expanded && (
-            <div className="px-4 pb-4 space-y-2">
-              {result.entities.map((entity, i) => (
-                <EntityCard key={i} entity={entity} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Error */}
-      {result.error && (
-        <div className="px-4 pb-4">
-          <div className="p-3 rounded-lg bg-red-500/10 text-red-400 text-sm">
-            {result.error}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function EntityCard({ entity }: { entity: EntityDetail }) {
-  const TypeIcon =
-    entity.type === "person"
-      ? User
-      : entity.type === "company"
-      ? Building
-      : FolderKanban;
-
-  return (
-    <div className="p-3 rounded-lg bg-background/50 border border-border/50">
-      <div className="flex items-center gap-2 mb-2">
-        <TypeIcon className="w-4 h-4 text-muted-foreground" />
-        <span className="font-medium text-gold">{entity.name}</span>
-        <span
-          className={`text-xs px-1.5 py-0.5 rounded ${
-            entity.action === "created"
-              ? "bg-green-500/20 text-green-400"
-              : "bg-blue-500/20 text-blue-400"
-          }`}
-        >
-          {entity.action}
-        </span>
-        <span className="text-xs text-muted-foreground ml-auto">
-          {entity.source}
-        </span>
-      </div>
-      {entity.facts.length > 0 && (
-        <ul className="text-sm text-muted-foreground space-y-1 ml-6">
-          {entity.facts.map((fact, i) => (
-            <li key={i}>• {fact}</li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function SynthesisResultCard({ result }: { result: SynthesisResult }) {
-  return (
-    <div
-      className={`rounded-lg border p-4 ${
-        result.success
-          ? "bg-purple-500/5 border-purple-500/30"
-          : "bg-red-500/5 border-red-500/30"
-      }`}
-    >
-      <div className="flex items-start gap-3">
-        <div
-          className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-            result.success ? "bg-purple-500/20" : "bg-red-500/20"
-          }`}
-        >
-          {result.success ? (
-            <Sparkles className="w-4 h-4 text-purple-400" />
-          ) : (
-            <AlertCircle className="w-4 h-4 text-red-500" />
-          )}
-        </div>
-        <div className="flex-1">
-          <div className="flex items-center justify-between">
-            <span className="font-medium">Synthesis</span>
-            <span className="text-sm text-muted-foreground">
-              {new Date(result.timestamp).toLocaleString()}
-            </span>
-          </div>
-
-          {result.success ? (
-            <div className="grid grid-cols-3 gap-4 mt-3 p-3 rounded-lg bg-background/50">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-purple-400">
-                  {result.entitiesProcessed}
-                </div>
-                <div className="text-xs text-muted-foreground">Processed</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-purple-400">
-                  {result.factsArchived}
-                </div>
-                <div className="text-xs text-muted-foreground">Archived</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-purple-400">
-                  {result.summariesRegenerated}
-                </div>
-                <div className="text-xs text-muted-foreground">Regenerated</div>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-2 p-3 rounded-lg bg-red-500/10 text-red-400 text-sm">
-              {result.error || "Unknown error"}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
 }

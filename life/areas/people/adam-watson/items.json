@@ -1,0 +1,63 @@
+[
+  {
+    "fact": "Role: CTO",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "adam-watson-1769990158928-0",
+    "lastAccessed": "2026-02-01T23:55:58.928Z",
+    "accessCount": 0,
+    "tier": "hot"
+  },
+  {
+    "fact": "Title: CTO; San Diego, architecture",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "adam-watson-1769990901569",
+    "lastAccessed": "2026-02-02T00:08:21.569Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "CTO, leading the architecture work from San Diego",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "adam-watson-1769991487894",
+    "lastAccessed": "2026-02-02T00:18:07.894Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Leading the architecture work from San Diego",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "adam-watson-1769993916204",
+    "lastAccessed": "2026-02-02T00:58:36.204Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "CTO",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "adam-watson-1769997155072",
+    "lastAccessed": "2026-02-02T01:52:35.072Z",
+    "accessCount": 0
+  }
+]

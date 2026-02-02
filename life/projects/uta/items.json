@@ -1,0 +1,62 @@
+[
+  {
+    "fact": "Deal that had been stalling since No...",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "uta-1769996008393-0",
+    "lastAccessed": "2026-02-02T01:33:28.393Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Officially dead due to internal-build decision by Marcus Lane.",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "uta-1769996008393-1",
+    "lastAccessed": "2026-02-02T01:33:28.393Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Officially dead (internal-build decision",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "uta-1769996368938",
+    "lastAccessed": "2026-02-02T01:39:28.938Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Marcus Lane)",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "uta-1769996368939",
+    "lastAccessed": "2026-02-02T01:39:28.939Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Officially dead due to internal-build decision by Marcus Lane",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "uta-1769997691175",
+    "lastAccessed": "2026-02-02T02:01:31.175Z",
+    "accessCount": 0
+  }
+]

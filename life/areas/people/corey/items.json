@@ -1,0 +1,26 @@
+[
+  {
+    "fact": "Putting together custom deck for Priya\"s team",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "corey-1769993904613-0",
+    "lastAccessed": "2026-02-02T00:58:24.613Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Putting together a custom deck focused on the label services analytics that WME\"s been asking about.",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "corey-1769996008374",
+    "lastAccessed": "2026-02-02T01:33:28.374Z",
+    "accessCount": 0
+  }
+]

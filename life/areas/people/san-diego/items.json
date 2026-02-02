@@ -1,0 +1,27 @@
+[
+  {
+    "fact": "Role: architecture work from",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "san-diego-1769990158929-0",
+    "lastAccessed": "2026-02-01T23:55:58.929Z",
+    "accessCount": 0,
+    "tier": "hot"
+  },
+  {
+    "fact": "Adam Watson leading the architecture work from San Diego",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "san-diego-1769991487892",
+    "lastAccessed": "2026-02-02T00:18:07.892Z",
+    "accessCount": 0
+  }
+]

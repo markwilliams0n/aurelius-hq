@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { runWeeklySynthesis } from '@/lib/memory/synthesis';
 import { appendActivityLog, SynthesisLogEntry } from '@/lib/memory/activity-log';
 
@@ -9,8 +9,19 @@ export const maxDuration = 300; // Allow up to 5 minutes for synthesis
  * POST /api/synthesis - Run weekly synthesis
  * Calculates decay tiers, archives cold facts, regenerates summaries
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
   const startTime = Date.now();
+
+  // Get trigger type from request body (default to manual)
+  let trigger: 'manual' | 'auto' | 'scheduled' = 'manual';
+  try {
+    const body = await request.json().catch(() => ({}));
+    if (body.trigger === 'auto' || body.trigger === 'scheduled') {
+      trigger = body.trigger;
+    }
+  } catch {
+    // No body, use default
+  }
 
   try {
     const result = await runWeeklySynthesis();
@@ -20,6 +31,7 @@ export async function POST() {
     const logEntry: SynthesisLogEntry = {
       id: `syn-${Date.now()}`,
       type: 'synthesis',
+      trigger,
       success: true,
       entitiesProcessed: result.entitiesProcessed ?? 0,
       factsArchived: result.factsArchived ?? 0,
@@ -42,6 +54,7 @@ export async function POST() {
     const logEntry: SynthesisLogEntry = {
       id: `syn-${Date.now()}`,
       type: 'synthesis',
+      trigger,
       success: false,
       entitiesProcessed: 0,
       factsArchived: 0,
@@ -60,6 +73,6 @@ export async function POST() {
 }
 
 // Also allow GET for easy testing
-export async function GET() {
-  return POST();
+export async function GET(request: NextRequest) {
+  return POST(request);
 }

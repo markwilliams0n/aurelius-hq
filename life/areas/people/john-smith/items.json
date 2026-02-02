@@ -1,0 +1,14 @@
+[
+  {
+    "fact": "Works at ACME Industries in New York",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "john-smith-1769993916217-0",
+    "lastAccessed": "2026-02-02T00:58:36.217Z",
+    "accessCount": 0
+  }
+]

@@ -1,0 +1,50 @@
+[
+  {
+    "fact": "Mentioned by Danny Feldman as one of the tools being evaluated by WME\"s data strategy head",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "viberate-1769996008385",
+    "lastAccessed": "2026-02-02T01:33:28.385Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Priya Mehta.",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "viberate-1769996008386",
+    "lastAccessed": "2026-02-02T01:33:28.386Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Mentioned by Priya Mehta as part of ROSTR Pro evaluation.",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "viberate-1769996089944",
+    "lastAccessed": "2026-02-02T01:34:49.944Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Mentioned by Danny Feldman as one of the tools being evaluated by WME\"s head of data strategy",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "viberate-1769996368934",
+    "lastAccessed": "2026-02-02T01:39:28.934Z",
+    "accessCount": 0
+  }
+]

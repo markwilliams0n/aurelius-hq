@@ -1,0 +1,38 @@
+[
+  {
+    "fact": "Deal stalled since No...",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "uta-1769993904631-0",
+    "lastAccessed": "2026-02-02T00:58:24.631Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Deal officially dead (internal-build decision",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "uta-1769996089943",
+    "lastAccessed": "2026-02-02T01:34:49.943Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Marcus Lane).",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "uta-1769996089943",
+    "lastAccessed": "2026-02-02T01:34:49.943Z",
+    "accessCount": 0
+  }
+]

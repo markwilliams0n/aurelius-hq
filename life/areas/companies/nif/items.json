@@ -1,0 +1,50 @@
+[
+  {
+    "fact": "Used for booking call with Rachel Thornton.",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "nif-1769996008394-0",
+    "lastAccessed": "2026-02-02T01:33:28.394Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Call booked 6 Feb (routed via)",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "nif-1769996089944",
+    "lastAccessed": "2026-02-02T01:34:49.944Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Used to route Rachel Thornton\"s call.",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "nif-1769996368939",
+    "lastAccessed": "2026-02-02T01:39:28.939Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Used for routing Rachel Thornton\"s call.",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "nif-1769997691176",
+    "lastAccessed": "2026-02-02T02:01:31.176Z",
+    "accessCount": 0
+  }
+]

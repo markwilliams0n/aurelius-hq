@@ -1,0 +1,62 @@
+[
+  {
+    "fact": "SVP Music",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "wasserman-1769993904616-0",
+    "lastAccessed": "2026-02-02T00:58:24.616Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Rachel Thornton is SVP Music.",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "wasserman-1769996008389",
+    "lastAccessed": "2026-02-02T01:33:28.389Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Rachel Thornton",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "wasserman-1769996089942",
+    "lastAccessed": "2026-02-02T01:34:49.942Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "SVP Music → call booked 6 Feb (routed via NIF web-form)",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "wasserman-1769996089942",
+    "lastAccessed": "2026-02-02T01:34:49.942Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Rachel Thornton is SVP Music",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "wasserman-1769997691173",
+    "lastAccessed": "2026-02-02T02:01:31.173Z",
+    "accessCount": 0
+  }
+]

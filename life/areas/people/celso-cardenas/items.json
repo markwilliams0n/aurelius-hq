@@ -1,0 +1,98 @@
+[
+  {
+    "fact": "front",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1769990901578-0",
+    "lastAccessed": "2026-02-02T00:08:21.578Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "front-end, 3-month tenure, UI ramp-up",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1769991487896",
+    "lastAccessed": "2026-02-02T00:18:07.896Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Just started as a front-end engineer in January",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1769993916207",
+    "lastAccessed": "2026-02-02T00:58:36.207Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Ramp-up on the codebase and picking up smaller UI tickets",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1769996021909",
+    "lastAccessed": "2026-02-02T01:33:41.909Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "front-end engineer",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1769996021910",
+    "lastAccessed": "2026-02-02T01:33:41.910Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "new hire in January",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1769996382510",
+    "lastAccessed": "2026-02-02T01:39:42.510Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "New hire at Meridian Labs",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1769996382530",
+    "lastAccessed": "2026-02-02T01:39:42.530Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "ramping up on the codebase and picking up smaller UI tickets",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1769996382531",
+    "lastAccessed": "2026-02-02T01:39:42.531Z",
+    "accessCount": 0
+  }
+]

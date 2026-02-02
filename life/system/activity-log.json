@@ -1,0 +1,386 @@
+{
+  "entries": [
+    {
+      "id": "hb-1769997700995",
+      "type": "heartbeat",
+      "success": true,
+      "entitiesCreated": 0,
+      "entitiesUpdated": 40,
+      "reindexed": true,
+      "entities": [
+        {
+          "name": "Danny Feldman",
+          "type": "person",
+          "facts": [
+            "Mentioned that their head of data strategy",
+            "Priya Mehta",
+            "has been evaluating ROSTR Pro against Chartmetric and Viberate."
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-02.md"
+        },
+        {
+          "name": "Priya Mehta",
+          "type": "person",
+          "facts": [
+            "Head of data strategy at WME",
+            "Being evaluated for ROSTR Pro"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-02.md"
+        },
+        {
+          "name": "Corey",
+          "type": "person",
+          "facts": [
+            "Putting together a custom deck focused on the label services analytics that WME\"s been asking about."
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-02.md"
+        },
+        {
+          "name": "Marcus Lane",
+          "type": "person",
+          "facts": [
+            "Made an internal-build decision",
+            "leading to the UTA deal being officially dead."
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-02.md"
+        },
+        {
+          "name": "Rachel Thornton",
+          "type": "person",
+          "facts": [
+            "Wasserman SVP Music"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-02.md"
+        },
+        {
+          "name": "Vivian Donahue",
+          "type": "person",
+          "facts": [
+            "Chrif Growth officer"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-02.md"
+        },
+        {
+          "name": "Chrif Growth",
+          "type": "project",
+          "facts": [
+            "Vivian Donahue\"s onboarding"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-02.md"
+        },
+        {
+          "name": "WME",
+          "type": "company",
+          "facts": [
+            "Had a call with Danny Feldman about a potential enterprise pilot",
+            "Head of data strategy Priya Mehta has been evaluating ROSTR Pro against Chartmetric and Viberate."
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-02.md"
+        },
+        {
+          "name": "Chartmetric",
+          "type": "project",
+          "facts": [
+            "Mentioned by Danny Feldman as one of the tools being evaluated by WME\"s head of data strategy",
+            "Priya Mehta."
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-02.md"
+        },
+        {
+          "name": "Viberate",
+          "type": "project",
+          "facts": [
+            "Mentioned by Danny Feldman as one of the tools being evaluated by WME\"s head of data strategy",
+            "Priya Mehta."
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-02.md"
+        },
+        {
+          "name": "ROSTR Pro",
+          "type": "project",
+          "facts": [
+            "Being evaluated by WME\"s head of data strategy",
+            "Priya Mehta"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-02.md"
+        },
+        {
+          "name": "Wasserman",
+          "type": "company",
+          "facts": [
+            "Rachel Thornton is SVP Music"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-02.md"
+        },
+        {
+          "name": "Fender",
+          "type": "company",
+          "facts": [
+            "Advertising locked: $45k",
+            "6-mo NI..."
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-02.md"
+        },
+        {
+          "name": "UTA",
+          "type": "project",
+          "facts": [
+            "Deal that had been stalling since No...",
+            "Officially dead due to internal-build decision by Marcus Lane"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-02.md"
+        },
+        {
+          "name": "NIF",
+          "type": "company",
+          "facts": [
+            "Used for routing Rachel Thornton\"s call."
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-02.md"
+        },
+        {
+          "name": "Slack",
+          "type": "project",
+          "facts": [
+            "Post-mortem requested in the channel after UTA deal was officially dead."
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-02.md"
+        },
+        {
+          "name": "ACME Industries",
+          "type": "company",
+          "facts": [
+            "Works at ACME Industries in New York"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "Meridian Labs",
+          "type": "company",
+          "facts": [
+            "Project Atlas is a project of Meridian Labs"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "Stripe",
+          "type": "company",
+          "facts": [
+            "Marcus Webb joined from Stripe in January"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "Shopify",
+          "type": "company",
+          "facts": [
+            "Elena Vasquez opened Shopify pilot talks"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "Twilio",
+          "type": "company",
+          "facts": [
+            "Rachel Kim worked on Twilio webho..."
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "ROSTR Pro",
+          "type": "project",
+          "facts": [
+            "The ROSTR Pro product push has been the main focus across engineering and product"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "Live Nation",
+          "type": "company",
+          "facts": [
+            "$4.5 M renewal (300 seats × $15 k) – Corey Crossfield & Steve ..."
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "Adam Watson",
+          "type": "person",
+          "facts": [
+            "Leading the architecture work from San Diego"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "Lucas Homer",
+          "type": "person",
+          "facts": [
+            "Coordinating daily with Matias Fessia on backend systems"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "Matias Fessia",
+          "type": "person",
+          "facts": [
+            "Rebuilding the artist profile components in Córdoba"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "Gabriel Lemache",
+          "type": "person",
+          "facts": [
+            "Full-stack dashboard integration in Rio"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "Celso Cardenas",
+          "type": "person",
+          "facts": [
+            "Ramping up on the codebase and picking up smaller UI tickets"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "Santiago Brusco",
+          "type": "person",
+          "facts": [
+            "PM at BA, 2-week Linear cycles, scope lock"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "Corey Crossfield",
+          "type": "person",
+          "facts": [
+            "$4.5 M renewal with Live Nation"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "Steve",
+          "type": "person",
+          "facts": [
+            "$4.5 M renewal with Live Nation"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "Elena Vasquez",
+          "type": "person",
+          "facts": [
+            "Partnerships lead, opened Shopify pilot talks"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "Rachel Kim",
+          "type": "person",
+          "facts": [
+            "Infra, two-week Twilio webho..."
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "Sarah Chen",
+          "type": "person",
+          "facts": [
+            "Lead engineer at Meridian Labs, Austin / bi-weekly SF flights"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "Marcus Webb",
+          "type": "person",
+          "facts": [
+            "Core API redesign (ex-Stripe, Jan hire)"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "David Okafor",
+          "type": "person",
+          "facts": [
+            "Lagos contractor, 2-6 pm CT overlap, mobile integration"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "John Smith",
+          "type": "person",
+          "facts": [
+            "Works at ACME Industries in New York"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "Aurelius",
+          "type": "person",
+          "facts": [],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "Corey Crossfield",
+          "type": "person",
+          "facts": [
+            "$4.5 M renewal with Live Nation"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        },
+        {
+          "name": "Steve",
+          "type": "person",
+          "facts": [
+            "$4.5 M renewal with Live Nation"
+          ],
+          "action": "updated",
+          "source": "memory/2026-02-01.md"
+        }
+      ],
+      "extractionMethod": "ollama",
+      "duration": 20147,
+      "timestamp": "2026-02-02T02:01:40.995Z"
+    }
+  ],
+  "lastUpdated": "2026-02-02T02:01:40.997Z"
+}

@@ -1,0 +1,99 @@
+[
+  {
+    "fact": "Role: lead engineer",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "sarah-chen-1769989834253-0",
+    "lastAccessed": "2026-02-01T23:50:34.253Z",
+    "accessCount": 0,
+    "tier": "hot"
+  },
+  {
+    "fact": "Mentioned on 2026-02-01",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "sarah-chen-1769990901593",
+    "lastAccessed": "2026-02-02T00:08:21.593Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "lead engineer, Austin / bi-weekly SF flights",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "sarah-chen-1769991487899",
+    "lastAccessed": "2026-02-02T00:18:07.899Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Lead engineer",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "sarah-chen-1769993916212",
+    "lastAccessed": "2026-02-02T00:58:36.212Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Austin / bi-weekly SF flights",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "sarah-chen-1769993916213",
+    "lastAccessed": "2026-02-02T00:58:36.213Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Lead engineer at Meridian Labs",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "sarah-chen-1769996382515",
+    "lastAccessed": "2026-02-02T01:39:42.515Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "working out of Austin office",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "sarah-chen-1769996382516",
+    "lastAccessed": "2026-02-02T01:39:42.516Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Lead engineer at Meridian Labs, Austin / bi-weekly SF flights",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "sarah-chen-1769997700442",
+    "lastAccessed": "2026-02-02T02:01:40.442Z",
+    "accessCount": 0
+  }
+]

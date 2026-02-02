@@ -1,0 +1,122 @@
+[
+  {
+    "fact": "Mentioned by Danny Feldman",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-pro-1769993904620",
+    "lastAccessed": "2026-02-02T00:58:24.620Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Main focus across engineering and product for the last several weeks",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-pro-1769993916202",
+    "lastAccessed": "2026-02-02T00:58:36.202Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Mentioned by Danny Feldman as one of the tools being evaluated by WME\"s data strategy head",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-pro-1769996008387",
+    "lastAccessed": "2026-02-02T01:33:28.387Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Priya Mehta.",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-pro-1769996008388",
+    "lastAccessed": "2026-02-02T01:33:28.388Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Mentioned by Danny Feldman as part of potential enterprise pilot.",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-pro-1769996089944",
+    "lastAccessed": "2026-02-02T01:34:49.944Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Mentioned by Danny Feldman as one of the tools being evaluated by WME\"s head of data strategy",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-pro-1769996368935",
+    "lastAccessed": "2026-02-02T01:39:28.935Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Being evaluated by WME\"s head of data strategy",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-pro-1769997139565",
+    "lastAccessed": "2026-02-02T01:52:19.565Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Priya Mehta",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-pro-1769997139568",
+    "lastAccessed": "2026-02-02T01:52:19.568Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "The ROSTR Pro product push has been the main focus across engineering and product for the last several weeks",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-pro-1769997155070",
+    "lastAccessed": "2026-02-02T01:52:35.070Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "The ROSTR Pro product push has been the main focus across engineering and product",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-pro-1769997700416",
+    "lastAccessed": "2026-02-02T02:01:40.416Z",
+    "accessCount": 0
+  }
+]

@@ -1,0 +1,74 @@
+[
+  {
+    "fact": "$4.5 M renewal (300 seats × $15 k) – Corey Crossfield & Steve ...",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "steve-1769991487897-0",
+    "lastAccessed": "2026-02-02T00:18:07.897Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Part of the $4.5 M renewal with Corey Crossfield",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "steve-1769993916210",
+    "lastAccessed": "2026-02-02T00:58:36.210Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Renewal with Live Nation",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "steve-1769996021914",
+    "lastAccessed": "2026-02-02T01:33:41.914Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Worked with Corey Crossfield on Live Nation renewal",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "steve-1769996382513",
+    "lastAccessed": "2026-02-02T01:39:42.513Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Steve ...",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "steve-1769997155094",
+    "lastAccessed": "2026-02-02T01:52:35.094Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "$4.5 M renewal with Live Nation",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "steve-1769997700438",
+    "lastAccessed": "2026-02-02T02:01:40.438Z",
+    "accessCount": 0
+  }
+]

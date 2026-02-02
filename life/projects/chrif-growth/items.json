@@ -1,0 +1,50 @@
+[
+  {
+    "fact": "Vivian Donahue\"s role",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chrif-growth-1769996008396-0",
+    "lastAccessed": "2026-02-02T01:33:28.396Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "AI support a priority for onboarding.",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chrif-growth-1769996008396-1",
+    "lastAccessed": "2026-02-02T01:33:28.396Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Vivian Donahue is the new Chrif Growth officer.",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chrif-growth-1769996368940",
+    "lastAccessed": "2026-02-02T01:39:28.940Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Vivian Donahue\"s onboarding",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chrif-growth-1769997691129",
+    "lastAccessed": "2026-02-02T02:01:31.129Z",
+    "accessCount": 0
+  }
+]

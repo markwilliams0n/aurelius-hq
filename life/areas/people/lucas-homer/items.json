@@ -1,0 +1,50 @@
+[
+  {
+    "fact": "Ojai, backend",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1769990901574-0",
+    "lastAccessed": "2026-02-02T00:08:21.574Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "coordinating daily on backend systems",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1769991487895",
+    "lastAccessed": "2026-02-02T00:18:07.895Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Coordinating daily with Matias Fessia on backend systems",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1769993916204",
+    "lastAccessed": "2026-02-02T00:58:36.204Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Daily coordination with Matias Fessia on backend systems",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1769997155073",
+    "lastAccessed": "2026-02-02T01:52:35.073Z",
+    "accessCount": 0
+  }
+]

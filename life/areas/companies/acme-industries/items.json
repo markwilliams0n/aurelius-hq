@@ -1,0 +1,14 @@
+[
+  {
+    "fact": "Works at ACME Industries in New York",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "acme-industries-1769991487887-0",
+    "lastAccessed": "2026-02-02T00:18:07.887Z",
+    "accessCount": 0
+  }
+]

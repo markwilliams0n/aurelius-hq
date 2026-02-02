@@ -1,0 +1,74 @@
+[
+  {
+    "fact": "Evaluating ROSTR Pro",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "priya-mehta-1769993904612-0",
+    "lastAccessed": "2026-02-02T00:58:24.612Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Data strategy head at WME",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "priya-mehta-1769993904612-1",
+    "lastAccessed": "2026-02-02T00:58:24.612Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Head of data strategy at WME",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "priya-mehta-1769996008361",
+    "lastAccessed": "2026-02-02T01:33:28.361Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Evaluating ROSTR Pro against Chartmetric and Viberate.",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "priya-mehta-1769996008362",
+    "lastAccessed": "2026-02-02T01:33:28.362Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Has been evaluating ROSTR Pro against Chartmetric and Viberate.",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "priya-mehta-1769996089939",
+    "lastAccessed": "2026-02-02T01:34:49.939Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Being evaluated for ROSTR Pro",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "priya-mehta-1769997139549",
+    "lastAccessed": "2026-02-02T01:52:19.549Z",
+    "accessCount": 0
+  }
+]

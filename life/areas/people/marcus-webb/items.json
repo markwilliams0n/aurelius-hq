@@ -1,0 +1,99 @@
+[
+  {
+    "fact": "Previously at Stripe",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-webb-1769989834254-0",
+    "lastAccessed": "2026-02-01T23:50:34.254Z",
+    "accessCount": 0,
+    "tier": "hot"
+  },
+  {
+    "fact": "Mentioned on 2026-02-01",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-webb-1769990901593",
+    "lastAccessed": "2026-02-02T00:08:21.593Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "core API redesign (ex-Stripe, Jan hire)",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-webb-1769991487899",
+    "lastAccessed": "2026-02-02T00:18:07.899Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Core API redesign (ex-Stripe",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-webb-1769993916214",
+    "lastAccessed": "2026-02-02T00:58:36.214Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Jan hire)",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-webb-1769993916214",
+    "lastAccessed": "2026-02-02T00:58:36.214Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Core API redesign",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-webb-1769996382517",
+    "lastAccessed": "2026-02-02T01:39:42.517Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "ex-Stripe",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-webb-1769996382518",
+    "lastAccessed": "2026-02-02T01:39:42.518Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "joined Meridian Labs in January",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-webb-1769996382521",
+    "lastAccessed": "2026-02-02T01:39:42.521Z",
+    "accessCount": 0
+  }
+]

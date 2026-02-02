@@ -1,0 +1,15 @@
+[
+  {
+    "fact": "your friend works here",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "acme-industries-in-new-york-1769989185114-0",
+    "lastAccessed": "2026-02-01T23:39:45.114Z",
+    "accessCount": 0,
+    "tier": "hot"
+  }
+]

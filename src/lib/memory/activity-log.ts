@@ -15,6 +15,7 @@ export type EntityDetail = {
 export type HeartbeatLogEntry = {
   id: string;
   type: 'heartbeat';
+  trigger: 'manual' | 'auto' | 'scheduled';
   success: boolean;
   entitiesCreated: number;
   entitiesUpdated: number;
@@ -29,6 +30,7 @@ export type HeartbeatLogEntry = {
 export type SynthesisLogEntry = {
   id: string;
   type: 'synthesis';
+  trigger: 'manual' | 'auto' | 'scheduled';
   success: boolean;
   entitiesProcessed: number;
   factsArchived: number;
@@ -38,7 +40,23 @@ export type SynthesisLogEntry = {
   error?: string;
 };
 
-export type ActivityLogEntry = HeartbeatLogEntry | SynthesisLogEntry;
+export type SessionLogEntry = {
+  id: string;
+  type: 'session';
+  action: 'started' | 'ended';
+  conversationId?: string;
+  timestamp: string;
+};
+
+export type SystemLogEntry = {
+  id: string;
+  type: 'system';
+  action: 'startup' | 'shutdown' | 'error' | 'config_change';
+  message: string;
+  timestamp: string;
+};
+
+export type ActivityLogEntry = HeartbeatLogEntry | SynthesisLogEntry | SessionLogEntry | SystemLogEntry;
 
 export interface ActivityLog {
   entries: ActivityLogEntry[];
