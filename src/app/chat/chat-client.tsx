@@ -381,13 +381,13 @@ export function ChatClient() {
             <div className="flex items-center gap-4">
               <button
                 onClick={handleNewChat}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               >
                 New chat
               </button>
               <button
                 onClick={handleOpenDailyNotes}
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               >
                 <FileText className="w-3.5 h-3.5" />
                 Notes
