@@ -5,6 +5,7 @@ import { ChatMessage } from "@/components/aurelius/chat-message";
 import { ChatInput } from "@/components/aurelius/chat-input";
 import { AppShell } from "@/components/aurelius/app-shell";
 import { ChatMemoryPanel } from "@/components/aurelius/chat-memory-panel";
+import { ToolPanel, PanelContent } from "@/components/aurelius/tool-panel";
 import { toast } from "sonner";
 
 type Message = {
@@ -30,6 +31,8 @@ export function ChatClient() {
     tokenCount: 0,
     factsSaved: 0,
   });
+  const [toolPanelContent, setToolPanelContent] = useState<PanelContent>(null);
+  const [currentToolName, setCurrentToolName] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingContentRef = useRef("");
 
@@ -81,8 +84,59 @@ export function ChatClient() {
     setMessages([]);
     setConversationId(null);
     setStats((prev) => ({ ...prev, tokenCount: 0, factsSaved: 0 }));
+    setToolPanelContent(null);
     localStorage.removeItem(STORAGE_KEY);
     toast.success("Started new conversation");
+  };
+
+  const fetchPendingChange = async (changeId: string) => {
+    try {
+      const response = await fetch(`/api/config/pending/${changeId}`);
+      if (response.ok) {
+        const data = await response.json();
+        const pending = data.pending;
+        setToolPanelContent({
+          type: "config_diff",
+          key: pending.key,
+          reason: pending.reason,
+          currentContent: pending.currentContent,
+          proposedContent: pending.proposedContent,
+          pendingChangeId: pending.id,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch pending change:", error);
+    }
+  };
+
+  const handleApproveChange = async (id: string) => {
+    const response = await fetch(`/api/config/pending/${id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "approve" }),
+    });
+    if (response.ok) {
+      setToolPanelContent(null);
+    } else {
+      throw new Error("Failed to approve");
+    }
+  };
+
+  const handleRejectChange = async (id: string) => {
+    const response = await fetch(`/api/config/pending/${id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "reject" }),
+    });
+    if (response.ok) {
+      setToolPanelContent(null);
+    } else {
+      throw new Error("Failed to reject");
+    }
+  };
+
+  const handleCloseToolPanel = () => {
+    setToolPanelContent(null);
   };
 
   const handleSend = async (content: string) => {
@@ -142,6 +196,50 @@ export function ChatClient() {
                   }
                   return prev;
                 });
+              } else if (data.type === "tool_use") {
+                setCurrentToolName(data.toolName);
+                // Show a loading state in the panel
+                if (data.toolName === "read_config" || data.toolName === "list_configs") {
+                  setToolPanelContent({
+                    type: "tool_result",
+                    toolName: data.toolName,
+                    result: "Loading...",
+                  });
+                }
+              } else if (data.type === "tool_result") {
+                // Parse the result and show appropriate panel
+                try {
+                  const result = JSON.parse(data.result);
+                  if (currentToolName === "read_config" && result.content !== undefined) {
+                    setToolPanelContent({
+                      type: "config_view",
+                      key: result.key,
+                      description: result.description || "",
+                      content: result.content,
+                      version: result.version,
+                      createdBy: result.createdBy,
+                      createdAt: result.createdAt,
+                    });
+                  } else if (currentToolName === "propose_config_change" && result.pendingChangeId) {
+                    // Fetch the pending change details
+                    fetchPendingChange(result.pendingChangeId);
+                  } else {
+                    setToolPanelContent({
+                      type: "tool_result",
+                      toolName: currentToolName || "unknown",
+                      result: data.result,
+                    });
+                  }
+                } catch {
+                  setToolPanelContent({
+                    type: "tool_result",
+                    toolName: currentToolName || "unknown",
+                    result: data.result,
+                  });
+                }
+                setCurrentToolName(null);
+              } else if (data.type === "pending_change") {
+                fetchPendingChange(data.changeId);
               } else if (data.type === "memories") {
                 setStats((prev) => ({
                   ...prev,
@@ -207,8 +305,20 @@ export function ChatClient() {
     );
   }
 
+  // Determine which sidebar to show
+  const rightSidebar = toolPanelContent ? (
+    <ToolPanel
+      content={toolPanelContent}
+      onClose={handleCloseToolPanel}
+      onApprove={handleApproveChange}
+      onReject={handleRejectChange}
+    />
+  ) : (
+    <ChatMemoryPanel />
+  );
+
   return (
-    <AppShell rightSidebar={<ChatMemoryPanel />}>
+    <AppShell rightSidebar={rightSidebar} wideSidebar={!!toolPanelContent}>
       <div className="flex flex-col h-screen">
         {/* Messages area - scrollable, takes remaining space */}
         <div className="flex-1 overflow-y-auto px-6 py-4">

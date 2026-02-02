@@ -6,9 +6,10 @@ import { AppSidebar } from "./app-sidebar";
 type AppShellProps = {
   children: ReactNode;
   rightSidebar?: ReactNode;
+  wideSidebar?: boolean;
 };
 
-export function AppShell({ children, rightSidebar }: AppShellProps) {
+export function AppShell({ children, rightSidebar, wideSidebar = false }: AppShellProps) {
   return (
     <div className="min-h-screen flex">
       {/* Left Navigation Sidebar */}
@@ -19,11 +20,11 @@ export function AppShell({ children, rightSidebar }: AppShellProps) {
         {children}
       </main>
 
-      {/* Right Sidebar (optional) */}
+      {/* Right Sidebar (optional) - wider when showing tool panel */}
       {rightSidebar && (
-        <aside className="w-80 border-l border-border bg-background overflow-y-auto">
+        <div className={wideSidebar ? "w-[480px]" : "w-80"}>
           {rightSidebar}
-        </aside>
+        </div>
       )}
     </div>
   );
