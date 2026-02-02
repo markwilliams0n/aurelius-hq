@@ -5,6 +5,18 @@
 1. **Check `docs/worklog/now.md`** - Current context: what we just did, what's in progress, what's next
 2. **Read `ARCHITECTURE.md`** - How the app works, key systems, patterns
 
+## Worklog Maintenance
+
+**Proactively suggest `/wrap-up`** to keep the worklog current:
+
+- After completing a feature or significant chunk of work
+- After multiple commits (3+) in a session
+- Before the conversation gets very long (context compaction risk)
+- When switching topics or wrapping up for the day
+- After merging branches
+
+Keep it lightweight - a quick "Want to run `/wrap-up` to capture this progress?" is enough.
+
 ## Process Management Safety
 
 **NEVER use broad pattern matching to kill processes:**
