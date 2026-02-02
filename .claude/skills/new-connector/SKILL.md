@@ -12,6 +12,7 @@ This skill guides you through designing a new connector for the Aurelius triage 
 When this skill is invoked:
 
 1. **Read the connector documentation** to understand the current architecture:
+   - Read `docs/connectors/index.md` for the **connector registry** (all connectors, their status, capabilities)
    - Read `docs/connectors/README.md` for the setup wizard interview
    - Read `docs/triage.md` for triage system overview
    - Read `docs/connectors/granola.md` as a reference implementation
@@ -139,6 +140,7 @@ Claude: Great choice! For Notion, I'd recommend:
 After completing the brainstorm:
 
 1. **Design document** saved to `docs/connectors/{name}.md`
-2. **Summary** of all design decisions
-3. **Next steps** for implementation
-4. **Optional**: Implementation plan via superpowers:writing-plans
+2. **Update connector registry** at `docs/connectors/index.md`
+3. **Summary** of all design decisions
+4. **Next steps** for implementation
+5. **Optional**: Implementation plan via superpowers:writing-plans
