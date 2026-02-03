@@ -4,57 +4,57 @@
 
 ## Just Completed (Last Session)
 
+**2026-02-03 Night**
+
+Gmail Connector Implementation:
+- **Full Gmail connector** on `feature/gmail-connector` branch (14 commits)
+- **Core modules**:
+  - `src/lib/gmail/types.ts` - TypeScript types for Gmail data
+  - `src/lib/gmail/client.ts` - Gmail API with Service Account auth
+  - `src/lib/gmail/sync.ts` - Sync logic with smart sender analysis
+  - `src/lib/gmail/actions.ts` - Archive, spam, reply, unsubscribe
+- **API endpoints**:
+  - `POST/GET /api/gmail/sync` - Manual sync trigger
+  - `POST /api/gmail/reply` - Create reply drafts or send
+- **Smart features**:
+  - Sender tags: Internal, Direct, CC, Auto, Newsletter, Group, Suspicious
+  - Phishing detection: brand impersonation, lookalike domains, urgency patterns
+  - Gravatar avatars
+  - Thread deduplication
+- **Integrations**:
+  - Heartbeat syncs Gmail (Step 3)
+  - Triage archive/spam actions sync back to Gmail
+- **Test suite**: 36 tests covering sync, actions, phishing detection
+- **Docs**: Updated `docs/connectors/gmail.md`, `.env.example`
+
 **2026-02-03 Early AM**
 
-Smart Entity Resolution System:
-- **New `entity-resolution.ts`** - Multi-signal entity matching with weighted scoring:
-  - Name similarity (50%): exact match, prefix, abbreviation
-  - Context overlap (35%): shared keywords between content and entity facts
-  - Recency/decay (15%): recently accessed entities rank higher
-- **Partial name matching**: "Adam" → "Adam Watson" when context aligns
-- **Cross-type protection**: Won't create "Adam Watson" as company if person exists
-- **Batch deduplication**: Multiple mentions in one note → one entity
-- **Fact deduplication**: Redundant facts (same info rephrased) skipped
-- **Location/term filtering**: San Diego, Austin, AI, ML filtered out
-- **Comprehensive test suite**: `scripts/test-heartbeat-scenarios.ts` (24 tests, 87.5% pass)
-- **Updated heartbeat docs**: `docs/systems/heartbeat.md` with entity resolution details
-
-**2026-02-02 Night (earlier)**
-
-Memory System Improvements:
-- Fixed QMD search showing git diff markers
-- Added Ollama semantic extraction for chat → daily notes
-- Improved triage note formatting
-- Added synthesis scheduling (daily at 3 AM)
-- Fixed agent not seeing daily notes
-- Fixed Telegram bot missing daily notes
-- Centralized agent context (`buildAgentContext()`)
-- Improved search results UI with clickable results
-- Type filter for search
-- Comprehensive memory system review
+Smart Entity Resolution System (merged to main):
+- Multi-signal entity matching with weighted scoring
+- Partial name matching, cross-type protection
+- Batch/fact deduplication, location/term filtering
+- Comprehensive test suite (24 tests, 87.5% pass)
 
 ## In Progress
 
-On `feature/memory-bot-tuning`:
-- Entity resolution system complete ✓
+On `feature/gmail-connector`:
+- Core implementation complete ✓
+- Tests passing ✓
 - Ready for merge to main
 
 ## Up Next
 
-- [ ] Merge feature branch to main
-- [ ] Test memory system for a few days
-- [ ] Consider: Heartbeat → DB sync (future)
-- [ ] Proactive work in heartbeat (future - sequence before memory backup)
+- [ ] Merge `feature/gmail-connector` to main
+- [ ] Test Gmail sync with real inbox
+- [ ] Add UI components for Gmail-specific features
+- [ ] Consider: Linear connector (similar pattern)
 
 ## Known Issues (Documented)
 
-- Dual storage systems (DB + file) not fully synchronized
-- Heartbeat extracts to file system only, not database
-- 3 edge cases in entity resolution tests (12.5% fail rate):
-  - "Adam Johnson" not always created as separate person
-  - StubHub duplicate on reprocessing historical notes
-  - Cross-type pollution (adam-watson as project exists)
-- See `docs/plans/2026-02-02-memory-system-review.md` for full analysis
+- Gmail: `GMAIL_ENABLE_SEND=true` required to send (drafts by default)
+- Gmail: Service Account needs domain-wide delegation setup
+- Memory: Dual storage systems (DB + file) not fully synchronized
+- Memory: 3 edge cases in entity resolution tests (12.5% fail rate)
 
 ---
 
