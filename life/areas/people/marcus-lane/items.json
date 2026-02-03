@@ -154,5 +154,29 @@
     "id": "marcus-lane-1770083110840",
     "lastAccessed": "2026-02-03T01:45:10.840Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Made an internal-build decision on UTA deal",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-lane-1770102013559",
+    "lastAccessed": "2026-02-03T07:00:13.559Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "post-mortem requested in Slack",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-lane-1770111012004",
+    "lastAccessed": "2026-02-03T09:30:12.004Z",
+    "accessCount": 0
   }
 ]

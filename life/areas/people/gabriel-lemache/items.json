@@ -70,5 +70,41 @@
     "id": "gabriel-lemache-1770084927020",
     "lastAccessed": "2026-02-03T02:15:27.020Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Rio",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "gabriel-lemache-1770093925412",
+    "lastAccessed": "2026-02-03T04:45:25.412Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "is ramping up on the codebase and picking up smaller UI tickets",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "gabriel-lemache-1770112820599",
+    "lastAccessed": "2026-02-03T10:00:20.599Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Ramping up on the codebase and picking up smaller UI tickets",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "gabriel-lemache-1770122722284",
+    "lastAccessed": "2026-02-03T12:45:22.284Z",
+    "accessCount": 0
   }
 ]

@@ -94,5 +94,89 @@
     "id": "alex-martinez-1770089408781",
     "lastAccessed": "2026-02-03T03:30:08.781Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Found bug in payment processing",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "alex-martinez-1770093914768",
+    "lastAccessed": "2026-02-03T04:45:14.768Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Sent bug report",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "alex-martinez-1770098413370",
+    "lastAccessed": "2026-02-03T06:00:13.370Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Found a bug in payment processing",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "alex-martinez-1770102013539",
+    "lastAccessed": "2026-02-03T07:00:13.539Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Posted a bug report",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "alex-martinez-1770106512800",
+    "lastAccessed": "2026-02-03T08:15:12.800Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Bug: Payment processing stuck",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "alex-martinez-1770120912831",
+    "lastAccessed": "2026-02-03T12:15:12.831Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Sent a bug report on payment processing stuck",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "alex-martinez-1770129019871",
+    "lastAccessed": "2026-02-03T14:30:19.871Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Priority: urgent",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "alex-martinez-1770130814472",
+    "lastAccessed": "2026-02-03T15:00:14.472Z",
+    "accessCount": 0
   }
 ]

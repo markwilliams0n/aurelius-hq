@@ -1,28 +1,30 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Inbox,
   Archive,
   Clock,
   CheckCircle,
-  User,
-  Building,
-  FolderOpen,
-  Brain,
-  Lightbulb,
   ChevronDown,
-  ChevronUp,
-  Sparkles,
-  Check,
-  ListTodo,
+  ChevronRight,
+  Brain,
+  Trash2,
+  RotateCcw,
+  Mail,
+  MessageSquare,
+  LayoutList,
+  CalendarDays,
+  Loader2,
+  CheckCheck,
+  XCircle,
+  FileText,
+  RefreshCw,
 } from "lucide-react";
-import { TriageItem } from "./triage-card";
 import { cn } from "@/lib/utils";
 import { RightSidebar } from "./right-sidebar";
 
 interface TriageSidebarProps {
-  item: TriageItem | null;
   stats: {
     new: number;
     archived: number;
@@ -31,15 +33,109 @@ interface TriageSidebarProps {
   };
   isExpanded?: boolean;
   onToggleExpand?: () => void;
+  onUndo?: (activityId: string, action: string, itemId: string) => void;
 }
 
-export function TriageSidebar({ item, stats, isExpanded = false, onToggleExpand }: TriageSidebarProps) {
-  const [isContentExpanded, setIsContentExpanded] = useState(false);
+type ActivityItem = {
+  id: string;
+  eventType: string;
+  actor: string;
+  description: string;
+  metadata: {
+    action?: string;
+    itemId?: string;
+    connector?: string;
+    subject?: string;
+    sender?: string;
+    status?: string;
+    factsCount?: number;
+    facts?: string[];
+    error?: string;
+    durationMs?: number;
+    previousStatus?: string;
+    newStatus?: string;
+    snoozeUntil?: string;
+  } | null;
+  createdAt: string;
+};
 
-  // Reset expanded state when item changes
+export function TriageSidebar({ stats, isExpanded = false, onToggleExpand, onUndo }: TriageSidebarProps) {
+  const [activeTab, setActiveTab] = useState<"activity" | "notes">("activity");
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [dailyNotes, setDailyNotes] = useState<string>("");
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Fetch activities
+  const fetchActivities = useCallback(async () => {
+    try {
+      const res = await fetch("/api/activity?eventType=triage_action&limit=30");
+      if (res.ok) {
+        const data = await res.json();
+        setActivities(data.activities || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch activities:", error);
+    }
+  }, []);
+
+  // Fetch daily notes
+  const fetchDailyNotes = useCallback(async () => {
+    try {
+      const res = await fetch("/api/daily-notes");
+      if (res.ok) {
+        const data = await res.json();
+        setDailyNotes(data.content || "No notes yet today.");
+      }
+    } catch (error) {
+      console.error("Failed to fetch daily notes:", error);
+      setDailyNotes("Failed to load notes.");
+    }
+  }, []);
+
+  // Initial fetch and polling
   useEffect(() => {
-    setIsContentExpanded(false);
-  }, [item?.id]);
+    if (activeTab === "activity") {
+      fetchActivities();
+      // Poll every 3 seconds for activity updates (to catch background memory completion)
+      const interval = setInterval(fetchActivities, 3000);
+      return () => clearInterval(interval);
+    } else {
+      fetchDailyNotes();
+    }
+  }, [activeTab, fetchActivities, fetchDailyNotes]);
+
+  const toggleExpanded = (id: string) => {
+    setExpandedItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleUndo = async (activity: ActivityItem) => {
+    if (!activity.metadata?.itemId || !activity.metadata?.action) return;
+
+    if (onUndo) {
+      onUndo(activity.id, activity.metadata.action, activity.metadata.itemId);
+    } else {
+      // Default undo: restore the item
+      try {
+        await fetch(`/api/triage/${activity.metadata.itemId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "restore" }),
+        });
+        fetchActivities();
+      } catch (error) {
+        console.error("Failed to undo:", error);
+      }
+    }
+  };
 
   // Keyboard shortcuts footer
   const keyboardShortcuts = (
@@ -54,6 +150,7 @@ export function TriageSidebar({ item, stats, isExpanded = false, onToggleExpand 
         <ShortcutHint keys="s" label="Snooze" />
         <ShortcutHint keys="Space" label="Chat" />
         <ShortcutHint keys="→" label="Actions" />
+        <ShortcutHint keys="↵" label="Expand" />
         <ShortcutHint keys="Esc" label="Close" />
       </div>
     </div>
@@ -76,138 +173,46 @@ export function TriageSidebar({ item, stats, isExpanded = false, onToggleExpand 
         </div>
       </div>
 
-      {/* Item details */}
-      {item && (
-        <div>
-          {/* Linked entities */}
-          {item.enrichment?.linkedEntities &&
-            item.enrichment.linkedEntities.length > 0 && (
-              <div className="px-4 py-3 border-b border-border">
-                <div className="flex items-center gap-2 mb-2">
-                  <Brain className="w-4 h-4 text-gold" />
-                  <h4 className="text-sm font-medium">From Memory</h4>
-                </div>
-                <div className="space-y-2">
-                  {item.enrichment.linkedEntities.map((entity) => (
-                    <EntityCard key={entity.id} entity={entity} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-          {/* Extracted Memory (for Granola meetings) */}
-          <ExtractedMemorySection item={item} />
-
-          {/* Suggested actions */}
-          {item.enrichment?.suggestedActions &&
-            item.enrichment.suggestedActions.length > 0 && (
-              <div className="px-4 py-3 border-b border-border">
-                <div className="flex items-center gap-2 mb-2">
-                  <Lightbulb className="w-4 h-4 text-gold" />
-                  <h4 className="text-sm font-medium">Suggested Actions</h4>
-                </div>
-                <div className="space-y-2">
-                  {item.enrichment.suggestedActions.map((action, idx) => (
-                    <div
-                      key={idx}
-                      className="p-2 rounded-lg bg-secondary/50 border border-border"
-                    >
-                      <div className="font-medium text-sm">{action.label}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {action.reason}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-          {/* Context from memory */}
-          {item.enrichment?.contextFromMemory && (
-            <div className="px-4 py-3 border-b border-border">
-              <div className="flex items-center gap-2 mb-2">
-                <Brain className="w-4 h-4 text-gold" />
-                <h4 className="text-sm font-medium">Context</h4>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                {item.enrichment.contextFromMemory}
-              </p>
-            </div>
+      {/* Tabs */}
+      <div className="flex border-b border-border">
+        <button
+          onClick={() => setActiveTab("activity")}
+          className={cn(
+            "flex-1 px-4 py-2 text-sm font-medium transition-colors",
+            activeTab === "activity"
+              ? "text-gold border-b-2 border-gold"
+              : "text-muted-foreground hover:text-foreground"
           )}
+        >
+          Activity
+        </button>
+        <button
+          onClick={() => setActiveTab("notes")}
+          className={cn(
+            "flex-1 px-4 py-2 text-sm font-medium transition-colors",
+            activeTab === "notes"
+              ? "text-gold border-b-2 border-gold"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          Notes
+        </button>
+      </div>
 
-          {/* Sender details */}
-          <div className="px-4 py-3 border-b border-border">
-            <h4 className="text-sm font-medium mb-2">Sender</h4>
-            <div className="flex items-center gap-3">
-              {item.senderAvatar ? (
-                <img
-                  src={item.senderAvatar}
-                  alt={item.senderName || item.sender}
-                  className="w-10 h-10 rounded-full"
-                />
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-gold/20 flex items-center justify-center">
-                  <span className="text-gold font-medium">
-                    {(item.senderName || item.sender).charAt(0).toUpperCase()}
-                  </span>
-                </div>
-              )}
-              <div>
-                <div className="font-medium text-sm">
-                  {item.senderName || item.sender}
-                </div>
-                {item.senderName && item.sender !== item.senderName && (
-                  <div className="text-xs text-muted-foreground">
-                    {item.sender}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Full content preview */}
-          <div className="px-4 py-3">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-sm font-medium">Full Content</h4>
-              {item.content.length > 500 && (
-                <button
-                  onClick={() => setIsContentExpanded(!isContentExpanded)}
-                  className="flex items-center gap-1 text-xs text-gold hover:text-gold/80 transition-colors"
-                >
-                  {isContentExpanded ? (
-                    <>
-                      <ChevronUp className="w-3 h-3" />
-                      Show less
-                    </>
-                  ) : (
-                    <>
-                      <ChevronDown className="w-3 h-3" />
-                      Show more
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-            <div
-              className={cn(
-                "text-sm text-muted-foreground whitespace-pre-wrap",
-                !isContentExpanded && "line-clamp-[12]"
-              )}
-            >
-              {item.content}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!item && (
-        <div className="flex-1 flex items-center justify-center p-4">
-          <p className="text-sm text-muted-foreground text-center">
-            No item selected
-          </p>
-        </div>
-      )}
+      {/* Tab content */}
+      <div className="flex-1 overflow-y-auto">
+        {activeTab === "activity" ? (
+          <ActivityList
+            activities={activities}
+            expandedItems={expandedItems}
+            onToggleExpanded={toggleExpanded}
+            onUndo={handleUndo}
+            onRefresh={fetchActivities}
+          />
+        ) : (
+          <DailyNotesView content={dailyNotes} onRefresh={fetchDailyNotes} />
+        )}
+      </div>
     </RightSidebar>
   );
 }
@@ -234,32 +239,6 @@ function StatBadge({
   );
 }
 
-function EntityCard({
-  entity,
-}: {
-  entity: { id: string; name: string; type: string };
-}) {
-  const icons = {
-    person: User,
-    company: Building,
-    project: FolderOpen,
-    team: Building,
-  };
-  const Icon = icons[entity.type as keyof typeof icons] || User;
-
-  return (
-    <div className="flex items-center gap-2 p-2 rounded-lg bg-secondary/50 border border-border">
-      <Icon className="w-4 h-4 text-gold" />
-      <div>
-        <div className="text-sm font-medium">{entity.name}</div>
-        <div className="text-[10px] text-muted-foreground capitalize">
-          {entity.type}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function ShortcutHint({ keys, label }: { keys: string; label: string }) {
   return (
     <div className="flex items-center gap-1.5">
@@ -271,143 +250,205 @@ function ShortcutHint({ keys, label }: { keys: string; label: string }) {
   );
 }
 
-// Extracted Memory Section for Granola meetings
-// Memory is auto-saved during sync, this is for display/review only
-function ExtractedMemorySection({ item }: { item: TriageItem }) {
-  // Cast enrichment to access dynamic fields (stored as JSON in DB)
-  const enrichment = item.enrichment as Record<string, unknown> | null;
-  const extractedMemory = enrichment?.extractedMemory as {
-    entities?: Array<{ name: string; type: string; role?: string; facts: string[] }>;
-    facts?: Array<{ content: string; category: string; entityName?: string; confidence: string }>;
-    actionItems?: Array<{ description: string; assignee?: string }>;
-    summary?: string;
-    topics?: string[];
-  } | null;
-
-  if (!extractedMemory || item.connector !== "granola") {
-    return null;
+// Activity list component
+function ActivityList({
+  activities,
+  expandedItems,
+  onToggleExpanded,
+  onUndo,
+  onRefresh,
+}: {
+  activities: ActivityItem[];
+  expandedItems: Set<string>;
+  onToggleExpanded: (id: string) => void;
+  onUndo: (activity: ActivityItem) => void;
+  onRefresh: () => void;
+}) {
+  if (activities.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 text-muted-foreground">
+        <Clock className="w-8 h-8 mb-2 opacity-50" />
+        <p className="text-sm">No recent activity</p>
+      </div>
+    );
   }
 
-  const hasEntities = extractedMemory.entities && extractedMemory.entities.length > 0;
-  const hasFacts = extractedMemory.facts && extractedMemory.facts.length > 0;
-  const hasActionItems = extractedMemory.actionItems && extractedMemory.actionItems.length > 0;
+  const connectorIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+    gmail: Mail,
+    slack: MessageSquare,
+    linear: LayoutList,
+    granola: CalendarDays,
+  };
 
-  if (!hasEntities && !hasFacts && !hasActionItems) {
-    return null;
-  }
+  const actionIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+    archive: Archive,
+    memory: Brain,
+    snooze: Clock,
+    spam: Trash2,
+    restore: RotateCcw,
+    actioned: CheckCircle,
+  };
+
+  const statusColors: Record<string, string> = {
+    processing: "text-yellow-400",
+    completed: "text-green-400",
+    failed: "text-red-400",
+  };
 
   return (
-    <div className="px-4 py-3 border-b border-border">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-purple-400" />
-          <h4 className="text-sm font-medium">Extracted Memory</h4>
-        </div>
-        <span className="flex items-center gap-1 px-2 py-1 text-xs text-green-400">
-          <Check className="w-3 h-3" />
-          Auto-saved
-        </span>
+    <div className="divide-y divide-border">
+      <div className="px-4 py-2 flex justify-end">
+        <button
+          onClick={onRefresh}
+          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+        >
+          <RefreshCw className="w-3 h-3" />
+          Refresh
+        </button>
       </div>
+      {activities.map((activity) => {
+        const isExpanded = expandedItems.has(activity.id);
+        const action = activity.metadata?.action || "action";
+        const connector = activity.metadata?.connector || "manual";
+        const status = activity.metadata?.status;
+        const ConnectorIcon = connectorIcons[connector] || Mail;
+        const ActionIcon = actionIcons[action] || CheckCircle;
+        const canUndo = ["archive", "spam", "snooze"].includes(action) && status !== "processing";
 
-      {/* Summary */}
-      {extractedMemory.summary && (
-        <p className="text-xs text-muted-foreground mb-3 italic">
-          {extractedMemory.summary}
-        </p>
-      )}
-
-      {/* Topics */}
-      {extractedMemory.topics && extractedMemory.topics.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-3">
-          {extractedMemory.topics.map((topic, i) => (
-            <span
-              key={i}
-              className="px-2 py-0.5 text-[10px] bg-secondary rounded-full text-muted-foreground"
+        return (
+          <div key={activity.id} className="px-4 py-2">
+            <div
+              className="flex items-start gap-2 cursor-pointer"
+              onClick={() => onToggleExpanded(activity.id)}
             >
-              {topic}
-            </span>
-          ))}
-        </div>
-      )}
+              {/* Expand indicator */}
+              <button className="mt-0.5 text-muted-foreground">
+                {isExpanded ? (
+                  <ChevronDown className="w-3 h-3" />
+                ) : (
+                  <ChevronRight className="w-3 h-3" />
+                )}
+              </button>
 
-      {/* Entities */}
-      {hasEntities && (
-        <div className="space-y-2 mb-3">
-          <div className="text-xs font-medium text-muted-foreground">People & Companies</div>
-          {extractedMemory.entities!.slice(0, 5).map((entity, i) => {
-            const Icon = entity.type === "company" ? Building : entity.type === "project" ? FolderOpen : User;
-            return (
-              <div
-                key={i}
-                className="flex items-start gap-2 p-2 rounded-lg bg-secondary/50 border border-border text-xs"
-              >
-                <Icon className="w-3.5 h-3.5 text-purple-400 mt-0.5 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium">{entity.name}</div>
-                  {entity.role && (
-                    <div className="text-muted-foreground text-[10px]">{entity.role}</div>
-                  )}
-                  {entity.facts.length > 0 && (
-                    <ul className="mt-1 text-muted-foreground">
-                      {entity.facts.slice(0, 2).map((fact, j) => (
-                        <li key={j} className="truncate">• {fact}</li>
-                      ))}
-                    </ul>
+              {/* Action icon */}
+              <div className="mt-0.5">
+                {status === "processing" ? (
+                  <Loader2 className="w-4 h-4 text-yellow-400 animate-spin" />
+                ) : status === "completed" ? (
+                  <CheckCheck className="w-4 h-4 text-green-400" />
+                ) : status === "failed" ? (
+                  <XCircle className="w-4 h-4 text-red-400" />
+                ) : (
+                  <ActionIcon className="w-4 h-4 text-muted-foreground" />
+                )}
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs truncate">{activity.description}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <ConnectorIcon className="w-3 h-3 text-muted-foreground" />
+                  <span className="text-[10px] text-muted-foreground">
+                    {formatTimeAgo(new Date(activity.createdAt))}
+                  </span>
+                  {status && (
+                    <span className={cn("text-[10px]", statusColors[status] || "text-muted-foreground")}>
+                      {status}
+                    </span>
                   )}
                 </div>
               </div>
-            );
-          })}
-        </div>
-      )}
 
-      {/* Facts */}
-      {hasFacts && (
-        <div className="space-y-2 mb-3">
-          <div className="text-xs font-medium text-muted-foreground">Key Facts</div>
-          {extractedMemory.facts!.slice(0, 5).map((fact, i) => (
-            <div
-              key={i}
-              className="p-2 rounded-lg bg-secondary/50 border border-border text-xs"
-            >
-              <p>{fact.content}</p>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-[10px] text-muted-foreground capitalize">
-                  {fact.category}
-                </span>
-                {fact.entityName && (
-                  <span className="text-[10px] text-purple-400">
-                    → {fact.entityName}
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Action Items */}
-      {hasActionItems && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-            <ListTodo className="w-3 h-3" />
-            Action Items
-          </div>
-          {extractedMemory.actionItems!.slice(0, 3).map((action, i) => (
-            <div
-              key={i}
-              className="p-2 rounded-lg bg-secondary/50 border border-border text-xs"
-            >
-              <p>{action.description}</p>
-              {action.assignee && (
-                <span className="text-[10px] text-muted-foreground">
-                  → {action.assignee}
-                </span>
+              {/* Undo button */}
+              {canUndo && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUndo(activity);
+                  }}
+                  className="text-xs text-muted-foreground hover:text-gold px-2 py-1 rounded hover:bg-secondary"
+                >
+                  Undo
+                </button>
               )}
             </div>
-          ))}
-        </div>
-      )}
+
+            {/* Expanded details */}
+            {isExpanded && activity.metadata && (
+              <div className="ml-7 mt-2 p-2 rounded-lg bg-secondary/50 text-xs space-y-1.5">
+                {/* Facts - show prominently */}
+                {activity.metadata.facts && activity.metadata.facts.length > 0 && (
+                  <div className="space-y-1.5">
+                    {activity.metadata.facts.map((fact, i) => (
+                      <div key={i} className="pl-2 border-l-2 border-gold/50 text-foreground">
+                        {fact}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Error message */}
+                {activity.metadata.error && (
+                  <div className="text-red-400 text-[10px]">
+                    Error: {activity.metadata.error}
+                  </div>
+                )}
+                {/* Snooze until */}
+                {activity.metadata.snoozeUntil && (
+                  <div className="text-muted-foreground text-[10px]">
+                    Until: {new Date(activity.metadata.snoozeUntil).toLocaleString()}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
+}
+
+// Daily notes view component
+function DailyNotesView({ content, onRefresh }: { content: string; onRefresh: () => void }) {
+  return (
+    <div className="p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <FileText className="w-4 h-4 text-gold" />
+          <h4 className="text-sm font-medium">Today's Notes</h4>
+        </div>
+        <button
+          onClick={onRefresh}
+          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+        >
+          <RefreshCw className="w-3 h-3" />
+          Refresh
+        </button>
+      </div>
+      <div className="prose prose-sm dark:prose-invert max-w-none">
+        <div className="text-xs text-muted-foreground whitespace-pre-wrap">
+          {content}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Format time ago helper
+function formatTimeAgo(date: Date): string {
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+
+  if (seconds < 60) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }

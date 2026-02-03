@@ -4,57 +4,43 @@
 
 ## Just Completed (Last Session)
 
-**2026-02-03 Early AM**
+**2026-02-03 Night**
 
-Smart Entity Resolution System:
-- **New `entity-resolution.ts`** - Multi-signal entity matching with weighted scoring:
-  - Name similarity (50%): exact match, prefix, abbreviation
-  - Context overlap (35%): shared keywords between content and entity facts
-  - Recency/decay (15%): recently accessed entities rank higher
-- **Partial name matching**: "Adam" → "Adam Watson" when context aligns
-- **Cross-type protection**: Won't create "Adam Watson" as company if person exists
-- **Batch deduplication**: Multiple mentions in one note → one entity
-- **Fact deduplication**: Redundant facts (same info rephrased) skipped
-- **Location/term filtering**: San Diego, Austin, AI, ML filtered out
-- **Comprehensive test suite**: `scripts/test-heartbeat-scenarios.ts` (24 tests, 87.5% pass)
-- **Updated heartbeat docs**: `docs/systems/heartbeat.md` with entity resolution details
+Gmail Connector + Memory System Fixes:
+- **Gmail connector** complete with all core features:
+  - Service Account auth with domain-wide delegation
+  - Smart sender tags (Internal, Direct, CC, Auto, Newsletter, Suspicious)
+  - Phishing detection (brand impersonation, lookalike domains)
+  - Bi-directional sync (archive/spam sync back to Gmail)
+  - Reply support (drafts, with optional direct send)
+  - Heartbeat integration for auto-sync
+  - 36 tests covering sync, actions, phishing detection
 
-**2026-02-02 Night (earlier)**
+- **Memory system fixes**:
+  - Heartbeat now processes pre-extracted content from daily notes
+  - Fixed over-aggressive redundancy detection (string-based instead of LLM)
+  - QMD search now indexes facts from summary.md
+  - Triage chat uses shared context builder (no more hallucinations)
 
-Memory System Improvements:
-- Fixed QMD search showing git diff markers
-- Added Ollama semantic extraction for chat → daily notes
-- Improved triage note formatting
-- Added synthesis scheduling (daily at 3 AM)
-- Fixed agent not seeing daily notes
-- Fixed Telegram bot missing daily notes
-- Centralized agent context (`buildAgentContext()`)
-- Improved search results UI with clickable results
-- Type filter for search
-- Comprehensive memory system review
+- **UI fixes**:
+  - Triage cards scroll properly when tasks overflow
 
 ## In Progress
 
-On `feature/memory-bot-tuning`:
-- Entity resolution system complete ✓
-- Ready for merge to main
+Ready to merge `feature/gmail-connector` to main.
 
 ## Up Next
 
-- [ ] Merge feature branch to main
-- [ ] Test memory system for a few days
-- [ ] Consider: Heartbeat → DB sync (future)
-- [ ] Proactive work in heartbeat (future - sequence before memory backup)
+- [ ] Test Gmail sync with real inbox
+- [ ] Add UI components for Gmail-specific features (thread expand/collapse)
+- [ ] Consider: Linear connector (similar pattern)
 
 ## Known Issues (Documented)
 
-- Dual storage systems (DB + file) not fully synchronized
-- Heartbeat extracts to file system only, not database
-- 3 edge cases in entity resolution tests (12.5% fail rate):
-  - "Adam Johnson" not always created as separate person
-  - StubHub duplicate on reprocessing historical notes
-  - Cross-type pollution (adam-watson as project exists)
-- See `docs/plans/2026-02-02-memory-system-review.md` for full analysis
+- Gmail: `GMAIL_ENABLE_SEND=true` required to send (drafts by default)
+- Gmail: Service Account needs domain-wide delegation setup
+- Memory: Dual storage systems (DB + file) not fully synchronized
+- Memory: 3 edge cases in entity resolution tests (12.5% fail rate)
 
 ---
 

@@ -1,26 +1,29 @@
 import { NextResponse } from "next/server";
-import { chat, type Message } from "@/lib/ai/client";
+import { chat } from "@/lib/ai/client";
+import { buildAgentContext } from "@/lib/ai/context";
 import { upsertEntity } from "@/lib/memory/entities";
 import { createFact } from "@/lib/memory/facts";
 
-const SYSTEM_PROMPT = `You are Aurelius, an AI assistant helping triage and process incoming items.
+/**
+ * Triage chat uses the same context building as main chat,
+ * with additional triage-specific context and actions.
+ */
 
-You are currently helping the user with a specific triage item. You can help them:
-- Add context or facts to memory about people, companies, or projects mentioned
+const TRIAGE_CONTEXT = `
+You are currently helping the user with a specific triage item. You can:
+- Answer questions about this item using your memory
+- Add facts to memory about people, companies, or projects mentioned
 - Create tasks or action items
 - Snooze the item for later
-- Extract and summarize key information
-- Provide context from memory about mentioned entities
 
 When the user wants to add something to memory, extract:
 - Entity name and type (person, company, project)
 - The fact or context to remember
 - Category: status, preference, relationship, context, milestone
 
-Respond conversationally but concisely. If you take an action, confirm what you did.
-
 If you need to trigger an action, include it in your response as JSON at the end:
-{"action": "snooze", "duration": "1d"} or {"action": "memory", "entity": "...", "fact": "..."}`;
+{"action": "snooze", "duration": "1d"} or {"action": "memory", "entity": "...", "fact": "..."}
+`;
 
 export async function POST(request: Request) {
   try {
@@ -31,7 +34,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Message required" }, { status: 400 });
     }
 
-    // Build context from item
+    // Build item context
     const itemContext = `
 Current triage item:
 - Type: ${item.connector}
@@ -40,17 +43,22 @@ Current triage item:
 - Preview: ${item.preview?.slice(0, 500) || item.content?.slice(0, 500)}
 `;
 
-    // Build messages for the AI
-    const messages: Message[] = [
-      { role: "user", content: `Context:\n${itemContext}` },
+    // Use shared context builder with triage-specific additions
+    const { systemPrompt } = await buildAgentContext({
+      query: `${item.subject} ${item.senderName || item.sender} ${message}`,
+      additionalContext: `${TRIAGE_CONTEXT}\n${itemContext}`,
+    });
+
+    // Build messages (include recent history)
+    const messages = [
       ...history.slice(-10).map((h: { role: string; content: string }) => ({
         role: h.role as "user" | "assistant",
         content: h.content,
       })),
-      { role: "user", content: message },
+      { role: "user" as const, content: message },
     ];
 
-    const result = await chat(messages, SYSTEM_PROMPT);
+    const result = await chat(messages, systemPrompt);
 
     let response = result;
     let action = null;

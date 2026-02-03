@@ -10,5 +10,29 @@
     "id": "stubhub-partnership-needs-1770081318016-0",
     "lastAccessed": "2026-02-03T01:15:18.016Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Need venue lists filtered by ticketing company",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "stubhub-partnership-needs-1770103814369",
+    "lastAccessed": "2026-02-03T07:30:14.369Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "StubHub needs venue lists filtered by ticketing company for their partnerships team",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "stubhub-partnership-needs-1770125420391",
+    "lastAccessed": "2026-02-03T13:30:20.391Z",
+    "accessCount": 0
   }
 ]

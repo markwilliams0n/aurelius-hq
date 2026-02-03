@@ -1,0 +1,62 @@
+[
+  {
+    "fact": "Market intelligence dashboard",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "ai-integration-points-1770119113741-0",
+    "lastAccessed": "2026-02-03T11:45:13.741Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Lead scoring automation",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "ai-integration-points-1770119113741-1",
+    "lastAccessed": "2026-02-03T11:45:13.741Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Growth forecasting models",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "ai-integration-points-1770119113741-2",
+    "lastAccessed": "2026-02-03T11:45:13.741Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Customer segmentation analysis",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "ai-integration-points-1770119113741-3",
+    "lastAccessed": "2026-02-03T11:45:13.741Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Competitor tracking feeds",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "ai-integration-points-1770119113741-4",
+    "lastAccessed": "2026-02-03T11:45:13.741Z",
+    "accessCount": 0
+  }
+]

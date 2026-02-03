@@ -94,5 +94,89 @@
     "id": "chartmetric-1770087613397",
     "lastAccessed": "2026-02-03T03:00:13.397Z",
     "accessCount": 0
+  },
+  {
+    "fact": "ROSTR Pro comparison",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chartmetric-1770093914895",
+    "lastAccessed": "2026-02-03T04:45:14.895Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "ROSTR Pro evaluation by Priya Mehta",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chartmetric-1770094819668",
+    "lastAccessed": "2026-02-03T05:00:19.668Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Mentioned in conversation about ROSTR Pro",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chartmetric-1770095718260",
+    "lastAccessed": "2026-02-03T05:15:18.260Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Mentioned by Danny Feldman as alternative to ROSTR Pro",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chartmetric-1770097517550",
+    "lastAccessed": "2026-02-03T05:45:17.550Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Comparison to ROSTR Pro by Priya Mehta",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chartmetric-1770109214904",
+    "lastAccessed": "2026-02-03T09:00:14.904Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Competitor to ROSTR Pro",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chartmetric-1770111012179",
+    "lastAccessed": "2026-02-03T09:30:12.179Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Mentioned by Danny Feldman as a comparison for ROSTR Pro",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chartmetric-1770118213964",
+    "lastAccessed": "2026-02-03T11:30:13.964Z",
+    "accessCount": 0
   }
 ]

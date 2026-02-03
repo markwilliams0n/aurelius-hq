@@ -10,5 +10,29 @@
     "id": "john-smith-1769993916217-0",
     "lastAccessed": "2026-02-02T00:58:36.217Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Works at ACME Corp",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "john-smith-1770113719494",
+    "lastAccessed": "2026-02-03T10:15:19.494Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Works at ACME Industries",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "john-smith-1770129925156",
+    "lastAccessed": "2026-02-03T14:45:25.156Z",
+    "accessCount": 0
   }
 ]

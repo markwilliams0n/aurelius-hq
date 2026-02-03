@@ -59,5 +59,29 @@
     "id": "meridian-labs-1769997700411",
     "lastAccessed": "2026-02-02T02:01:40.411Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Austin office",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "meridian-labs-1770093925349",
+    "lastAccessed": "2026-02-03T04:45:25.349Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Project Atlas (Meridian Labs) is sprinting to its beta milestone ahead of an 8-person board review on April 18 in San Francisco",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "meridian-labs-1770112820433",
+    "lastAccessed": "2026-02-03T10:00:20.433Z",
+    "accessCount": 0
   }
 ]

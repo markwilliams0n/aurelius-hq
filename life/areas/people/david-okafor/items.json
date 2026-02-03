@@ -107,5 +107,41 @@
     "id": "david-okafor-1770083119280",
     "lastAccessed": "2026-02-03T01:45:19.280Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Lagos contractor, handles mobile integration",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "david-okafor-1770105621184",
+    "lastAccessed": "2026-02-03T08:00:21.184Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "handles 2-6 pm CT overlap",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "david-okafor-1770107424588",
+    "lastAccessed": "2026-02-03T08:30:24.588Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Lagos contractor, handling mobile integration for Project Atlas",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "david-okafor-1770115522694",
+    "lastAccessed": "2026-02-03T10:45:22.694Z",
+    "accessCount": 0
   }
 ]

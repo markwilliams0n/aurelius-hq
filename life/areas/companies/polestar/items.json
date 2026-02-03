@@ -1,1 +1,26 @@
-[]
+[
+  {
+    "fact": "Data inconsistencies",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "polestar-1770093914906",
+    "lastAccessed": "2026-02-03T04:45:14.906Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Data inconsistencies with Michelle Swing",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "polestar-1770099311559",
+    "lastAccessed": "2026-02-03T06:15:11.559Z",
+    "accessCount": 0
+  }
+]

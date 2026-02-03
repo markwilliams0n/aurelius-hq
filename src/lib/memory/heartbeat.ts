@@ -5,6 +5,7 @@ import { listDailyNotes, readDailyNote } from './daily-notes';
 import { isOllamaAvailable, extractEntitiesWithLLM, isFactRedundant, type ExistingEntityHint } from './ollama';
 import { resolveEntities, type ResolvedEntity } from './entity-resolution';
 import { syncGranolaMeetings, type GranolaSyncResult } from '@/lib/granola';
+import { syncGmailMessages, type GmailSyncResult } from '@/lib/gmail';
 
 const LIFE_DIR = path.join(process.cwd(), 'life');
 const HEARTBEAT_STATE_FILE = path.join(LIFE_DIR, 'system', 'heartbeat-state.json');
@@ -65,6 +66,82 @@ function getNewSections(content: string, afterTimestamp: string | null): { conte
     content: newSections.map(s => s.content).join('\n'),
     latestTimestamp
   };
+}
+
+interface ParsedDailyNoteEntry {
+  sender: string;
+  connector: string;
+  subject: string;
+  summary?: string;
+  memorySaved: string[];
+  actionItems: string[];
+  timestamp: string;
+}
+
+/**
+ * Parse pre-extracted content from daily note sections.
+ * Daily notes from triage already have **Memory Saved:** and **Action Items:** sections
+ * that we should use instead of re-extracting.
+ */
+function parsePreExtractedContent(content: string): ParsedDailyNoteEntry[] {
+  const entries: ParsedDailyNoteEntry[] = [];
+
+  // Split into sections by ## HH:MM
+  const sectionPattern = /^## (\d{2}:\d{2})\s*\n([\s\S]*?)(?=^## \d{2}:\d{2}|\Z)/gm;
+  let match;
+
+  // Use a different approach - split by section headers
+  const sections = content.split(/(?=^## \d{2}:\d{2})/m);
+
+  for (const section of sections) {
+    if (!section.trim()) continue;
+
+    // Get timestamp
+    const timestampMatch = section.match(/^## (\d{2}:\d{2})/);
+    if (!timestampMatch) continue;
+    const timestamp = timestampMatch[1];
+
+    // Get sender line: **Name** via connector: "Subject"
+    const senderMatch = section.match(/\*\*([^*]+)\*\*\s+via\s+(\w+)[^:]*:\s*"([^"]+)"/);
+    if (!senderMatch) continue;
+
+    const entry: ParsedDailyNoteEntry = {
+      sender: senderMatch[1].trim(),
+      connector: senderMatch[2].trim(),
+      subject: senderMatch[3].trim(),
+      memorySaved: [],
+      actionItems: [],
+      timestamp,
+    };
+
+    // Get summary (blockquote after header)
+    const summaryMatch = section.match(/>\s*([^\n]+(?:\n>[^\n]*)*)/);
+    if (summaryMatch) {
+      entry.summary = summaryMatch[1].replace(/\n>\s*/g, ' ').trim();
+    }
+
+    // Get Memory Saved section
+    const memorySavedMatch = section.match(/\*\*(?:Memory Saved|Key Facts):\*\*\s*\n((?:- [^\n]+\n?)+)/);
+    if (memorySavedMatch) {
+      entry.memorySaved = memorySavedMatch[1]
+        .split('\n')
+        .map(line => line.replace(/^-\s*/, '').trim())
+        .filter(line => line && !line.startsWith('_(+'));  // Skip overflow indicators
+    }
+
+    // Get Action Items section
+    const actionItemsMatch = section.match(/\*\*Action Items:\*\*\s*\n((?:- \[[ x]\][^\n]+\n?)+)/);
+    if (actionItemsMatch) {
+      entry.actionItems = actionItemsMatch[1]
+        .split('\n')
+        .map(line => line.replace(/^-\s*\[[ x]\]\s*/, '').trim())
+        .filter(line => line);
+    }
+
+    entries.push(entry);
+  }
+
+  return entries;
 }
 
 interface ExtractedEntity {
@@ -236,7 +313,13 @@ async function createEntity(
   // Create directory
   await fs.mkdir(entityPath, { recursive: true });
 
-  // Create summary.md
+  // Build summary with facts included (for QMD indexing)
+  const factsList = initialFacts.map(f => f.fact);
+  const factsSection = factsList.length > 0
+    ? `\n## Facts\n\n${factsList.map(f => `- ${f}`).join('\n')}\n`
+    : '';
+
+  // Create summary.md (include facts for QMD search)
   const summaryContent = `# ${name}
 
 **Type:** ${type}
@@ -245,7 +328,7 @@ async function createEntity(
 ## Summary
 
 ${summary}
-`;
+${factsSection}`;
   await fs.writeFile(path.join(entityPath, 'summary.md'), summaryContent);
 
   // Create items.json
@@ -314,6 +397,27 @@ async function addFactToEntity(
   facts.push(newFact);
 
   await fs.writeFile(itemsPath, JSON.stringify(facts, null, 2));
+
+  // Update summary.md with new facts (for QMD indexing)
+  const summaryPath = path.join(entityPath, 'summary.md');
+  try {
+    const summaryContent = await fs.readFile(summaryPath, 'utf-8');
+    // Replace or add Facts section
+    const activeFacts = facts.filter(f => f.status === 'active').map(f => f.fact);
+    const factsSection = `## Facts\n\n${activeFacts.map(f => `- ${f}`).join('\n')}\n`;
+
+    if (summaryContent.includes('## Facts')) {
+      // Replace existing Facts section
+      const updated = summaryContent.replace(/## Facts[\s\S]*?(?=\n## |$)/, factsSection);
+      await fs.writeFile(summaryPath, updated);
+    } else {
+      // Append Facts section
+      await fs.writeFile(summaryPath, summaryContent.trim() + '\n\n' + factsSection);
+    }
+  } catch {
+    // Summary doesn't exist, skip
+  }
+
   return true; // Fact was added
 }
 
@@ -330,6 +434,8 @@ export interface HeartbeatOptions {
   skipReindex?: boolean;
   /** Skip Granola sync */
   skipGranola?: boolean;
+  /** Skip Gmail sync */
+  skipGmail?: boolean;
   /** Skip entity extraction from daily notes */
   skipExtraction?: boolean;
 }
@@ -347,10 +453,12 @@ export interface HeartbeatResult {
   entities: EntityDetail[];
   extractionMethod: 'ollama' | 'pattern';
   granola?: GranolaSyncResult;
+  gmail?: GmailSyncResult;
   /** Granular step results for debugging */
   steps: {
     extraction?: StepResult;
     granola?: StepResult;
+    gmail?: StepResult;
     qmdUpdate?: StepResult;
     qmdEmbed?: StepResult;
   };
@@ -421,8 +529,49 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
         // Track the latest timestamp we'll save after processing
         const newTimestamp = latestTimestamp;
 
+        // FIRST: Try to use pre-extracted content from daily notes
+        // Daily notes from triage already have **Memory Saved:** sections with rich extracted facts
+        const preExtracted = parsePreExtractedContent(content);
         let extracted: ExtractedEntity[];
-        if (useOllama) {
+
+        if (preExtracted.length > 0) {
+          // Convert pre-extracted entries to entities
+          console.log(`[Heartbeat] Found ${preExtracted.length} pre-extracted entries in ${date}`);
+          extracted = [];
+
+          for (const entry of preExtracted) {
+            // Create entity for sender if they have facts
+            if (entry.memorySaved.length > 0 || entry.actionItems.length > 0) {
+              const facts = [
+                ...entry.memorySaved,
+                ...entry.actionItems.map(a => `Action item: ${a}`),
+              ];
+
+              // Filter out vague/useless facts
+              const goodFacts = facts.filter(f => {
+                const lower = f.toLowerCase();
+                // Skip very short or vague facts
+                if (f.length < 10) return false;
+                // Skip "mentioned on" type facts
+                if (lower.includes('mentioned on') || lower.includes('contacted us about')) return false;
+                // Skip vague facts without data
+                if (/^(january|february|march|april|may|june|july|august|september|october|november|december)\s+\w+\s+(performance|report)/i.test(lower)) return false;
+                return true;
+              });
+
+              if (goodFacts.length > 0) {
+                extracted.push({
+                  name: entry.sender,
+                  type: 'person',
+                  facts: goodFacts,
+                });
+              }
+            }
+          }
+
+          console.log(`[Heartbeat] Pre-extracted ${extracted.length} entities with facts from ${date}`);
+        } else if (useOllama) {
+          // FALLBACK: No pre-extracted content, use Ollama extraction
           try {
             // Pass existing entities so LLM can use full names when possible
             extracted = await extractEntitiesWithLLM(content, `memory/${date}.md`, existingEntityHints);
@@ -573,7 +722,32 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
     }
   }
 
-  // Step 3: Reindex QMD (split into update + embed for better observability)
+  // Step 3: Sync Gmail messages to triage
+  let gmailResult: GmailSyncResult | undefined;
+  if (!options.skipGmail) {
+    const gmailStart = Date.now();
+    try {
+      gmailResult = await syncGmailMessages();
+      if (gmailResult.synced > 0) {
+        console.log(`[Heartbeat] Gmail: synced ${gmailResult.synced} emails`);
+      }
+      steps.gmail = {
+        success: true,
+        durationMs: Date.now() - gmailStart,
+      };
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error('[Heartbeat] Gmail sync failed:', errMsg);
+      warnings.push(`Gmail sync failed: ${errMsg}`);
+      steps.gmail = {
+        success: false,
+        durationMs: Date.now() - gmailStart,
+        error: errMsg,
+      };
+    }
+  }
+
+  // Step 4: Reindex QMD (split into update + embed for better observability)
   let reindexed = false;
   if (!options.skipReindex) {
     // QMD Update (fast - just document index)
@@ -648,6 +822,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
     entities: entityDetails,
     extractionMethod: useOllama ? 'ollama' : 'pattern',
     granola: granolaResult,
+    gmail: gmailResult,
     steps,
     allStepsSucceeded,
     warnings,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runHeartbeat, type HeartbeatOptions } from '@/lib/memory/heartbeat';
-import { appendActivityLog, HeartbeatLogEntry } from '@/lib/memory/activity-log';
+import { logActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes - heartbeat can be slow with QMD embed
@@ -46,22 +46,23 @@ export async function POST(request: NextRequest) {
     const result = await runHeartbeat(options);
     const duration = Date.now() - startTime;
 
-    // Log to activity log
-    const logEntry: HeartbeatLogEntry = {
-      id: `hb-${Date.now()}`,
-      type: 'heartbeat',
-      trigger,
-      success: result.allStepsSucceeded,
-      entitiesCreated: result.entitiesCreated,
-      entitiesUpdated: result.entitiesUpdated,
-      reindexed: result.reindexed,
-      entities: result.entities,
-      extractionMethod: result.extractionMethod,
-      duration,
-      timestamp: new Date().toISOString(),
-      error: result.warnings.length > 0 ? result.warnings.join('; ') : undefined,
-    };
-    await appendActivityLog(logEntry);
+    // Log to activity database
+    await logActivity({
+      eventType: 'heartbeat_run',
+      actor: 'system',
+      description: `Heartbeat: ${result.entitiesCreated} created, ${result.entitiesUpdated} updated`,
+      metadata: {
+        trigger,
+        success: result.allStepsSucceeded,
+        entitiesCreated: result.entitiesCreated,
+        entitiesUpdated: result.entitiesUpdated,
+        reindexed: result.reindexed,
+        entities: result.entities,
+        extractionMethod: result.extractionMethod,
+        duration,
+        error: result.warnings.length > 0 ? result.warnings.join('; ') : undefined,
+      },
+    });
 
     return NextResponse.json({
       success: result.allStepsSucceeded,
@@ -72,22 +73,21 @@ export async function POST(request: NextRequest) {
     const duration = Date.now() - startTime;
     console.error('Heartbeat error:', error);
 
-    // Log failure to activity log
-    const logEntry: HeartbeatLogEntry = {
-      id: `hb-${Date.now()}`,
-      type: 'heartbeat',
-      trigger,
-      success: false,
-      entitiesCreated: 0,
-      entitiesUpdated: 0,
-      reindexed: false,
-      entities: [],
-      extractionMethod: 'pattern',
-      duration,
-      timestamp: new Date().toISOString(),
-      error: String(error),
-    };
-    await appendActivityLog(logEntry);
+    // Log failure to activity database
+    await logActivity({
+      eventType: 'heartbeat_run',
+      actor: 'system',
+      description: `Heartbeat failed: ${String(error)}`,
+      metadata: {
+        trigger,
+        success: false,
+        entitiesCreated: 0,
+        entitiesUpdated: 0,
+        reindexed: false,
+        duration,
+        error: String(error),
+      },
+    });
 
     return NextResponse.json(
       { success: false, error: 'Heartbeat failed', details: String(error), duration },

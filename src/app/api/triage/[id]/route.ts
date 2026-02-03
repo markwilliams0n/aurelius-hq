@@ -2,6 +2,35 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { inboxItems } from "@/lib/db/schema";
 import { eq, or } from "drizzle-orm";
+import { syncArchiveToGmail, syncSpamToGmail } from "@/lib/gmail/actions";
+import { logActivity } from "@/lib/activity";
+
+// Check if string is a valid UUID
+function isUUID(str: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+}
+
+// Find item by id (UUID) or externalId (string)
+async function findItem(id: string) {
+  // Only compare against id column if it's a valid UUID to avoid DB errors
+  if (isUUID(id)) {
+    const items = await db
+      .select()
+      .from(inboxItems)
+      .where(or(eq(inboxItems.id, id), eq(inboxItems.externalId, id)))
+      .limit(1);
+    return items[0];
+  } else {
+    // Not a UUID, only search by externalId
+    const items = await db
+      .select()
+      .from(inboxItems)
+      .where(eq(inboxItems.externalId, id))
+      .limit(1);
+    return items[0];
+  }
+}
 
 // GET /api/triage/[id] - Get single item
 export async function GET(
@@ -10,14 +39,7 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  // Find by id or externalId
-  const items = await db
-    .select()
-    .from(inboxItems)
-    .where(or(eq(inboxItems.id, id), eq(inboxItems.externalId, id)))
-    .limit(1);
-
-  const item = items[0];
+  const item = await findItem(id);
 
   if (!item) {
     return NextResponse.json({ error: "Item not found" }, { status: 404 });
@@ -35,14 +57,7 @@ export async function POST(
   const body = await request.json();
   const { action, ...actionData } = body;
 
-  // Find by id or externalId
-  const items = await db
-    .select()
-    .from(inboxItems)
-    .where(or(eq(inboxItems.id, id), eq(inboxItems.externalId, id)))
-    .limit(1);
-
-  const item = items[0];
+  const item = await findItem(id);
 
   if (!item) {
     return NextResponse.json({ error: "Item not found" }, { status: 404 });
@@ -52,10 +67,21 @@ export async function POST(
     updatedAt: new Date(),
   };
 
+  // Track background tasks for this action
+  const backgroundTasks: Promise<void>[] = [];
+
   switch (action) {
     case "archive":
       updates.status = "archived";
       updates.snoozedUntil = null;
+      // Sync to Gmail in background (don't wait)
+      if (item.connector === "gmail") {
+        backgroundTasks.push(
+          syncArchiveToGmail(item.id).catch((error) => {
+            console.error("[Triage] Background Gmail archive failed:", error);
+          })
+        );
+      }
       break;
 
     case "snooze":
@@ -95,6 +121,19 @@ export async function POST(
       updates.snoozedUntil = null;
       break;
 
+    case "spam":
+      updates.status = "archived";
+      updates.snoozedUntil = null;
+      // Mark as spam in Gmail in background (don't wait)
+      if (item.connector === "gmail") {
+        backgroundTasks.push(
+          syncSpamToGmail(item.id).catch((error) => {
+            console.error("[Triage] Background Gmail spam failed:", error);
+          })
+        );
+      }
+      break;
+
     case "restore":
       updates.status = "new";
       updates.snoozedUntil = null;
@@ -107,12 +146,49 @@ export async function POST(
       );
   }
 
-  // Update in database
+  // Update in database - this we await since we return the item
   const [updatedItem] = await db
     .update(inboxItems)
     .set(updates)
     .where(eq(inboxItems.id, item.id))
     .returning();
+
+  // Log action to activity log in background (don't wait)
+  const actionDescriptions: Record<string, string> = {
+    archive: `Archived: ${item.subject}`,
+    snooze: `Snoozed: ${item.subject}`,
+    spam: `Marked as spam: ${item.subject}`,
+    restore: `Restored: ${item.subject}`,
+    flag: `Flagged: ${item.subject}`,
+    actioned: `Marked done: ${item.subject}`,
+  };
+
+  backgroundTasks.push(
+    logActivity({
+      eventType: "triage_action",
+      actor: "user",
+      description: actionDescriptions[action] || `${action}: ${item.subject}`,
+      metadata: {
+        action,
+        itemId: item.externalId || item.id,
+        connector: item.connector,
+        subject: item.subject,
+        sender: item.senderName || item.sender,
+        previousStatus: item.status,
+        newStatus: updates.status,
+        ...(action === "snooze" && { snoozeUntil: updates.snoozedUntil }),
+      },
+    }).catch((error) => {
+      console.error("[Triage] Background activity logging failed:", error);
+    })
+  );
+
+  // Fire all background tasks without waiting
+  if (backgroundTasks.length > 0) {
+    Promise.all(backgroundTasks).catch(() => {
+      // Errors already logged in individual catch blocks
+    });
+  }
 
   return NextResponse.json({
     success: true,

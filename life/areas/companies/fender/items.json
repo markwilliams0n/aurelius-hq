@@ -142,5 +142,77 @@
     "id": "fender-1770086713300",
     "lastAccessed": "2026-02-03T02:45:13.300Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Advertising was locked with StubHub for $45k",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-1770103814357",
+    "lastAccessed": "2026-02-03T07:30:14.357Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Advertising locked with StubHub for $45k",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-1770107412579",
+    "lastAccessed": "2026-02-03T08:30:12.579Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Advertising deal with StubHub",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-1770120011662",
+    "lastAccessed": "2026-02-03T12:00:11.662Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Is advertising locked in for $45k",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-1770121812840",
+    "lastAccessed": "2026-02-03T12:30:12.840Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Advertising was locked for $45k",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-1770123614661",
+    "lastAccessed": "2026-02-03T13:00:14.661Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "6 months",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-1770126312754",
+    "lastAccessed": "2026-02-03T13:45:12.754Z",
+    "accessCount": 0
   }
 ]

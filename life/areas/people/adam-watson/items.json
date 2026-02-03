@@ -239,5 +239,53 @@
     "id": "adam-watson-1770085305307",
     "lastAccessed": "2026-02-03T02:21:45.307Z",
     "accessCount": 0
+  },
+  {
+    "fact": "architecture",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "adam-watson-1770093925397",
+    "lastAccessed": "2026-02-03T04:45:25.397Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "ROSTR Pro product push",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "adam-watson-1770099319472",
+    "lastAccessed": "2026-02-03T06:15:19.472Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Is CTO of ROSTR",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "adam-watson-1770107412518",
+    "lastAccessed": "2026-02-03T08:30:12.518Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "has been leading the architecture work from San Diego while coordinating daily with Lucas Homer in Ojai on the backend systems",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "adam-watson-1770112820440",
+    "lastAccessed": "2026-02-03T10:00:20.440Z",
+    "accessCount": 0
   }
 ]

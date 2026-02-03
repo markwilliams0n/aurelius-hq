@@ -46,26 +46,42 @@ Central reference for all triage connectors, their capabilities, and status.
 ### gmail
 | Property | Value |
 |----------|-------|
-| **Status** | Stub (fake data only) |
+| **Status** | **Active** |
 | **Added** | 2026-02-01 |
-| **Description** | Email messages from Gmail |
-| **Documentation** | None yet |
+| **Description** | Email messages from Gmail (Workspace) |
+| **Documentation** | [gmail.md](./gmail.md) |
 
 **Capabilities:**
 | Feature | Supported | Notes |
 |---------|-----------|-------|
-| Reply | Yes | Direct email reply |
-| Archive | Yes | |
+| Reply | Yes | Drafts initially, direct send via setting |
+| Archive | Yes | **Bi-directional** - syncs back to Gmail |
 | Memory | Yes | Manual only |
 | Chat | Yes | |
-| Custom Actions | No | |
+| Custom Actions | Yes | Unsubscribe, Spam, Always Archive, To Action |
 | Task Extraction | Yes | AI extraction |
 
-**Custom Enrichment Fields:** None
+**Custom Enrichment Fields:**
+- `intent` - What sender wants (FYI, needs response, action required)
+- `deadline` - Mentioned deadlines/time sensitivity
+- `sentiment` - Email tone (urgent, friendly, formal, frustrated)
+- `threadSummary` - Summary of full thread context
+- Smart sender tags: Internal, New, Direct, CC'd, VIP, Auto, Newsletter, Suspicious
 
-**Sync:** Not implemented (using fake data)
+**Sync:**
+- Trigger: Heartbeat (centralized, default 15 min)
+- Query: All unarchived Gmail emails
+- Deduplication: By thread ID
+- Bi-directional: Archive/spam sync back to Gmail
+- Threading: Latest message creates item, history collapsed
 
-**Files:** None yet (uses fake data generator)
+**Files:**
+- `src/lib/gmail/client.ts`
+- `src/lib/gmail/sync.ts`
+- `src/lib/gmail/actions.ts`
+- `src/lib/gmail/types.ts`
+- `src/app/api/gmail/sync/route.ts`
+- `src/app/api/gmail/reply/route.ts`
 
 ---
 
@@ -152,7 +168,7 @@ Central reference for all triage connectors, their capabilities, and status.
 | Connector | Reply | Auto Memory | Custom Enrichment | Task Source | Status |
 |-----------|-------|-------------|-------------------|-------------|--------|
 | granola | No | Yes | Yes | Granola + AI | Active |
-| gmail | Yes | No | No | AI only | Stub |
+| gmail | Yes | No | Yes | AI | **Active** |
 | slack | Yes | No | No | AI only | Stub |
 | linear | No | No | No | AI only | Stub |
 | manual | No | No | No | AI only | Active |
@@ -171,8 +187,10 @@ When adding a new connector:
 
 ## Connector Roadmap
 
+### Recently Completed
+- [x] **Gmail** - Full implementation with Service Account auth, phishing detection, bi-directional sync ([docs](./gmail.md))
+
 ### Planned
-- [ ] **Gmail** - Full implementation with OAuth
 - [ ] **Slack** - Full implementation with OAuth
 - [ ] **Linear** - Full implementation with API key
 - [ ] **Notion** - Database items and pages
@@ -184,3 +202,16 @@ When adding a new connector:
 - GitHub - Issues and PRs
 - Obsidian - Local markdown notes
 - Telegram - Messages (already have bot setup)
+
+## Cross-Connector Features
+
+Features that apply to all connectors:
+
+### Style Guides
+Per-connector AI guidance for tone, formality, reply style. Chat-updatable.
+
+### Connector Rules
+Per-connector triage rules for auto-actions (archive, priority, tags).
+
+### Heartbeat
+Central scheduler triggers all syncs (default 15 min, configurable in settings).

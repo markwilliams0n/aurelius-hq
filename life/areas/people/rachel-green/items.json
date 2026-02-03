@@ -70,5 +70,65 @@
     "id": "rachel-green-1770089408786",
     "lastAccessed": "2026-02-03T03:30:08.786Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Sent security audit report",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rachel-green-1770098413368",
+    "lastAccessed": "2026-02-03T06:00:13.368Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Sent a triage message about a security audit",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rachel-green-1770114612482",
+    "lastAccessed": "2026-02-03T10:30:12.482Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Security audit report - Action required",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rachel-green-1770120912811",
+    "lastAccessed": "2026-02-03T12:15:12.811Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Action required",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rachel-green-1770130814468",
+    "lastAccessed": "2026-02-03T15:00:14.468Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Posted a security audit report",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rachel-green-1770131714392",
+    "lastAccessed": "2026-02-03T15:15:14.392Z",
+    "accessCount": 0
   }
 ]

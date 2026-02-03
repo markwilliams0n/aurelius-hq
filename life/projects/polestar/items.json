@@ -82,5 +82,113 @@
     "id": "polestar-1770085398559",
     "lastAccessed": "2026-02-03T02:23:18.559Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Data inconsistencies with Michelle Swing\"s team",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "polestar-1770094819665",
+    "lastAccessed": "2026-02-03T05:00:19.665Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Data inconsistencies with ROSTR",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "polestar-1770097517520",
+    "lastAccessed": "2026-02-03T05:45:17.520Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Data inconsistencies reported by Michelle Swing",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "polestar-1770098413384",
+    "lastAccessed": "2026-02-03T06:00:13.384Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Data source for StubHub\"s partnerships team",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "polestar-1770111012192",
+    "lastAccessed": "2026-02-03T09:30:12.192Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Has data inconsistencies that need to be checked by Michelle Swing",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "polestar-1770119113198",
+    "lastAccessed": "2026-02-03T11:45:13.198Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Has data inconsistencies that Michelle needs to check on",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "polestar-1770121812835",
+    "lastAccessed": "2026-02-03T12:30:12.835Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Data inconsistencies were mentioned in the conversation",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "polestar-1770123614660",
+    "lastAccessed": "2026-02-03T13:00:14.660Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Has data inconsistencies that Michelle needs to check with her team about",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "polestar-1770126312741",
+    "lastAccessed": "2026-02-03T13:45:12.741Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Data inconsistencies mentioned in conversation with Michelle Swing",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "polestar-1770130814490",
+    "lastAccessed": "2026-02-03T15:00:14.490Z",
+    "accessCount": 0
   }
 ]

@@ -72,23 +72,31 @@ src/
 
 > **Detailed docs:** [docs/systems/heartbeat.md](docs/systems/heartbeat.md)
 
-Heartbeat is the central background process that converts raw inputs into searchable knowledge:
+Heartbeat is the **central memory processing system** that converts raw inputs into searchable knowledge:
 
 ```
 Raw Inputs                         Searchable Knowledge
 ──────────                         ────────────────────
 Daily notes (memory/*.md)    ┐
                              ├──→  HEARTBEAT  ──→  Entity files (life/)
-Granola meetings             ┘     (every 15m)     QMD search index
-                                                   Triage inbox
+Granola meetings             │     (every 15m)     QMD search index
+Gmail emails                 ┘                     Triage inbox
 ```
 
 **What it does:**
-1. Extracts entities from daily notes (people, companies, projects)
+1. Extracts entities from daily notes (people, companies, projects) using Ollama
 2. Syncs Granola meetings → triage inbox + database
-3. Reindexes QMD search (BM25 + vector embeddings)
+3. Syncs Gmail → triage inbox
+4. Reindexes QMD search (BM25 + vector embeddings)
 
-**Without heartbeat:** Information enters the system but isn't searchable. The AI can only recall what's been indexed.
+**Memory architecture principle:** All memory processing flows through heartbeat.
+- Triage "save to memory" → saves rich content to daily notes
+- Heartbeat processes daily notes → creates entities in `life/`
+- QMD indexes `life/` → searchable via memory UI
+
+This centralizes LLM-based extraction in one place for consistency.
+
+**Without heartbeat:** Information enters daily notes but isn't searchable. Run heartbeat to process new content.
 
 **Scheduling:**
 - Runs automatically every 15 minutes via `node-cron` (configurable)

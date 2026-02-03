@@ -41,4 +41,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# connector credentials/state
 .granola-credentials.json
+.gmail-sync-state.json

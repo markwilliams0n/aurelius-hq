@@ -1,0 +1,110 @@
+[
+  {
+    "fact": "AI Integration Points: Market intelligence dashboard",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chrif-growth-officer-1770105611929-0",
+    "lastAccessed": "2026-02-03T08:00:11.929Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Lead scoring automation",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chrif-growth-officer-1770105611929-1",
+    "lastAccessed": "2026-02-03T08:00:11.929Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "etc.\"}}",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chrif-growth-officer-1770105611929-2",
+    "lastAccessed": "2026-02-03T08:00:11.929Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "{\"name\": \"WME",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chrif-growth-officer-1770105611929-3",
+    "lastAccessed": "2026-02-03T08:00:11.929Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "type\": \"company",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chrif-growth-officer-1770105611929-4",
+    "lastAccessed": "2026-02-03T08:00:11.929Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "facts\": [\"Had a call with Mark about a potential enterprise pilot",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chrif-growth-officer-1770105611929-5",
+    "lastAccessed": "2026-02-03T08:00:11.929Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "{\"name\": \"Adam Watson",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chrif-growth-officer-1770120912475",
+    "lastAccessed": "2026-02-03T12:15:12.475Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "type\": \"person",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chrif-growth-officer-1770120912476",
+    "lastAccessed": "2026-02-03T12:15:12.476Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "facts\": [\"CTO at ROSTR",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chrif-growth-officer-1770120912477",
+    "lastAccessed": "2026-02-03T12:15:12.477Z",
+    "accessCount": 0
+  }
+]

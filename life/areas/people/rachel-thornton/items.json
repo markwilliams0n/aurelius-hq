@@ -166,5 +166,41 @@
     "id": "rachel-thornton-1770089408786",
     "lastAccessed": "2026-02-03T03:30:08.786Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Works at Wasserman SVP Music",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rachel-thornton-1770106512825",
+    "lastAccessed": "2026-02-03T08:15:12.825Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "call booked on Feb 6 via NIF web-form",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rachel-thornton-1770111012001",
+    "lastAccessed": "2026-02-03T09:30:12.001Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Booked a call with NIF web-form",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rachel-thornton-1770130814465",
+    "lastAccessed": "2026-02-03T15:00:14.465Z",
+    "accessCount": 0
   }
 ]

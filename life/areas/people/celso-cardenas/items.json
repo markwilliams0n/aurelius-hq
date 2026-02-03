@@ -214,5 +214,53 @@
     "id": "celso-cardenas-1770088530148",
     "lastAccessed": "2026-02-03T03:15:30.148Z",
     "accessCount": 0
+  },
+  {
+    "fact": "ramping up on the codebase",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1770097534623",
+    "lastAccessed": "2026-02-03T05:45:34.623Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "New hire, front-end engineer, started in January",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1770108322593",
+    "lastAccessed": "2026-02-03T08:45:22.593Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Ramp-up on the codebase and picking up smaller UI tickets, front-end engineer",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1770111922037",
+    "lastAccessed": "2026-02-03T09:45:22.037Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "just started in January as a front-end engineer",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1770112820600",
+    "lastAccessed": "2026-02-03T10:00:20.600Z",
+    "accessCount": 0
   }
 ]

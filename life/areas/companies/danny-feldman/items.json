@@ -1,0 +1,38 @@
+[
+  {
+    "fact": "Had a call with Mark about a potential enterprise pilot",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "danny-feldman-1770105612001-0",
+    "lastAccessed": "2026-02-03T08:00:12.001Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "WME pilot",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "danny-feldman-1770120912606",
+    "lastAccessed": "2026-02-03T12:15:12.606Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "enterprise interest",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "danny-feldman-1770120912616",
+    "lastAccessed": "2026-02-03T12:15:12.616Z",
+    "accessCount": 0
+  }
+]

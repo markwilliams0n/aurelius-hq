@@ -130,5 +130,101 @@
     "id": "steve-1770085138757",
     "lastAccessed": "2026-02-03T02:18:58.757Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Renewal talks with Live Nation",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "steve-1770097534683",
+    "lastAccessed": "2026-02-03T05:45:34.683Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Steve",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "steve-1770101123991",
+    "lastAccessed": "2026-02-03T06:45:23.991Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "no further info",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "steve-1770101123994",
+    "lastAccessed": "2026-02-03T06:45:23.994Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Part of the commercial & renewals team, name not specified",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "steve-1770106527762",
+    "lastAccessed": "2026-02-03T08:15:27.762Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "...",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "steve-1770112820609",
+    "lastAccessed": "2026-02-03T10:00:20.609Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Worked with Corey on Live Nation renewal",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "steve-1770123624103",
+    "lastAccessed": "2026-02-03T13:00:24.103Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "no further details provided",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "steve-1770126323364",
+    "lastAccessed": "2026-02-03T13:45:23.364Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Part of the renewal with Live Nation",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "steve-1770130822686",
+    "lastAccessed": "2026-02-03T15:00:22.686Z",
+    "accessCount": 0
   }
 ]

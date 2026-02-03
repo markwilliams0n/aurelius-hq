@@ -106,5 +106,17 @@
     "id": "corey-crossfield-1770084019651",
     "lastAccessed": "2026-02-03T02:00:19.651Z",
     "accessCount": 0
+  },
+  {
+    "fact": "& Steve ...",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "corey-crossfield-1770112820608",
+    "lastAccessed": "2026-02-03T10:00:20.608Z",
+    "accessCount": 0
   }
 ]

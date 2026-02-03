@@ -130,5 +130,29 @@
     "id": "vivian-donahue-1770083110839",
     "lastAccessed": "2026-02-03T01:45:10.839Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Is the new Chief Growth Officer",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "vivian-donahue-1770114612472",
+    "lastAccessed": "2026-02-03T10:30:12.472Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Onboarding as Chief Growth Officer",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "vivian-donahue-1770130814455",
+    "lastAccessed": "2026-02-03T15:00:14.455Z",
+    "accessCount": 0
   }
 ]

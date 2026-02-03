@@ -118,5 +118,41 @@
     "id": "elena-vasquez-1770060486470",
     "lastAccessed": "2026-02-02T19:28:06.470Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Partnerships lead at Meridian Labs, opened Shopify pilot talks",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "elena-vasquez-1770105621186",
+    "lastAccessed": "2026-02-03T08:00:21.186Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Opened pilot talks (Toronto meetup) at Shopify",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "elena-vasquez-1770123624104",
+    "lastAccessed": "2026-02-03T13:00:24.104Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Shopify pilot talks",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "elena-vasquez-1770129925124",
+    "lastAccessed": "2026-02-03T14:45:25.124Z",
+    "accessCount": 0
   }
 ]
