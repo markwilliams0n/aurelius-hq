@@ -97,16 +97,18 @@ export async function GET(request: Request) {
 }
 
 // POST /api/triage - Reset with fresh fake data (for development)
+// NOTE: Does NOT delete gmail items - those come from real Gmail sync
 export async function POST() {
-  // Clear existing fake items and their tasks (keep real connector data like granola)
+  // Clear existing fake items and their tasks (keep real connector data like granola, gmail)
   // Tasks are cascade deleted when inbox items are deleted
-  await db.delete(inboxItemsTable).where(eq(inboxItemsTable.connector, 'gmail'));
+  // Gmail is excluded - use real Gmail sync instead of fake data
   await db.delete(inboxItemsTable).where(eq(inboxItemsTable.connector, 'slack'));
   await db.delete(inboxItemsTable).where(eq(inboxItemsTable.connector, 'linear'));
   await db.delete(inboxItemsTable).where(eq(inboxItemsTable.connector, 'manual'));
 
-  // Generate fresh fake data
-  const fakeItems = generateFakeInboxItems();
+  // Generate fresh fake data (excluding Gmail - use real sync)
+  const allFakeItems = generateFakeInboxItems();
+  const fakeItems = allFakeItems.filter(item => item.connector !== 'gmail');
 
   // Insert fake data - skip AI task extraction for performance
   // Fake data could include simulated tasks later if needed
