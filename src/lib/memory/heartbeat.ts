@@ -6,6 +6,7 @@ import { isOllamaAvailable, extractEntitiesWithLLM, isFactRedundant, type Existi
 import { resolveEntities, type ResolvedEntity } from './entity-resolution';
 import { syncGranolaMeetings, type GranolaSyncResult } from '@/lib/granola';
 import { syncGmailMessages, type GmailSyncResult } from '@/lib/gmail';
+import { createBackup, type BackupResult } from './backup';
 
 const LIFE_DIR = path.join(process.cwd(), 'life');
 const HEARTBEAT_STATE_FILE = path.join(LIFE_DIR, 'system', 'heartbeat-state.json');
@@ -430,6 +431,8 @@ export interface EntityDetail {
 }
 
 export interface HeartbeatOptions {
+  /** Skip daily backup (backup still runs once per day by default) */
+  skipBackup?: boolean;
   /** Skip QMD reindex (faster heartbeat, but new content won't be searchable until next full run) */
   skipReindex?: boolean;
   /** Skip Granola sync */
@@ -454,8 +457,10 @@ export interface HeartbeatResult {
   extractionMethod: 'ollama' | 'pattern';
   granola?: GranolaSyncResult;
   gmail?: GmailSyncResult;
+  backup?: BackupResult;
   /** Granular step results for debugging */
   steps: {
+    backup?: StepResult;
     extraction?: StepResult;
     granola?: StepResult;
     gmail?: StepResult;
@@ -470,11 +475,13 @@ export interface HeartbeatResult {
 
 /**
  * Run the heartbeat process:
+ * 0. Daily backup (once per day, keeps last 7)
  * 1. Scan recent daily notes
  * 2. Extract entities and facts (using Ollama LLM or pattern matching fallback)
  * 3. Create/update entity files
  * 4. Sync Granola meetings
- * 5. Reindex QMD
+ * 5. Sync Gmail messages
+ * 6. Reindex QMD
  *
  * Each step is isolated - failures in one step don't prevent others from running.
  */
@@ -487,6 +494,34 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
   const entityDetails: EntityDetail[] = [];
   const warnings: string[] = [];
   const steps: HeartbeatResult['steps'] = {};
+
+  // Step 0: Daily backup (runs once per day, keeps last 7)
+  let backupResult: BackupResult | undefined;
+  if (!options.skipBackup) {
+    const backupStart = Date.now();
+    try {
+      backupResult = await createBackup();
+      if (backupResult.skipped) {
+        console.log(`[Heartbeat] Backup skipped (${backupResult.reason})`);
+      } else if (backupResult.success) {
+        console.log(`[Heartbeat] Backup created: ${backupResult.backupPath}`);
+      }
+      steps.backup = {
+        success: backupResult.success,
+        durationMs: Date.now() - backupStart,
+        error: backupResult.error,
+      };
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error('[Heartbeat] Backup failed:', errMsg);
+      warnings.push(`Backup failed: ${errMsg}`);
+      steps.backup = {
+        success: false,
+        durationMs: Date.now() - backupStart,
+        error: errMsg,
+      };
+    }
+  }
 
   // Determine extraction method
   let useOllama = false;
@@ -823,6 +858,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
     extractionMethod: useOllama ? 'ollama' : 'pattern',
     granola: granolaResult,
     gmail: gmailResult,
+    backup: backupResult,
     steps,
     allStepsSucceeded,
     warnings,

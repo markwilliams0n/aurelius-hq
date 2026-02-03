@@ -76,6 +76,12 @@ Preferred approaches (in order):
 3. Use localtunnel (unstable but safe)
 4. Only use cloudflared if user explicitly approves
 
+## Dangerous Scripts - Explicit Use Only
+
+These scripts exist but should **NEVER** be run without explicit user request:
+
+- `scripts/wipe-memory.ts` - Nuclear reset of all memory data (entities, facts, conversations, daily notes). Only run when user explicitly asks to wipe memory.
+
 ## Safe Command Patterns
 
 ```bash

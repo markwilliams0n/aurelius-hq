@@ -1,0 +1,162 @@
+#!/usr/bin/env npx tsx
+/**
+ * ⚠️  DANGEROUS - EXPLICIT USE ONLY ⚠️
+ *
+ * Wipe Memory - Nuclear reset of all memory data
+ *
+ * This script deletes ALL memory data (entities, facts, daily notes, conversations).
+ * Only run this when you intentionally want a fresh start.
+ *
+ * DO NOT:
+ * - Run this as part of automated workflows
+ * - Run this without understanding what it deletes
+ * - Let Claude run this without explicit user request
+ *
+ * Usage:
+ *   npx tsx scripts/wipe-memory.ts           # Preview what will be deleted
+ *   npx tsx scripts/wipe-memory.ts --confirm # Actually delete everything
+ */
+
+// Load environment FIRST using require (not hoisted like import)
+require('dotenv').config({ path: '.env.local' });
+
+import * as fs from "fs";
+import * as path from "path";
+
+const ROOT = process.cwd();
+
+// Paths to clear
+const PATHS = {
+  people: path.join(ROOT, "life/areas/people"),
+  companies: path.join(ROOT, "life/areas/companies"),
+  projects: path.join(ROOT, "life/projects"),
+  activityLog: path.join(ROOT, "life/system/activity-log.json"),
+  heartbeatState: path.join(ROOT, "life/system/heartbeat-state.json"),
+  dailyNotes: path.join(ROOT, "memory"),
+};
+
+function countDirectoryItems(dirPath: string): string[] {
+  if (!fs.existsSync(dirPath)) return [];
+  return fs.readdirSync(dirPath).filter(f => !f.startsWith('.'));
+}
+
+function deleteDirectoryContents(dirPath: string): number {
+  if (!fs.existsSync(dirPath)) return 0;
+  const items = fs.readdirSync(dirPath).filter(f => !f.startsWith('.'));
+  for (const item of items) {
+    const fullPath = path.join(dirPath, item);
+    fs.rmSync(fullPath, { recursive: true, force: true });
+  }
+  return items.length;
+}
+
+async function main() {
+  // Dynamic imports AFTER env is loaded
+  const { db } = await import("../src/lib/db");
+  const { entities, facts, conversations, documents, documentChunks } = await import("../src/lib/db/schema");
+  const { sql } = await import("drizzle-orm");
+
+  const confirm = process.argv.includes("--confirm");
+
+  console.log("🧹 Memory Wipe Tool\n");
+
+  // Count what will be deleted
+  console.log("Scanning...\n");
+
+  // Files
+  const people = countDirectoryItems(PATHS.people);
+  const companies = countDirectoryItems(PATHS.companies);
+  const projects = countDirectoryItems(PATHS.projects);
+  const dailyNotes = countDirectoryItems(PATHS.dailyNotes).filter(f => f.endsWith('.md'));
+
+  // Database
+  const [entitiesCount] = await db.select({ count: sql<number>`count(*)` }).from(entities);
+  const [factsCount] = await db.select({ count: sql<number>`count(*)` }).from(facts);
+  const [conversationsCount] = await db.select({ count: sql<number>`count(*)` }).from(conversations);
+  const [documentsCount] = await db.select({ count: sql<number>`count(*)` }).from(documents);
+  const [chunksCount] = await db.select({ count: sql<number>`count(*)` }).from(documentChunks);
+
+  const dbCounts = {
+    entities: Number(entitiesCount.count),
+    facts: Number(factsCount.count),
+    conversations: Number(conversationsCount.count),
+    documents: Number(documentsCount.count),
+    documentChunks: Number(chunksCount.count),
+  };
+
+  console.log("FILE SYSTEM:");
+  console.log(`  life/areas/people/     ${people.length} entities (${people.join(', ') || 'empty'})`);
+  console.log(`  life/areas/companies/  ${companies.length} entities (${companies.join(', ') || 'empty'})`);
+  console.log(`  life/projects/         ${projects.length} entities (${projects.join(', ') || 'empty'})`);
+  console.log(`  memory/*.md            ${dailyNotes.length} daily notes`);
+  console.log(`  life/system/           activity-log.json, heartbeat-state.json (reset)`);
+
+  console.log("\nDATABASE:");
+  console.log(`  entities               ${dbCounts.entities} rows`);
+  console.log(`  facts                  ${dbCounts.facts} rows`);
+  console.log(`  conversations          ${dbCounts.conversations} rows`);
+  console.log(`  documents              ${dbCounts.documents} rows`);
+  console.log(`  document_chunks        ${dbCounts.documentChunks} rows`);
+
+  const totalFiles = people.length + companies.length + projects.length + dailyNotes.length;
+  const totalDbRows = Object.values(dbCounts).reduce((a, b) => a + b, 0);
+
+  console.log(`\nTOTAL: ${totalFiles} file items + ${totalDbRows} database rows\n`);
+
+  if (!confirm) {
+    console.log("⚠️  This is a PREVIEW. To actually delete, run:");
+    console.log("   npx tsx scripts/wipe-memory.ts --confirm\n");
+    process.exit(0);
+  }
+
+  // Actually delete
+  console.log("🔥 DELETING...\n");
+
+  // Delete file contents
+  let deletedPeople = deleteDirectoryContents(PATHS.people);
+  console.log(`  ✓ Deleted ${deletedPeople} people entities`);
+
+  let deletedCompanies = deleteDirectoryContents(PATHS.companies);
+  console.log(`  ✓ Deleted ${deletedCompanies} company entities`);
+
+  let deletedProjects = deleteDirectoryContents(PATHS.projects);
+  console.log(`  ✓ Deleted ${deletedProjects} project entities`);
+
+  // Delete daily notes
+  for (const note of dailyNotes) {
+    fs.unlinkSync(path.join(PATHS.dailyNotes, note));
+  }
+  console.log(`  ✓ Deleted ${dailyNotes.length} daily notes`);
+
+  // Reset system files
+  fs.writeFileSync(PATHS.activityLog, JSON.stringify({ entries: [] }, null, 2));
+  console.log(`  ✓ Reset activity-log.json`);
+
+  fs.writeFileSync(PATHS.heartbeatState, JSON.stringify({ processedNotes: {}, lastRun: null }, null, 2));
+  console.log(`  ✓ Reset heartbeat-state.json`);
+
+  // Truncate database tables (order matters due to foreign keys)
+  await db.delete(documentChunks);
+  console.log(`  ✓ Truncated document_chunks`);
+
+  await db.delete(documents);
+  console.log(`  ✓ Truncated documents`);
+
+  await db.delete(facts);
+  console.log(`  ✓ Truncated facts`);
+
+  await db.delete(entities);
+  console.log(`  ✓ Truncated entities`);
+
+  await db.delete(conversations);
+  console.log(`  ✓ Truncated conversations`);
+
+  console.log("\n✅ Memory wiped. Fresh start!\n");
+
+  process.exit(0);
+}
+
+main().catch((err) => {
+  console.error("Error:", err);
+  process.exit(1);
+});
