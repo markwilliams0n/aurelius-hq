@@ -32,9 +32,12 @@ When this skill is invoked:
    - Content field mapping (what maps to subject, content, sender, etc.)
    - Supported actions (reply capability, custom actions)
    - AI enrichment (standard + connector-specific fields)
+   - Smart tagging (auto-tags based on content/sender analysis)
    - Memory integration (auto-extract vs manual)
    - Task extraction (source provides tasks? AI supplement?)
-   - Sync behavior (trigger, window, deduplication)
+   - Sync behavior (heartbeat-triggered, window, deduplication, bi-directional?)
+   - Style guide (what AI guidance is needed for this connector?)
+   - Connector-specific rules (what auto-actions make sense?)
    - UI customization needs
 
 5. **After gathering requirements**, present the design in sections for validation
@@ -45,17 +48,31 @@ When this skill is invoked:
 
 ## Existing Connectors Reference
 
-| Connector | Reply | Custom Enrichment | Auto Memory | Tasks | Notes |
-|-----------|-------|-------------------|-------------|-------|-------|
-| `gmail` | Yes | No | No | Yes | Email messages |
-| `slack` | Yes | No | No | Yes | Channel messages |
-| `linear` | No | No | No | Yes | Issue tracking |
-| `granola` | No | Yes (meeting data) | Yes | Yes | Meeting transcripts |
-| `manual` | No | No | No | Yes | Manual entries |
+| Connector | Reply | Custom Enrichment | Auto Memory | Tasks | Style Guide | Status |
+|-----------|-------|-------------------|-------------|-------|-------------|--------|
+| `gmail` | Yes | Yes (intent, sentiment) | No | Yes | Yes | Designed |
+| `slack` | Yes | No | No | Yes | Planned | Stub |
+| `linear` | No | No | No | Yes | Planned | Stub |
+| `granola` | No | Yes (meeting data) | Yes | Yes | Planned | Active |
+| `manual` | No | No | No | Yes | No | Active |
 
-### Granola as Reference
+### Gmail as Reference (Most Complete Design)
 
-Granola is the most complete connector implementation with:
+Gmail is the most thoroughly designed connector with:
+- Custom enrichment: `intent`, `deadline`, `sentiment`, `threadSummary`
+- Smart sender tags: Internal, New, Direct, VIP, Auto, Newsletter, Suspicious
+- Phishing detection
+- Bi-directional sync (archive syncs back to Gmail)
+- Thread handling (latest message = item, history collapsed)
+- Rich action set: Reply, Unsubscribe, Spam, Always Archive, To Action
+- Style guide for reply tone, formality, signature
+- Connector-specific rules
+
+See `docs/connectors/gmail.md` for the full design.
+
+### Granola as Reference (Active Implementation)
+
+Granola is the most complete **implemented** connector:
 - Custom enrichment fields: `attendees`, `meetingTime`, `topics`, `actionItems`, `extractedMemory`
 - Auto memory extraction during sync
 - Task extraction from existing action items + AI supplement
@@ -99,6 +116,8 @@ const CONNECTOR_ACTIONS: Record<string, {
 src/lib/{connector}/
   ├── client.ts          # API client for external service
   ├── sync.ts            # Sync logic (fetch, transform, save)
+  ├── actions.ts         # Connector-specific actions (reply, archive back, etc.)
+  ├── enrichment.ts      # AI enrichment logic
   ├── extract-memory.ts  # AI memory extraction (if auto-extract)
   └── types.ts           # TypeScript types (optional)
 
@@ -106,6 +125,75 @@ src/app/api/{connector}/
   ├── sync/route.ts      # Manual sync endpoint
   └── webhook/route.ts   # Webhook receiver (if push-based)
 ```
+
+### Style Guides
+
+Each connector can have an AI-readable style guide that influences how the agent handles items:
+
+```typescript
+// Per-connector style guide (chat-updatable)
+{
+  connector: "gmail",
+  styleGuide: `
+    Reply Tone: Professional but warm. Use first names.
+    Formality: Match the sender's level of formality.
+    Signature: Use "Best, Mark"
+    Quick replies: Keep under 3 sentences when possible.
+  `
+}
+```
+
+**What style guides cover:**
+- Reply tone and formality
+- Signature preferences
+- Language handling
+- VIP treatment
+- Summarization preferences
+
+**Users update via chat:**
+```
+You: "Be more casual in Slack replies"
+Agent: Updated Slack style guide.
+```
+
+### Connector-Specific Rules
+
+Triage rules can be scoped to specific connectors:
+
+```typescript
+{
+  connector: "gmail",           // Only applies to Gmail
+  trigger: {
+    senderDomain: "linear.app",
+    subjectContains: "sprint"
+  },
+  action: { type: "archive" }
+}
+```
+
+**Common connector rule patterns:**
+- Auto-archive notifications from specific services
+- High priority for VIP senders
+- Auto-tag based on content patterns
+- Spam/phishing detection rules
+
+### Sync Trigger: Heartbeat
+
+All connectors sync via the central **Heartbeat** (default 15 min, configurable):
+
+```
+Heartbeat (every N minutes)
+├── Sync Gmail
+├── Sync Granola
+├── Sync [other connectors]
+├── Memory consolidation
+└── Other agent maintenance
+```
+
+When designing a connector, specify:
+- Does it need heartbeat sync? (most do)
+- Any special sync timing needs?
+- Bi-directional sync? (actions sync back to source)
 
 ## Example Session Flow
 
@@ -140,7 +228,52 @@ Claude: Great choice! For Notion, I'd recommend:
 After completing the brainstorm:
 
 1. **Design document** saved to `docs/connectors/{name}.md`
+   - Overview and capabilities table
+   - Content mapping
+   - Enrichment fields (standard + custom)
+   - Smart tagging logic
+   - Supported actions and keyboard shortcuts
+   - Sync behavior (heartbeat, deduplication, bi-directional?)
+   - Style guide template
+   - Suggested connector-specific rules
+   - Implementation phases
 2. **Update connector registry** at `docs/connectors/index.md`
 3. **Summary** of all design decisions
 4. **Next steps** for implementation
 5. **Optional**: Implementation plan via superpowers:writing-plans
+
+## Interview Questions Checklist
+
+Make sure to cover these topics (ask one at a time):
+
+### Basic
+- [ ] What service/data source?
+- [ ] What content should flow into triage?
+- [ ] Authentication method?
+
+### Data Mapping
+- [ ] Field mapping (subject, content, sender, etc.)
+- [ ] Additional fields to capture (threads, attachments, CC/BCC, etc.)
+
+### Actions
+- [ ] Reply support? (direct, draft, none)
+- [ ] Custom actions? (unsubscribe, spam, etc.)
+- [ ] Bi-directional sync? (archive syncs back to source?)
+
+### AI Features
+- [ ] Custom enrichment fields?
+- [ ] Smart tagging? (what auto-tags make sense?)
+- [ ] Phishing/spam detection?
+- [ ] Memory integration? (auto vs manual)
+- [ ] Task extraction?
+
+### Sync
+- [ ] Heartbeat-triggered?
+- [ ] Sync window? (how far back)
+- [ ] Deduplication strategy?
+- [ ] Update existing items or insert-only?
+
+### Configuration
+- [ ] Style guide needs? (reply tone, formality, etc.)
+- [ ] Connector-specific rules? (auto-archive patterns, VIP lists, etc.)
+- [ ] UI customization?
