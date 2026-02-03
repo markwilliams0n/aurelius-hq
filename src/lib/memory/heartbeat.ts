@@ -5,6 +5,7 @@ import { listDailyNotes, readDailyNote } from './daily-notes';
 import { isOllamaAvailable, extractEntitiesWithLLM, isFactRedundant, type ExistingEntityHint } from './ollama';
 import { resolveEntities, type ResolvedEntity } from './entity-resolution';
 import { syncGranolaMeetings, type GranolaSyncResult } from '@/lib/granola';
+import { syncGmailMessages, type GmailSyncResult } from '@/lib/gmail';
 
 const LIFE_DIR = path.join(process.cwd(), 'life');
 const HEARTBEAT_STATE_FILE = path.join(LIFE_DIR, 'system', 'heartbeat-state.json');
@@ -330,6 +331,8 @@ export interface HeartbeatOptions {
   skipReindex?: boolean;
   /** Skip Granola sync */
   skipGranola?: boolean;
+  /** Skip Gmail sync */
+  skipGmail?: boolean;
   /** Skip entity extraction from daily notes */
   skipExtraction?: boolean;
 }
@@ -347,10 +350,12 @@ export interface HeartbeatResult {
   entities: EntityDetail[];
   extractionMethod: 'ollama' | 'pattern';
   granola?: GranolaSyncResult;
+  gmail?: GmailSyncResult;
   /** Granular step results for debugging */
   steps: {
     extraction?: StepResult;
     granola?: StepResult;
+    gmail?: StepResult;
     qmdUpdate?: StepResult;
     qmdEmbed?: StepResult;
   };
@@ -573,7 +578,32 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
     }
   }
 
-  // Step 3: Reindex QMD (split into update + embed for better observability)
+  // Step 3: Sync Gmail messages to triage
+  let gmailResult: GmailSyncResult | undefined;
+  if (!options.skipGmail) {
+    const gmailStart = Date.now();
+    try {
+      gmailResult = await syncGmailMessages();
+      if (gmailResult.synced > 0) {
+        console.log(`[Heartbeat] Gmail: synced ${gmailResult.synced} emails`);
+      }
+      steps.gmail = {
+        success: true,
+        durationMs: Date.now() - gmailStart,
+      };
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error('[Heartbeat] Gmail sync failed:', errMsg);
+      warnings.push(`Gmail sync failed: ${errMsg}`);
+      steps.gmail = {
+        success: false,
+        durationMs: Date.now() - gmailStart,
+        error: errMsg,
+      };
+    }
+  }
+
+  // Step 4: Reindex QMD (split into update + embed for better observability)
   let reindexed = false;
   if (!options.skipReindex) {
     // QMD Update (fast - just document index)
@@ -648,6 +678,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
     entities: entityDetails,
     extractionMethod: useOllama ? 'ollama' : 'pattern',
     granola: granolaResult,
+    gmail: gmailResult,
     steps,
     allStepsSucceeded,
     warnings,
