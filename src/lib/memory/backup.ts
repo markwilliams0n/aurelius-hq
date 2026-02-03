@@ -24,11 +24,14 @@ const MEMORY_DIR = path.join(ROOT, 'memory');
 const RETENTION_DAYS = 7;
 
 /**
- * Validate a path to prevent command injection
+ * Validate a path to prevent command injection.
+ * Since we use spawnSync with array args, this is mostly redundant,
+ * but we still reject obvious shell metacharacters as defense in depth.
  */
 function isValidPath(p: string): boolean {
-  // Allow alphanumeric, dash, underscore, dot, slash, space, and tilde
-  return /^[\w\-\.\/\s~]+$/.test(p);
+  // Reject null bytes and obvious shell metacharacters
+  // Allow everything else (including non-ASCII, parentheses, etc.)
+  return !/[\0`$|;&]/.test(p);
 }
 
 /**

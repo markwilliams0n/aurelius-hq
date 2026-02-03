@@ -158,21 +158,15 @@ async function main() {
   fs.writeFileSync(PATHS.heartbeatState, JSON.stringify({ processedNotes: {}, lastRun: null }, null, 2));
   console.log(`  ✓ Reset heartbeat-state.json`);
 
-  // Truncate database tables (order matters due to foreign keys)
-  await db.delete(documentChunks);
-  console.log(`  ✓ Truncated document_chunks`);
-
-  await db.delete(documents);
-  console.log(`  ✓ Truncated documents`);
-
-  await db.delete(facts);
-  console.log(`  ✓ Truncated facts`);
-
-  await db.delete(entities);
-  console.log(`  ✓ Truncated entities`);
-
-  await db.delete(conversations);
-  console.log(`  ✓ Truncated conversations`);
+  // Truncate database tables in a transaction (atomic)
+  await db.transaction(async (tx) => {
+    await tx.delete(documentChunks);
+    await tx.delete(documents);
+    await tx.delete(facts);
+    await tx.delete(entities);
+    await tx.delete(conversations);
+  });
+  console.log(`  ✓ Truncated database tables`);
 
   console.log("\n✅ Memory wiped. Fresh start!\n");
 
