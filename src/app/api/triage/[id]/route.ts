@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { inboxItems } from "@/lib/db/schema";
 import { eq, or } from "drizzle-orm";
+import { syncArchiveToGmail, syncSpamToGmail } from "@/lib/gmail/actions";
 
 // GET /api/triage/[id] - Get single item
 export async function GET(
@@ -56,6 +57,15 @@ export async function POST(
     case "archive":
       updates.status = "archived";
       updates.snoozedUntil = null;
+      // Sync to Gmail if this is a Gmail item
+      if (item.connector === "gmail") {
+        try {
+          await syncArchiveToGmail(item.id);
+        } catch (error) {
+          console.error("[Triage] Failed to sync archive to Gmail:", error);
+          // Continue with local archive even if Gmail sync fails
+        }
+      }
       break;
 
     case "snooze":
@@ -93,6 +103,20 @@ export async function POST(
     case "actioned":
       updates.status = "actioned";
       updates.snoozedUntil = null;
+      break;
+
+    case "spam":
+      updates.status = "archived";
+      updates.snoozedUntil = null;
+      // Mark as spam in Gmail if this is a Gmail item
+      if (item.connector === "gmail") {
+        try {
+          await syncSpamToGmail(item.id);
+        } catch (error) {
+          console.error("[Triage] Failed to mark as spam in Gmail:", error);
+          // Continue with local archive even if Gmail sync fails
+        }
+      }
       break;
 
     case "restore":
