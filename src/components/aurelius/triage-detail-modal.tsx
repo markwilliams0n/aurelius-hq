@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   X,
   Mail,
@@ -14,7 +14,24 @@ import {
   AlertTriangle,
   ArrowRight,
   CalendarDays,
+  ShieldAlert,
+  Users,
+  Bell,
+  Send,
+  AtSign,
+  Globe,
 } from "lucide-react";
+
+// Smart analysis tag config
+const SENDER_TAG_CONFIG: Record<string, { icon: React.ComponentType<{ className?: string }>; color: string; bgColor: string }> = {
+  Internal: { icon: Building, color: "text-green-400", bgColor: "bg-green-500/20" },
+  Direct: { icon: Send, color: "text-blue-400", bgColor: "bg-blue-500/20" },
+  CC: { icon: AtSign, color: "text-slate-400", bgColor: "bg-slate-500/20" },
+  Auto: { icon: Bell, color: "text-orange-400", bgColor: "bg-orange-500/20" },
+  Newsletter: { icon: Globe, color: "text-cyan-400", bgColor: "bg-cyan-500/20" },
+  Group: { icon: Users, color: "text-violet-400", bgColor: "bg-violet-500/20" },
+  Suspicious: { icon: ShieldAlert, color: "text-red-400", bgColor: "bg-red-500/20" },
+};
 import { cn } from "@/lib/utils";
 import { TriageItem } from "./triage-card";
 
@@ -185,7 +202,52 @@ export function TriageDetailModal({ item, onClose }: TriageDetailModalProps) {
         <div className="px-6 py-4 border-b border-border shrink-0">
           <h2 className="text-lg font-semibold">{item.subject}</h2>
 
-          {/* Tags */}
+          {/* Smart analysis tags */}
+          {((item.enrichment?.senderTags && item.enrichment.senderTags.length > 0) || item.enrichment?.isSuspicious) && (
+            <div className="flex items-center gap-1.5 flex-wrap mt-3">
+              {item.enrichment?.senderTags?.map((tag) => {
+                const config = SENDER_TAG_CONFIG[tag];
+                if (!config) return null;
+                const TagIcon = config.icon;
+                return (
+                  <span
+                    key={tag}
+                    className={cn(
+                      "flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
+                      config.bgColor,
+                      config.color
+                    )}
+                  >
+                    <TagIcon className="w-3 h-3" />
+                    {tag}
+                  </span>
+                );
+              })}
+              {item.enrichment?.isSuspicious && (
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/20 text-red-400">
+                  <ShieldAlert className="w-3 h-3" />
+                  Suspicious
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Phishing warning */}
+          {item.enrichment?.phishingIndicators && item.enrichment.phishingIndicators.length > 0 && (
+            <div className="flex items-start gap-2 p-3 mt-3 rounded-lg bg-red-500/10 border border-red-500/20">
+              <ShieldAlert className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <div className="text-sm text-red-400">
+                <span className="font-medium">Phishing Warning:</span>
+                <ul className="mt-1 space-y-1">
+                  {item.enrichment.phishingIndicators.map((indicator, i) => (
+                    <li key={i}>• {indicator}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* User tags */}
           {item.tags.length > 0 && (
             <div className="flex items-center gap-2 mt-3">
               <Tag className="w-3.5 h-3.5 text-muted-foreground" />
@@ -228,11 +290,33 @@ export function TriageDetailModal({ item, onClose }: TriageDetailModalProps) {
 
         {/* Content - scrollable */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          <div className="prose prose-sm dark:prose-invert max-w-none">
-            <pre className="whitespace-pre-wrap font-sans text-sm text-foreground leading-relaxed">
-              {item.content}
-            </pre>
-          </div>
+          {(() => {
+            // Check if we have HTML content in rawPayload
+            const rawPayload = item.rawPayload as Record<string, unknown> | undefined;
+            const bodyHtml = rawPayload?.bodyHtml as string | undefined;
+
+            if (bodyHtml && item.connector === 'gmail') {
+              return (
+                <div
+                  className="prose prose-sm dark:prose-invert max-w-none
+                    [&_a]:text-gold [&_a]:no-underline [&_a:hover]:underline
+                    [&_img]:max-w-full [&_img]:h-auto
+                    [&_table]:border-collapse [&_td]:p-2 [&_th]:p-2
+                    [&_*]:max-w-full"
+                  dangerouslySetInnerHTML={{ __html: bodyHtml }}
+                />
+              );
+            }
+
+            // Fallback to plain text
+            return (
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <pre className="whitespace-pre-wrap font-sans text-sm text-foreground leading-relaxed">
+                  {item.content}
+                </pre>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Footer with keyboard hints */}

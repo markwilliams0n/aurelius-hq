@@ -9,6 +9,7 @@ import { db } from '@/lib/db';
 import { inboxItems } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { insertInboxItemWithTasks } from '@/lib/triage/insert-with-tasks';
+import { chat } from '@/lib/ai/client';
 import {
   isConfigured,
   fetchUnarchived,
@@ -17,6 +18,26 @@ import {
   getGravatarUrl,
 } from './client';
 import type { ParsedEmail, GmailSyncResult, GmailEnrichment } from './types';
+
+/**
+ * Generate a brief summary of an email
+ */
+async function summarizeEmail(email: ParsedEmail): Promise<string | undefined> {
+  try {
+    const prompt = `Summarize this email in 1-2 sentences. Be concise and focus on the key action or information.
+
+From: ${email.from.name || email.from.email}
+Subject: ${email.subject}
+
+${email.body.slice(0, 2000)}`;
+
+    const summary = await chat(prompt, "You are a helpful assistant that summarizes emails very concisely. Output only the summary, no preamble.");
+    return summary.trim();
+  } catch (error) {
+    console.error('[Gmail] Failed to summarize email:', error);
+    return undefined;
+  }
+}
 
 /**
  * Check if a thread is already in triage
@@ -147,7 +168,7 @@ function checkPhishing(email: ParsedEmail): { isSuspicious: boolean; indicators:
 /**
  * Transform a parsed email into a triage inbox item
  */
-function transformToInboxItem(email: ParsedEmail) {
+function transformToInboxItem(email: ParsedEmail, summary?: string) {
   const userDomain = process.env.GOOGLE_IMPERSONATE_EMAIL?.split('@')[1] || '';
   const senderTags = analyzeSender(email, userDomain);
   const phishing = checkPhishing(email);
@@ -156,8 +177,8 @@ function transformToInboxItem(email: ParsedEmail) {
     senderTags.push('Suspicious');
   }
 
-  // Build preview
-  const preview = email.snippet.slice(0, 200) + (email.snippet.length > 200 ? '...' : '');
+  // Build preview - use summary if available, otherwise snippet
+  const preview = summary || (email.snippet.slice(0, 200) + (email.snippet.length > 200 ? '...' : ''));
 
   // Build content with metadata
   const contentParts = [
@@ -186,6 +207,7 @@ function transformToInboxItem(email: ParsedEmail) {
     attachments: email.attachments,
     isSuspicious: phishing.isSuspicious,
     phishingIndicators: phishing.indicators.length > 0 ? phishing.indicators : undefined,
+    summary, // Add AI summary to enrichment
   };
 
   return {
@@ -206,6 +228,7 @@ function transformToInboxItem(email: ParsedEmail) {
       labels: email.labels,
       hasUnsubscribe: email.hasUnsubscribe,
       unsubscribeUrl: email.unsubscribeUrl,
+      bodyHtml: email.bodyHtml, // Store HTML for rich rendering
     },
     receivedAt: email.receivedAt,
     status: 'new' as const,
@@ -235,13 +258,28 @@ export async function syncGmailMessages(): Promise<GmailSyncResult> {
   console.log('[Gmail] Starting sync...');
 
   try {
-    // Fetch unarchived emails
-    const { emails } = await fetchUnarchived({ maxResults: 50 });
-    console.log(`[Gmail] Found ${emails.length} emails in inbox`);
+    // Fetch all unarchived emails with pagination
+    const allEmails: ParsedEmail[] = [];
+    let pageToken: string | undefined;
+    let pageCount = 0;
+    const maxPages = 10; // Safety limit: 10 pages * 100 = 1000 emails max
+
+    do {
+      const { emails, nextPageToken } = await fetchUnarchived({
+        maxResults: 100,
+        pageToken
+      });
+      allEmails.push(...emails);
+      pageToken = nextPageToken;
+      pageCount++;
+      console.log(`[Gmail] Fetched page ${pageCount}: ${emails.length} emails (total: ${allEmails.length})`);
+    } while (pageToken && pageCount < maxPages);
+
+    console.log(`[Gmail] Found ${allEmails.length} emails in inbox`);
 
     // Group by thread - only process latest message per thread
     const threadMap = new Map<string, ParsedEmail>();
-    for (const email of emails) {
+    for (const email of allEmails) {
       const existing = threadMap.get(email.threadId);
       if (!existing || email.receivedAt > existing.receivedAt) {
         threadMap.set(email.threadId, email);
@@ -258,8 +296,12 @@ export async function syncGmailMessages(): Promise<GmailSyncResult> {
           continue;
         }
 
+        // Generate AI summary for the email
+        console.log(`[Gmail] Summarizing: ${email.subject}`);
+        const summary = await summarizeEmail(email);
+
         // Transform and insert into triage
-        const item = transformToInboxItem(email);
+        const item = transformToInboxItem(email, summary);
         await insertInboxItemWithTasks(item);
 
         result.synced++;

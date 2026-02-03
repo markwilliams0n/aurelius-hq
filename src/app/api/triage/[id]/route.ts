@@ -4,6 +4,33 @@ import { inboxItems } from "@/lib/db/schema";
 import { eq, or } from "drizzle-orm";
 import { syncArchiveToGmail, syncSpamToGmail } from "@/lib/gmail/actions";
 
+// Check if string is a valid UUID
+function isUUID(str: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+}
+
+// Find item by id (UUID) or externalId (string)
+async function findItem(id: string) {
+  // Only compare against id column if it's a valid UUID to avoid DB errors
+  if (isUUID(id)) {
+    const items = await db
+      .select()
+      .from(inboxItems)
+      .where(or(eq(inboxItems.id, id), eq(inboxItems.externalId, id)))
+      .limit(1);
+    return items[0];
+  } else {
+    // Not a UUID, only search by externalId
+    const items = await db
+      .select()
+      .from(inboxItems)
+      .where(eq(inboxItems.externalId, id))
+      .limit(1);
+    return items[0];
+  }
+}
+
 // GET /api/triage/[id] - Get single item
 export async function GET(
   request: Request,
@@ -11,14 +38,7 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  // Find by id or externalId
-  const items = await db
-    .select()
-    .from(inboxItems)
-    .where(or(eq(inboxItems.id, id), eq(inboxItems.externalId, id)))
-    .limit(1);
-
-  const item = items[0];
+  const item = await findItem(id);
 
   if (!item) {
     return NextResponse.json({ error: "Item not found" }, { status: 404 });
@@ -36,14 +56,7 @@ export async function POST(
   const body = await request.json();
   const { action, ...actionData } = body;
 
-  // Find by id or externalId
-  const items = await db
-    .select()
-    .from(inboxItems)
-    .where(or(eq(inboxItems.id, id), eq(inboxItems.externalId, id)))
-    .limit(1);
-
-  const item = items[0];
+  const item = await findItem(id);
 
   if (!item) {
     return NextResponse.json({ error: "Item not found" }, { status: 404 });

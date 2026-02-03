@@ -61,7 +61,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status") || "new";
   const connector = searchParams.get("connector");
-  const limit = parseInt(searchParams.get("limit") || "50");
+  const limit = parseInt(searchParams.get("limit") || "500");
 
   // First, wake up any snoozed items whose time has passed
   await wakeUpSnoozedItems();

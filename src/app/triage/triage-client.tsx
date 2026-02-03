@@ -22,6 +22,7 @@ import {
   LayoutList,
   Filter,
   CalendarDays,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -272,6 +273,45 @@ export function TriageClient() {
     setViewMode("snooze");
   }, [currentItem]);
 
+  // Spam action (x) - archive and mark as spam
+  const handleSpam = useCallback(async () => {
+    if (!currentItem) return;
+
+    setAnimatingOut("left");
+    setLastAction({ type: "spam", itemId: currentItem.id, item: currentItem });
+
+    // Wait for animation
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    try {
+      // Dismiss any remaining suggested tasks
+      await fetch(`/api/triage/${currentItem.id}/tasks`, {
+        method: "DELETE",
+      });
+
+      // Mark as spam
+      await fetch(`/api/triage/${currentItem.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "spam" }),
+      });
+
+      // Remove from list
+      setItems((prev) => prev.filter((i) => i.id !== currentItem.id));
+      toast.success("Marked as spam", {
+        action: {
+          label: "Undo",
+          onClick: () => handleUndo(),
+        },
+      });
+    } catch (error) {
+      console.error("Failed to mark as spam:", error);
+      toast.error("Failed to mark as spam");
+    }
+
+    setAnimatingOut(null);
+  }, [currentItem]);
+
   // Handle snooze selection
   const handleSnooze = useCallback(async (until: Date) => {
     if (!currentItem) return;
@@ -434,6 +474,10 @@ export function TriageClient() {
           e.preventDefault();
           handleOpenSnooze();
           break;
+        case "x":
+          e.preventDefault();
+          handleSpam();
+          break;
         case "u":
           if (e.metaKey || e.ctrlKey) {
             e.preventDefault();
@@ -455,6 +499,7 @@ export function TriageClient() {
     handleOpenDetail,
     handleOpenChat,
     handleOpenSnooze,
+    handleSpam,
     handleCloseOverlay,
     handleUndo,
   ]);
@@ -645,6 +690,12 @@ export function TriageClient() {
                   label="Snooze"
                   onClick={handleOpenSnooze}
                   color="text-orange-400"
+                />
+                <ActionButton
+                  keyName="x"
+                  label="Spam"
+                  onClick={handleSpam}
+                  color="text-red-500"
                 />
                 <ActionButton
                   keyName="␣"

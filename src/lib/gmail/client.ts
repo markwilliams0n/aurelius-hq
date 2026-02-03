@@ -260,12 +260,30 @@ export async function fetchUnarchived(options?: {
 
 /**
  * Archive an email in Gmail
+ *
+ * Gmail archiving = removing the INBOX label. The message stays in "All Mail"
+ * and any other labels it has, but disappears from the inbox.
  */
 export async function archiveEmail(messageId: string): Promise<void> {
   console.log(`[Gmail] Archiving message ${messageId}...`);
+  console.log(`[Gmail] Impersonating: ${IMPERSONATE_EMAIL}`);
   const gmail = await getGmailClient();
 
   try {
+    // First, get the current message to see its labels
+    const before = await gmail.users.messages.get({
+      userId: 'me',
+      id: messageId,
+      format: 'minimal',
+    });
+    console.log(`[Gmail] Before archive - labels:`, before.data.labelIds);
+
+    // Check if already archived
+    if (!before.data.labelIds?.includes('INBOX')) {
+      console.log(`[Gmail] Message ${messageId} already archived (no INBOX label)`);
+      return;
+    }
+
     const result = await gmail.users.messages.modify({
       userId: 'me',
       id: messageId,
@@ -274,8 +292,24 @@ export async function archiveEmail(messageId: string): Promise<void> {
       },
     });
     console.log(`[Gmail] Archive result for ${messageId}:`, result.status);
+    console.log(`[Gmail] After archive - labels:`, result.data.labelIds);
+
+    // Verify the archive took effect by re-fetching
+    const verify = await gmail.users.messages.get({
+      userId: 'me',
+      id: messageId,
+      format: 'minimal',
+    });
+    console.log(`[Gmail] Verification - labels:`, verify.data.labelIds);
+
+    if (verify.data.labelIds?.includes('INBOX')) {
+      console.error(`[Gmail] WARNING: INBOX label still present after archive!`);
+    } else {
+      console.log(`[Gmail] Verified: INBOX label removed successfully`);
+    }
   } catch (error: any) {
     console.error(`[Gmail] Archive API error for ${messageId}:`, error?.message || error);
+    console.error(`[Gmail] Full error:`, JSON.stringify(error, null, 2));
     throw error;
   }
 }
