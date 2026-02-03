@@ -12,7 +12,7 @@
 
 import { promises as fs } from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import { db } from '@/lib/db';
 import { entities, facts, conversations, documents, documentChunks } from '@/lib/db/schema';
 
@@ -22,6 +22,25 @@ const MEMORY_DIR = path.join(ROOT, 'memory');
 
 // How many daily backups to keep
 const RETENTION_DAYS = 7;
+
+/**
+ * Validate a path to prevent command injection
+ */
+function isValidPath(p: string): boolean {
+  // Allow alphanumeric, dash, underscore, dot, slash, space, and tilde
+  return /^[\w\-\.\/\s~]+$/.test(p);
+}
+
+/**
+ * Run a command safely with spawnSync (no shell interpolation)
+ */
+function runCommand(cmd: string, args: string[], cwd?: string): { success: boolean; error?: string } {
+  const result = spawnSync(cmd, args, { cwd, stdio: 'pipe' });
+  if (result.status !== 0) {
+    return { success: false, error: result.stderr?.toString() || 'Command failed' };
+  }
+  return { success: true };
+}
 
 /**
  * Get the backup directory path.
@@ -64,10 +83,11 @@ export interface BackupResult {
 }
 
 /**
- * Get today's date in YYYY-MM-DD format
+ * Get today's date in YYYY-MM-DD format (local timezone)
  */
 function getTodayDate(): string {
-  return new Date().toISOString().split('T')[0];
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
 /**
@@ -130,73 +150,81 @@ async function ensureBackupRepo(): Promise<void> {
   } catch {
     // Initialize git repo
     console.log('[Backup] Initializing backup repository...');
-    execSync('git init', { cwd: backupsDir, stdio: 'pipe' });
+    runCommand('git', ['init'], backupsDir);
 
     // Create .gitignore for staging directories
     await fs.writeFile(path.join(backupsDir, '.gitignore'), '.staging-*\n.restore-staging\n');
 
     // Initial commit
-    execSync('git add .gitignore && git commit -m "Initial commit"', { cwd: backupsDir, stdio: 'pipe' });
+    runCommand('git', ['add', '.gitignore'], backupsDir);
+    runCommand('git', ['commit', '-m', 'Initial commit'], backupsDir);
   }
 }
 
 /**
- * Set up the remote if configured and not already set
+ * Set up the remote if not already set (without token in URL)
  */
 async function ensureRemote(): Promise<void> {
   if (!isGitPushConfigured()) return;
 
   const backupsDir = getBackupsDir();
-  const token = process.env.BACKUP_GITHUB_TOKEN;
   const repo = process.env.BACKUP_GITHUB_REPO;
 
   // Check if remote exists
-  try {
-    execSync('git remote get-url origin', { cwd: backupsDir, stdio: 'pipe' });
-  } catch {
-    // Add remote with token auth
-    const remoteUrl = `https://${token}@github.com/${repo}.git`;
-    execSync(`git remote add origin "${remoteUrl}"`, { cwd: backupsDir, stdio: 'pipe' });
+  const result = spawnSync('git', ['remote', 'get-url', 'origin'], { cwd: backupsDir, stdio: 'pipe' });
+  if (result.status !== 0) {
+    // Add remote WITHOUT token (token used only during push)
+    const remoteUrl = `https://github.com/${repo}.git`;
+    runCommand('git', ['remote', 'add', 'origin', remoteUrl], backupsDir);
     console.log('[Backup] Added GitHub remote');
   }
 }
 
 /**
  * Commit and push the backup to GitHub
+ * Token is used inline during push only, not stored in git config
  */
 async function commitAndPush(backupFile: string): Promise<boolean> {
   if (!isGitPushConfigured()) return false;
 
   const backupsDir = getBackupsDir();
   const today = getTodayDate();
+  const token = process.env.BACKUP_GITHUB_TOKEN;
+  const repo = process.env.BACKUP_GITHUB_REPO;
 
   try {
     await ensureRemote();
 
     // Stage the backup file
-    execSync(`git add "${backupFile}"`, { cwd: backupsDir, stdio: 'pipe' });
+    runCommand('git', ['add', backupFile], backupsDir);
 
     // Also stage any deletions (pruned backups)
-    execSync('git add -A', { cwd: backupsDir, stdio: 'pipe' });
+    runCommand('git', ['add', '-A'], backupsDir);
 
     // Check if there's anything to commit
-    try {
-      execSync('git diff --cached --quiet', { cwd: backupsDir, stdio: 'pipe' });
+    const diffResult = spawnSync('git', ['diff', '--cached', '--quiet'], { cwd: backupsDir, stdio: 'pipe' });
+    if (diffResult.status === 0) {
       // No changes to commit
       return true;
-    } catch {
-      // There are changes, proceed with commit
     }
 
     // Commit
-    execSync(`git commit -m "Backup ${today}"`, { cwd: backupsDir, stdio: 'pipe' });
+    runCommand('git', ['commit', '-m', `Backup ${today}`], backupsDir);
 
-    // Push
+    // Push with token inline (not stored in remote URL)
     console.log('[Backup] Pushing to GitHub...');
-    execSync('git push -u origin main 2>&1 || git push -u origin master 2>&1', {
-      cwd: backupsDir,
-      stdio: 'pipe',
-    });
+    const pushUrl = `https://${token}@github.com/${repo}.git`;
+
+    // Try main first, then master
+    let pushResult = spawnSync('git', ['push', '-u', pushUrl, 'main'], { cwd: backupsDir, stdio: 'pipe' });
+    if (pushResult.status !== 0) {
+      pushResult = spawnSync('git', ['push', '-u', pushUrl, 'master'], { cwd: backupsDir, stdio: 'pipe' });
+    }
+
+    if (pushResult.status !== 0) {
+      console.error('[Backup] Git push failed:', pushResult.stderr?.toString());
+      return false;
+    }
 
     console.log('[Backup] Pushed to GitHub');
     return true;
@@ -220,21 +248,21 @@ async function exportDatabase(targetDir: string): Promise<{
   const dbDir = path.join(targetDir, 'db');
   await fs.mkdir(dbDir, { recursive: true });
 
-  // Export each table
+  // Export each table (no pretty-printing to save memory on large DBs)
   const entitiesData = await db.select().from(entities);
-  await fs.writeFile(path.join(dbDir, 'entities.json'), JSON.stringify(entitiesData, null, 2));
+  await fs.writeFile(path.join(dbDir, 'entities.json'), JSON.stringify(entitiesData));
 
   const factsData = await db.select().from(facts);
-  await fs.writeFile(path.join(dbDir, 'facts.json'), JSON.stringify(factsData, null, 2));
+  await fs.writeFile(path.join(dbDir, 'facts.json'), JSON.stringify(factsData));
 
   const conversationsData = await db.select().from(conversations);
-  await fs.writeFile(path.join(dbDir, 'conversations.json'), JSON.stringify(conversationsData, null, 2));
+  await fs.writeFile(path.join(dbDir, 'conversations.json'), JSON.stringify(conversationsData));
 
   const documentsData = await db.select().from(documents);
-  await fs.writeFile(path.join(dbDir, 'documents.json'), JSON.stringify(documentsData, null, 2));
+  await fs.writeFile(path.join(dbDir, 'documents.json'), JSON.stringify(documentsData));
 
   const chunksData = await db.select().from(documentChunks);
-  await fs.writeFile(path.join(dbDir, 'documentChunks.json'), JSON.stringify(chunksData, null, 2));
+  await fs.writeFile(path.join(dbDir, 'documentChunks.json'), JSON.stringify(chunksData));
 
   return {
     entities: entitiesData.length,
@@ -278,6 +306,14 @@ async function copyDir(src: string, dest: string): Promise<number> {
 }
 
 /**
+ * Verify a tarball is valid by listing its contents
+ */
+async function verifyTarball(tarballPath: string): Promise<boolean> {
+  const result = spawnSync('tar', ['-tzf', tarballPath], { stdio: 'pipe' });
+  return result.status === 0;
+}
+
+/**
  * Create a backup of all memory data.
  *
  * @param force - If true, create backup even if one exists for today
@@ -286,6 +322,11 @@ async function copyDir(src: string, dest: string): Promise<number> {
 export async function createBackup(force = false): Promise<BackupResult> {
   const backupsDir = getBackupsDir();
   const today = getTodayDate();
+
+  // Validate paths
+  if (!isValidPath(backupsDir)) {
+    return { success: false, error: 'Invalid backup directory path' };
+  }
 
   // Check if backup already exists for today
   if (!force && await backupExistsForToday()) {
@@ -317,11 +358,22 @@ export async function createBackup(force = false): Promise<BackupResult> {
     // Copy memory/ directory
     filesCopied += await copyDir(MEMORY_DIR, path.join(stagingDir, 'memory'));
 
-    // Create tarball
+    // Create tarball using spawnSync (no shell interpolation)
     const tarballName = `${today}.tar.gz`;
     const tarballPath = path.join(backupsDir, tarballName);
     console.log('[Backup] Creating archive...');
-    execSync(`tar -czf "${tarballPath}" -C "${stagingDir}" .`, { stdio: 'pipe' });
+
+    const tarResult = spawnSync('tar', ['-czf', tarballPath, '-C', stagingDir, '.'], { stdio: 'pipe' });
+    if (tarResult.status !== 0) {
+      throw new Error(`tar failed: ${tarResult.stderr?.toString()}`);
+    }
+
+    // Verify the tarball is valid
+    console.log('[Backup] Verifying archive...');
+    if (!await verifyTarball(tarballPath)) {
+      await fs.unlink(tarballPath).catch(() => {});
+      throw new Error('Backup verification failed - archive corrupted');
+    }
 
     // Cleanup staging directory
     await fs.rm(stagingDir, { recursive: true, force: true });
@@ -383,57 +435,64 @@ export async function restoreBackup(backupPath: string): Promise<{
 }> {
   const backupsDir = getBackupsDir();
 
+  // Validate and resolve path
+  const resolvedPath = path.resolve(backupPath);
+  if (!isValidPath(resolvedPath)) {
+    return { success: false, error: 'Invalid backup path' };
+  }
+
   // Verify backup exists
   try {
-    await fs.access(backupPath);
+    await fs.access(resolvedPath);
   } catch {
-    return { success: false, error: `Backup not found: ${backupPath}` };
+    return { success: false, error: `Backup not found: ${resolvedPath}` };
   }
 
   const stagingDir = path.join(backupsDir, '.restore-staging');
 
   try {
-    // Extract to staging
+    // Extract to staging using spawnSync (no shell interpolation)
     await fs.mkdir(stagingDir, { recursive: true });
-    execSync(`tar -xzf "${backupPath}" -C "${stagingDir}"`, { stdio: 'pipe' });
+    const tarResult = spawnSync('tar', ['-xzf', resolvedPath, '-C', stagingDir], { stdio: 'pipe' });
+    if (tarResult.status !== 0) {
+      throw new Error(`tar extraction failed: ${tarResult.stderr?.toString()}`);
+    }
 
-    // Restore database tables (clear existing, insert from backup)
-    console.log('[Restore] Restoring database...');
-
-    // Clear existing data (order matters for foreign keys)
-    await db.delete(documentChunks);
-    await db.delete(documents);
-    await db.delete(facts);
-    await db.delete(entities);
-    await db.delete(conversations);
-
-    // Load and insert backup data
+    // Load backup data first (before deleting anything)
     const dbDir = path.join(stagingDir, 'db');
-
     const entitiesData = JSON.parse(await fs.readFile(path.join(dbDir, 'entities.json'), 'utf-8'));
-    if (entitiesData.length > 0) {
-      await db.insert(entities).values(entitiesData);
-    }
-
     const factsData = JSON.parse(await fs.readFile(path.join(dbDir, 'facts.json'), 'utf-8'));
-    if (factsData.length > 0) {
-      await db.insert(facts).values(factsData);
-    }
-
     const conversationsData = JSON.parse(await fs.readFile(path.join(dbDir, 'conversations.json'), 'utf-8'));
-    if (conversationsData.length > 0) {
-      await db.insert(conversations).values(conversationsData);
-    }
-
     const documentsData = JSON.parse(await fs.readFile(path.join(dbDir, 'documents.json'), 'utf-8'));
-    if (documentsData.length > 0) {
-      await db.insert(documents).values(documentsData);
-    }
-
     const chunksData = JSON.parse(await fs.readFile(path.join(dbDir, 'documentChunks.json'), 'utf-8'));
-    if (chunksData.length > 0) {
-      await db.insert(documentChunks).values(chunksData);
-    }
+
+    // Restore database in a transaction (atomic - all or nothing)
+    console.log('[Restore] Restoring database...');
+    await db.transaction(async (tx) => {
+      // Clear existing data (order matters for foreign keys)
+      await tx.delete(documentChunks);
+      await tx.delete(documents);
+      await tx.delete(facts);
+      await tx.delete(entities);
+      await tx.delete(conversations);
+
+      // Insert backup data
+      if (entitiesData.length > 0) {
+        await tx.insert(entities).values(entitiesData);
+      }
+      if (factsData.length > 0) {
+        await tx.insert(facts).values(factsData);
+      }
+      if (conversationsData.length > 0) {
+        await tx.insert(conversations).values(conversationsData);
+      }
+      if (documentsData.length > 0) {
+        await tx.insert(documents).values(documentsData);
+      }
+      if (chunksData.length > 0) {
+        await tx.insert(documentChunks).values(chunksData);
+      }
+    });
 
     // Restore files
     console.log('[Restore] Restoring files...');
@@ -454,7 +513,9 @@ export async function restoreBackup(backupPath: string): Promise<{
       }
       // Copy from backup
       await copyDir(lifeStagingDir, LIFE_DIR);
-    } catch {}
+    } catch (error) {
+      console.warn('[Restore] Warning: Could not fully restore life/ directory:', error);
+    }
 
     // Clear and restore memory/ directory
     const memoryStagingDir = path.join(stagingDir, 'memory');
@@ -469,7 +530,9 @@ export async function restoreBackup(backupPath: string): Promise<{
       }
       // Copy from backup
       await copyDir(memoryStagingDir, MEMORY_DIR);
-    } catch {}
+    } catch (error) {
+      console.warn('[Restore] Warning: Could not fully restore memory/ directory:', error);
+    }
 
     // Cleanup
     await fs.rm(stagingDir, { recursive: true, force: true });

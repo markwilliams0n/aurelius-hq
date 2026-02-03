@@ -13,8 +13,9 @@
  * - Let Claude run this without explicit user request
  *
  * Usage:
- *   npx tsx scripts/wipe-memory.ts           # Preview what will be deleted
- *   npx tsx scripts/wipe-memory.ts --confirm # Actually delete everything
+ *   npx tsx scripts/wipe-memory.ts              # Preview what will be deleted
+ *   npx tsx scripts/wipe-memory.ts --confirm    # Backup first, then delete
+ *   npx tsx scripts/wipe-memory.ts --confirm --no-backup  # Skip backup (dangerous!)
  */
 
 // Load environment FIRST using require (not hoisted like import)
@@ -107,6 +108,28 @@ async function main() {
     console.log("⚠️  This is a PREVIEW. To actually delete, run:");
     console.log("   npx tsx scripts/wipe-memory.ts --confirm\n");
     process.exit(0);
+  }
+
+  // Create backup first (unless --no-backup)
+  const skipBackup = process.argv.includes("--no-backup");
+  if (!skipBackup) {
+    console.log("📦 Creating backup before wipe...\n");
+    const { createBackup } = await import("../src/lib/memory/backup");
+    const backupResult = await createBackup(true); // force=true to create even if one exists today
+
+    if (backupResult.success && !backupResult.skipped) {
+      console.log(`  ✓ Backup created: ${backupResult.backupPath}`);
+      if (backupResult.pushed) {
+        console.log(`  ✓ Pushed to GitHub`);
+      }
+      console.log("");
+    } else if (!backupResult.success) {
+      console.error(`\n❌ Backup failed: ${backupResult.error}`);
+      console.log("Run with --no-backup to skip backup and wipe anyway (dangerous!).\n");
+      process.exit(1);
+    }
+  } else {
+    console.log("⚠️  Skipping backup (--no-backup flag)\n");
   }
 
   // Actually delete

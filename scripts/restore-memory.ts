@@ -11,6 +11,7 @@
 require('dotenv').config({ path: '.env.local' });
 
 import * as path from 'path';
+import { promises as fs } from 'fs';
 
 async function main() {
   const { restoreBackup, getBackupInfo } = await import('../src/lib/memory/backup');
@@ -44,10 +45,23 @@ async function main() {
   // Determine backup path
   let backupPath: string;
   if (arg.endsWith('.tar.gz')) {
-    backupPath = arg;
+    // Resolve relative paths
+    backupPath = path.resolve(arg);
   } else {
     // Assume it's a date - use the configured backup repo path
     backupPath = path.join(info.repoPath, `${arg}.tar.gz`);
+  }
+
+  // Check if backup exists BEFORE the countdown
+  try {
+    await fs.access(backupPath);
+  } catch {
+    console.error(`❌ Backup not found: ${backupPath}\n`);
+    console.log('Available backups:');
+    for (const backup of info.backups) {
+      console.log(`  ${backup.date}`);
+    }
+    process.exit(1);
   }
 
   console.log(`⚠️  This will OVERWRITE all current memory data with backup from:`);
