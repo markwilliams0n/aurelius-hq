@@ -1,9 +1,19 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// Mock environment variables
-vi.stubEnv('GOOGLE_SERVICE_ACCOUNT_PATH', '/mock/path/service-account.json');
-vi.stubEnv('GOOGLE_IMPERSONATE_EMAIL', 'mark@rostr.cc');
-vi.stubEnv('GMAIL_ENABLE_SEND', 'false');
+// Store original env values
+const originalEnv = { ...process.env };
+
+// Set up environment before mocks
+beforeEach(() => {
+  process.env.GOOGLE_SERVICE_ACCOUNT_PATH = '/mock/path/service-account.json';
+  process.env.GOOGLE_IMPERSONATE_EMAIL = 'mark@rostr.cc';
+  process.env.GMAIL_ENABLE_SEND = 'false';
+});
+
+afterEach(() => {
+  // Restore original env
+  process.env = { ...originalEnv };
+});
 
 // Mock googleapis - CRITICAL: prevents real API calls
 vi.mock('googleapis', () => ({

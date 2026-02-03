@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+// Store original env values
+const originalEnv = { ...process.env };
 
 // Mock parsed email data
 const mockParsedEmail = {
@@ -18,10 +21,17 @@ const mockParsedEmail = {
   unsubscribeUrl: null,
 };
 
-// Mock environment variables
-vi.stubEnv('GOOGLE_SERVICE_ACCOUNT_PATH', '/mock/path/service-account.json');
-vi.stubEnv('GOOGLE_IMPERSONATE_EMAIL', 'mark@rostr.cc');
-vi.stubEnv('GMAIL_ENABLE_SEND', 'false');
+// Set up environment before mocks
+beforeEach(() => {
+  process.env.GOOGLE_SERVICE_ACCOUNT_PATH = '/mock/path/service-account.json';
+  process.env.GOOGLE_IMPERSONATE_EMAIL = 'mark@rostr.cc';
+  process.env.GMAIL_ENABLE_SEND = 'false';
+});
+
+afterEach(() => {
+  // Restore original env
+  process.env = { ...originalEnv };
+});
 
 // Mock the database
 vi.mock('@/lib/db', () => ({
@@ -41,17 +51,26 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-vi.mock('@/lib/db/schema', () => ({
-  inboxItems: {
-    id: 'id',
-    connector: 'connector',
-    externalId: 'externalId',
-  },
-}));
+vi.mock('@/lib/db/schema', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/db/schema')>();
+  return {
+    ...actual,
+    inboxItems: {
+      id: 'id',
+      connector: 'connector',
+      externalId: 'externalId',
+    },
+  };
+});
 
 // Mock the triage insert function
 vi.mock('@/lib/triage/insert-with-tasks', () => ({
   insertInboxItemWithTasks: vi.fn(() => Promise.resolve({ id: 'new-item-id' })),
+}));
+
+// Mock the AI client to avoid needing API keys in tests
+vi.mock('@/lib/ai/client', () => ({
+  chat: vi.fn(() => Promise.resolve('This is a test summary.')),
 }));
 
 // Mock the Gmail client

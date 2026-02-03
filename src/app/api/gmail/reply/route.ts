@@ -14,6 +14,9 @@ export const runtime = 'nodejs';
  * - replyAll: boolean (optional) - Reply to all recipients
  * - forceDraft: boolean (optional) - Force draft even if sending enabled
  */
+// Maximum reply body length (100KB should be plenty for email)
+const MAX_BODY_LENGTH = 100 * 1024;
+
 export async function POST(request: NextRequest) {
   try {
     const json = await request.json();
@@ -33,7 +36,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await replyToEmail(itemId, body, { replyAll, forceDraft });
+    // Validate body length
+    if (body.length > MAX_BODY_LENGTH) {
+      return NextResponse.json(
+        { error: `body exceeds maximum length of ${MAX_BODY_LENGTH} characters` },
+        { status: 400 }
+      );
+    }
+
+    // Sanitize: trim whitespace
+    const sanitizedBody = body.trim();
+    if (!sanitizedBody) {
+      return NextResponse.json(
+        { error: 'body cannot be empty' },
+        { status: 400 }
+      );
+    }
+
+    const result = await replyToEmail(itemId, sanitizedBody, { replyAll, forceDraft });
 
     return NextResponse.json({
       success: true,

@@ -19,6 +19,9 @@ import {
 } from './client';
 import type { ParsedEmail, GmailSyncResult, GmailEnrichment } from './types';
 
+/** Small delay to avoid rate limiting */
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 /**
  * Generate a brief summary of an email
  */
@@ -273,6 +276,11 @@ export async function syncGmailMessages(): Promise<GmailSyncResult> {
       pageToken = nextPageToken;
       pageCount++;
       console.log(`[Gmail] Fetched page ${pageCount}: ${emails.length} emails (total: ${allEmails.length})`);
+
+      // Rate limiting: small delay between pages to avoid hitting Gmail API quotas
+      if (pageToken) {
+        await delay(100);
+      }
     } while (pageToken && pageCount < maxPages);
 
     console.log(`[Gmail] Found ${allEmails.length} emails in inbox`);

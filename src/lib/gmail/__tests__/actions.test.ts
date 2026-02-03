@@ -1,9 +1,19 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// Mock environment
-vi.stubEnv('GOOGLE_SERVICE_ACCOUNT_PATH', '/mock/path/service-account.json');
-vi.stubEnv('GOOGLE_IMPERSONATE_EMAIL', 'mark@rostr.cc');
-vi.stubEnv('GMAIL_ENABLE_SEND', 'false');
+// Store original env values
+const originalEnv = { ...process.env };
+
+// Set up environment before mocks
+beforeEach(() => {
+  process.env.GOOGLE_SERVICE_ACCOUNT_PATH = '/mock/path/service-account.json';
+  process.env.GOOGLE_IMPERSONATE_EMAIL = 'mark@rostr.cc';
+  process.env.GMAIL_ENABLE_SEND = 'false';
+});
+
+afterEach(() => {
+  // Restore original env
+  process.env = { ...originalEnv };
+});
 
 // Mock database item
 const mockGmailItem = {
@@ -169,7 +179,7 @@ describe('Gmail Actions', () => {
 
   describe('replyToEmail', () => {
     beforeEach(() => {
-      vi.stubEnv('GMAIL_ENABLE_SEND', 'false');
+      process.env.GMAIL_ENABLE_SEND = 'false';
       vi.mocked(db.select).mockReturnValue({
         from: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
@@ -195,7 +205,7 @@ describe('Gmail Actions', () => {
     });
 
     it('creates draft when forceDraft is true', async () => {
-      vi.stubEnv('GMAIL_ENABLE_SEND', 'true');
+      process.env.GMAIL_ENABLE_SEND = 'true';
 
       const result = await replyToEmail('item-123', 'Reply body', {
         forceDraft: true,
@@ -207,7 +217,7 @@ describe('Gmail Actions', () => {
     });
 
     it('sends email when GMAIL_ENABLE_SEND is true and forceDraft is false', async () => {
-      vi.stubEnv('GMAIL_ENABLE_SEND', 'true');
+      process.env.GMAIL_ENABLE_SEND = 'true';
 
       const result = await replyToEmail('item-123', 'Reply body', {
         forceDraft: false,

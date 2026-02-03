@@ -5,7 +5,7 @@
  */
 
 import { google } from 'googleapis';
-import { promises as fs } from 'fs';
+import { promises as fs, existsSync } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import type {
@@ -22,12 +22,28 @@ const SYNC_STATE_PATH = path.join(process.cwd(), '.gmail-sync-state.json');
 // Environment variables
 const SERVICE_ACCOUNT_PATH = process.env.GOOGLE_SERVICE_ACCOUNT_PATH;
 const IMPERSONATE_EMAIL = process.env.GOOGLE_IMPERSONATE_EMAIL;
+const DEBUG = process.env.GMAIL_DEBUG === 'true';
+
+/** Log only when GMAIL_DEBUG=true */
+function debugLog(...args: unknown[]) {
+  if (DEBUG) {
+    console.log('[Gmail]', ...args);
+  }
+}
 
 /**
- * Check if Gmail is configured
+ * Check if Gmail is configured (env vars set and service account file exists)
  */
 export function isConfigured(): boolean {
-  return !!(SERVICE_ACCOUNT_PATH && IMPERSONATE_EMAIL);
+  if (!SERVICE_ACCOUNT_PATH || !IMPERSONATE_EMAIL) {
+    return false;
+  }
+  // Verify service account file exists
+  try {
+    return existsSync(SERVICE_ACCOUNT_PATH);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -265,8 +281,7 @@ export async function fetchUnarchived(options?: {
  * and any other labels it has, but disappears from the inbox.
  */
 export async function archiveEmail(messageId: string): Promise<void> {
-  console.log(`[Gmail] Archiving message ${messageId}...`);
-  console.log(`[Gmail] Impersonating: ${IMPERSONATE_EMAIL}`);
+  debugLog(`Archiving message ${messageId}...`);
   const gmail = await getGmailClient();
 
   try {
@@ -276,11 +291,11 @@ export async function archiveEmail(messageId: string): Promise<void> {
       id: messageId,
       format: 'minimal',
     });
-    console.log(`[Gmail] Before archive - labels:`, before.data.labelIds);
+    debugLog(`Before archive - labels:`, before.data.labelIds);
 
     // Check if already archived
     if (!before.data.labelIds?.includes('INBOX')) {
-      console.log(`[Gmail] Message ${messageId} already archived (no INBOX label)`);
+      debugLog(`Message ${messageId} already archived (no INBOX label)`);
       return;
     }
 
@@ -291,25 +306,23 @@ export async function archiveEmail(messageId: string): Promise<void> {
         removeLabelIds: ['INBOX'],
       },
     });
-    console.log(`[Gmail] Archive result for ${messageId}:`, result.status);
-    console.log(`[Gmail] After archive - labels:`, result.data.labelIds);
+    debugLog(`Archive result for ${messageId}:`, result.status);
 
-    // Verify the archive took effect by re-fetching
-    const verify = await gmail.users.messages.get({
-      userId: 'me',
-      id: messageId,
-      format: 'minimal',
-    });
-    console.log(`[Gmail] Verification - labels:`, verify.data.labelIds);
-
-    if (verify.data.labelIds?.includes('INBOX')) {
-      console.error(`[Gmail] WARNING: INBOX label still present after archive!`);
-    } else {
-      console.log(`[Gmail] Verified: INBOX label removed successfully`);
+    // Verify the archive took effect
+    if (DEBUG) {
+      const verify = await gmail.users.messages.get({
+        userId: 'me',
+        id: messageId,
+        format: 'minimal',
+      });
+      if (verify.data.labelIds?.includes('INBOX')) {
+        console.error(`[Gmail] WARNING: INBOX label still present after archive!`);
+      } else {
+        debugLog(`Verified: INBOX label removed successfully`);
+      }
     }
   } catch (error: any) {
-    console.error(`[Gmail] Archive API error for ${messageId}:`, error?.message || error);
-    console.error(`[Gmail] Full error:`, JSON.stringify(error, null, 2));
+    console.error(`[Gmail] Archive failed for ${messageId}:`, error?.message || error);
     throw error;
   }
 }
