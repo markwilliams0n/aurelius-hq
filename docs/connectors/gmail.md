@@ -7,7 +7,7 @@ Gmail integration for inbox-zero workflow. Syncs emails into triage, enables fas
 | Property | Value |
 |----------|-------|
 | Connector ID | `gmail` |
-| Status | Planned |
+| Status | In Progress |
 | Authentication | Service Account (Google Workspace) |
 | Supports Reply | Yes (drafts initially, direct send via setting) |
 | Supports Archive | Yes (syncs back to Gmail) |
@@ -364,24 +364,24 @@ GMAIL_SYNC_DAYS=30               # How far back to sync on first run
 ## Implementation Phases
 
 ### Phase 1: Core Sync
-- [ ] Service account authentication
-- [ ] Fetch unarchived emails
-- [ ] Content mapping + deduplication
+- [x] Service account authentication
+- [x] Fetch unarchived emails
+- [x] Content mapping + deduplication
 - [ ] Basic enrichment (summary, priority)
-- [ ] Insert to inbox_items
+- [x] Insert to inbox_items
 
 ### Phase 2: Smart Features
 - [ ] Thread handling (collapse/expand)
-- [ ] Smart sender tags
-- [ ] Phishing detection
+- [x] Smart sender tags
+- [x] Phishing detection
 - [ ] Intent + deadline detection
-- [ ] Gravatar avatars
+- [x] Gravatar avatars
 
 ### Phase 3: Actions
-- [ ] Archive (sync to Gmail)
-- [ ] Reply (draft mode)
-- [ ] Unsubscribe
-- [ ] Spam
+- [x] Archive (sync to Gmail)
+- [x] Reply (draft mode)
+- [x] Unsubscribe (URL extraction)
+- [x] Spam
 - [ ] Always Archive (rule creation)
 
 ### Phase 4: AI Power Features
