@@ -4,6 +4,32 @@ Work completed in the last 2-4 weeks.
 
 ---
 
+## 2026-02-03
+
+### Gmail Connector (Full Implementation)
+- **Core sync**: Service Account auth, fetch unarchived emails, content mapping
+- **Smart features**: Sender tags (Internal, Direct, CC, Auto, Newsletter, Suspicious), phishing detection, Gravatar avatars
+- **Actions**: Archive (bi-directional), Reply (drafts), Spam, Unsubscribe
+- **Heartbeat integration**: Auto-sync during heartbeat cycle
+- **Test suite**: 36 tests covering sync, actions, phishing detection
+
+### Memory System Fixes
+- **Pre-extracted content**: Heartbeat parses `**Memory Saved:**` sections from daily notes
+- **Redundancy detection**: Fixed over-aggressive LLM checks, now string-based (>85% similarity)
+- **QMD indexing**: Facts now included in `summary.md` for search
+- **Shared context**: Triage chat uses `buildAgentContext` like main chat
+
+### Smart Entity Resolution (merged to main)
+- Multi-signal entity matching with weighted scoring
+- Partial name matching, cross-type protection
+- Batch/fact deduplication, location/term filtering
+- Comprehensive test suite (24 tests)
+
+### UI Fixes
+- Triage cards scroll properly when tasks overflow (`overflow-y-auto`)
+
+---
+
 ## 2026-02-02
 
 ### Triage Enhancements

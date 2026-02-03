@@ -46,7 +46,7 @@ Central reference for all triage connectors, their capabilities, and status.
 ### gmail
 | Property | Value |
 |----------|-------|
-| **Status** | Designed (ready for implementation) |
+| **Status** | **Active** |
 | **Added** | 2026-02-01 |
 | **Description** | Email messages from Gmail (Workspace) |
 | **Documentation** | [gmail.md](./gmail.md) |
@@ -79,7 +79,7 @@ Central reference for all triage connectors, their capabilities, and status.
 - `src/lib/gmail/client.ts`
 - `src/lib/gmail/sync.ts`
 - `src/lib/gmail/actions.ts`
-- `src/lib/gmail/enrichment.ts`
+- `src/lib/gmail/types.ts`
 - `src/app/api/gmail/sync/route.ts`
 - `src/app/api/gmail/reply/route.ts`
 
@@ -168,7 +168,7 @@ Central reference for all triage connectors, their capabilities, and status.
 | Connector | Reply | Auto Memory | Custom Enrichment | Task Source | Status |
 |-----------|-------|-------------|-------------------|-------------|--------|
 | granola | No | Yes | Yes | Granola + AI | Active |
-| gmail | Yes | No | Yes | AI | Designed |
+| gmail | Yes | No | Yes | AI | **Active** |
 | slack | Yes | No | No | AI only | Stub |
 | linear | No | No | No | AI only | Stub |
 | manual | No | No | No | AI only | Active |
@@ -187,8 +187,8 @@ When adding a new connector:
 
 ## Connector Roadmap
 
-### In Progress
-- [ ] **Gmail** - Full implementation with Service Account auth ([design doc](./gmail.md))
+### Recently Completed
+- [x] **Gmail** - Full implementation with Service Account auth, phishing detection, bi-directional sync ([docs](./gmail.md))
 
 ### Planned
 - [ ] **Slack** - Full implementation with OAuth

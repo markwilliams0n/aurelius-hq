@@ -20,6 +20,8 @@ export const eventTypeEnum = pgEnum("event_type", [
   "task_created",
   "task_updated",
   "connector_sync",
+  "heartbeat_run",
+  "synthesis_run",
   "system_error",
 ]);
 

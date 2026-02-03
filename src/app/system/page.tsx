@@ -98,7 +98,49 @@ export default function SystemPage() {
     try {
       const response = await fetch("/api/activity");
       const data = await response.json();
-      setActivityLog(data.entries || []);
+      // Transform database activities to the expected format
+      const entries = (data.activities || []).map((a: any) => {
+        // Map eventType to entry type
+        if (a.eventType === 'heartbeat_run') {
+          return {
+            id: a.id,
+            type: 'heartbeat' as const,
+            trigger: a.metadata?.trigger || 'manual',
+            success: a.metadata?.success ?? true,
+            entitiesCreated: a.metadata?.entitiesCreated || 0,
+            entitiesUpdated: a.metadata?.entitiesUpdated || 0,
+            reindexed: a.metadata?.reindexed ?? false,
+            entities: a.metadata?.entities || [],
+            extractionMethod: a.metadata?.extractionMethod,
+            duration: a.metadata?.duration,
+            timestamp: a.createdAt,
+            error: a.metadata?.error,
+          };
+        }
+        if (a.eventType === 'synthesis_run') {
+          return {
+            id: a.id,
+            type: 'synthesis' as const,
+            trigger: a.metadata?.trigger || 'manual',
+            success: a.metadata?.success ?? true,
+            entitiesProcessed: a.metadata?.entitiesProcessed || 0,
+            factsArchived: a.metadata?.factsArchived || 0,
+            summariesRegenerated: a.metadata?.summariesRegenerated || 0,
+            duration: a.metadata?.duration,
+            timestamp: a.createdAt,
+            error: a.metadata?.error,
+          };
+        }
+        // Generic system/other entries
+        return {
+          id: a.id,
+          type: 'system' as const,
+          action: a.eventType,
+          message: a.description,
+          timestamp: a.createdAt,
+        };
+      });
+      setActivityLog(entries);
     } catch (error) {
       console.error("Failed to load activity log:", error);
     } finally {

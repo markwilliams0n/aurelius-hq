@@ -121,119 +121,90 @@ export function TriageClient() {
     granola: items.filter((i) => i.connector === "granola").length,
   };
 
-  // Archive action (←)
-  const handleArchive = useCallback(async () => {
+  // Archive action (←) - swipe animation + optimistic
+  const handleArchive = useCallback(() => {
     if (!currentItem) return;
 
+    const itemToArchive = currentItem;
     setAnimatingOut("left");
-    setLastAction({ type: "archive", itemId: currentItem.id, item: currentItem });
+    setLastAction({ type: "archive", itemId: itemToArchive.id, item: itemToArchive });
 
-    // Wait for animation
-    await new Promise((resolve) => setTimeout(resolve, 200));
-
-    try {
-      // Dismiss any remaining suggested tasks
-      await fetch(`/api/triage/${currentItem.id}/tasks`, {
-        method: "DELETE",
-      });
-
-      // Archive the item
-      await fetch(`/api/triage/${currentItem.id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "archive" }),
-      });
-
-      // Remove from list
-      setItems((prev) => prev.filter((i) => i.id !== currentItem.id));
-      toast.success("Archived", {
-        action: {
-          label: "Undo",
-          onClick: () => handleUndo(),
-        },
-      });
-    } catch (error) {
+    // Fire API calls in background immediately
+    fetch(`/api/triage/${itemToArchive.id}/tasks`, { method: "DELETE" }).catch(() => {});
+    fetch(`/api/triage/${itemToArchive.id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "archive" }),
+    }).catch((error) => {
       console.error("Failed to archive:", error);
-      toast.error("Failed to archive");
-    }
+      toast.error("Failed to archive - item restored");
+      setItems((prev) => [itemToArchive, ...prev]);
+    });
 
-    setAnimatingOut(null);
+    // Remove from list after brief animation
+    setTimeout(() => {
+      setItems((prev) => prev.filter((i) => i.id !== itemToArchive.id));
+      setAnimatingOut(null);
+    }, 150);
+
+    toast.success("Archived", {
+      action: {
+        label: "Undo",
+        onClick: () => handleUndo(),
+      },
+    });
   }, [currentItem]);
 
-  // Memory action (↑)
+  // Memory action (↑) - fires in background, don't wait
   const handleMemory = useCallback(async () => {
     if (!currentItem) return;
 
-    setAnimatingOut("up");
+    // Fire and forget - processing happens in background
+    fetch(`/api/triage/${currentItem.id}/memory`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    }).catch((error) => {
+      console.error("Failed to queue memory save:", error);
+    });
 
-    try {
-      const response = await fetch(`/api/triage/${currentItem.id}/memory`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to save to memory");
-      }
-
-      const facts = data.facts || [];
-      if (facts.length > 0) {
-        toast.success(`Saved ${facts.length} facts to memory`, {
-          description: facts[0]?.content?.slice(0, 60) + "...",
-        });
-      } else {
-        toast.info("No new facts extracted", {
-          description: "This item may have already been processed",
-        });
-      }
-    } catch (error) {
-      console.error("Failed to save to memory:", error);
-      toast.error("Failed to save to memory");
-    }
-
-    // Don't remove from list - memory is non-destructive
-    setAnimatingOut(null);
+    toast.success("Saving to memory...", {
+      description: "Check Activity tab for results",
+    });
   }, [currentItem]);
 
-  // Memory + Archive action (Shift+↑)
-  const handleMemoryAndArchive = useCallback(async () => {
+  // Memory + Archive action (Shift+↑) - swipe animation + optimistic
+  const handleMemoryAndArchive = useCallback(() => {
     if (!currentItem) return;
 
+    const itemToProcess = currentItem;
     setAnimatingOut("up");
-    setLastAction({ type: "memory-archive", itemId: currentItem.id, item: currentItem });
+    setLastAction({ type: "memory-archive", itemId: itemToProcess.id, item: itemToProcess });
 
-    try {
-      // Save to memory
-      await fetch(`/api/triage/${currentItem.id}/memory`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
+    // Fire all API calls in background immediately
+    fetch(`/api/triage/${itemToProcess.id}/memory`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    }).catch(() => {});
 
-      // Dismiss any remaining suggested tasks
-      await fetch(`/api/triage/${currentItem.id}/tasks`, {
-        method: "DELETE",
-      });
+    fetch(`/api/triage/${itemToProcess.id}/tasks`, { method: "DELETE" }).catch(() => {});
 
-      // Archive the item
-      await fetch(`/api/triage/${currentItem.id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "archive" }),
-      });
+    fetch(`/api/triage/${itemToProcess.id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "archive" }),
+    }).catch((error) => {
+      console.error("Failed to archive:", error);
+      toast.error("Failed to archive - item restored");
+      setItems((prev) => [itemToProcess, ...prev]);
+    });
 
-      // Wait for animation
-      await new Promise((resolve) => setTimeout(resolve, 200));
+    // Remove from list after brief animation
+    setTimeout(() => {
+      setItems((prev) => prev.filter((i) => i.id !== itemToProcess.id));
+      setAnimatingOut(null);
+    }, 150);
 
-      // Remove from list
-      setItems((prev) => prev.filter((i) => i.id !== currentItem.id));
-      toast.success("Saved to memory and archived");
-    } catch (error) {
-      console.error("Failed to memory + archive:", error);
-      toast.error("Failed to complete action");
-    }
-
-    setAnimatingOut(null);
+    toast.success("Archived + memory saving in background");
   }, [currentItem]);
 
   // Open action menu (→)
@@ -273,83 +244,73 @@ export function TriageClient() {
     setViewMode("snooze");
   }, [currentItem]);
 
-  // Spam action (x) - archive and mark as spam
-  const handleSpam = useCallback(async () => {
+  // Spam action (x) - swipe animation + optimistic
+  const handleSpam = useCallback(() => {
     if (!currentItem) return;
 
+    const itemToSpam = currentItem;
     setAnimatingOut("left");
-    setLastAction({ type: "spam", itemId: currentItem.id, item: currentItem });
+    setLastAction({ type: "spam", itemId: itemToSpam.id, item: itemToSpam });
 
-    // Wait for animation
-    await new Promise((resolve) => setTimeout(resolve, 200));
-
-    try {
-      // Dismiss any remaining suggested tasks
-      await fetch(`/api/triage/${currentItem.id}/tasks`, {
-        method: "DELETE",
-      });
-
-      // Mark as spam
-      await fetch(`/api/triage/${currentItem.id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "spam" }),
-      });
-
-      // Remove from list
-      setItems((prev) => prev.filter((i) => i.id !== currentItem.id));
-      toast.success("Marked as spam", {
-        action: {
-          label: "Undo",
-          onClick: () => handleUndo(),
-        },
-      });
-    } catch (error) {
+    // Fire API calls in background immediately
+    fetch(`/api/triage/${itemToSpam.id}/tasks`, { method: "DELETE" }).catch(() => {});
+    fetch(`/api/triage/${itemToSpam.id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "spam" }),
+    }).catch((error) => {
       console.error("Failed to mark as spam:", error);
-      toast.error("Failed to mark as spam");
-    }
+      toast.error("Failed to mark as spam - item restored");
+      setItems((prev) => [itemToSpam, ...prev]);
+    });
 
-    setAnimatingOut(null);
+    // Remove from list after brief animation
+    setTimeout(() => {
+      setItems((prev) => prev.filter((i) => i.id !== itemToSpam.id));
+      setAnimatingOut(null);
+    }, 150);
+
+    toast.success("Marked as spam", {
+      action: {
+        label: "Undo",
+        onClick: () => handleUndo(),
+      },
+    });
   }, [currentItem]);
 
-  // Handle snooze selection
-  const handleSnooze = useCallback(async (until: Date) => {
+  // Handle snooze selection - swipe animation + optimistic
+  const handleSnooze = useCallback((until: Date) => {
     if (!currentItem) return;
 
+    const itemToSnooze = currentItem;
     setViewMode("triage");
     setAnimatingOut("right");
-    setLastAction({ type: "snooze", itemId: currentItem.id, item: currentItem });
+    setLastAction({ type: "snooze", itemId: itemToSnooze.id, item: itemToSnooze });
 
-    // Wait for animation
-    await new Promise((resolve) => setTimeout(resolve, 200));
-
-    try {
-      // Dismiss any remaining suggested tasks
-      await fetch(`/api/triage/${currentItem.id}/tasks`, {
-        method: "DELETE",
-      });
-
-      // Snooze the item
-      await fetch(`/api/triage/${currentItem.id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "snooze", snoozeUntil: until.toISOString() }),
-      });
-
-      // Remove from list
-      setItems((prev) => prev.filter((i) => i.id !== currentItem.id));
-      toast.success(`Snoozed until ${until.toLocaleDateString()} ${until.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, {
-        action: {
-          label: "Undo",
-          onClick: () => handleUndo(),
-        },
-      });
-    } catch (error) {
+    // Fire API calls in background immediately
+    fetch(`/api/triage/${itemToSnooze.id}/tasks`, { method: "DELETE" }).catch(() => {});
+    fetch(`/api/triage/${itemToSnooze.id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "snooze", snoozeUntil: until.toISOString() }),
+    }).catch((error) => {
       console.error("Failed to snooze:", error);
-      toast.error("Failed to snooze");
-    }
+      toast.error("Failed to snooze - item restored");
+      setItems((prev) => [itemToSnooze, ...prev]);
+    });
 
-    setAnimatingOut(null);
+    // Remove from list after brief animation
+    setTimeout(() => {
+      setItems((prev) => prev.filter((i) => i.id !== itemToSnooze.id));
+      setAnimatingOut(null);
+    }, 150);
+
+    toast.success(`Snoozed until ${until.toLocaleDateString()} ${until.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, {
+      action: {
+        label: "Undo",
+        onClick: () => handleUndo(),
+      },
+    });
   }, [currentItem]);
 
   // Close overlays
@@ -385,25 +346,28 @@ export function TriageClient() {
     setViewMode("triage");
   }, [currentItem]);
 
-  // Undo last action
-  const handleUndo = useCallback(async () => {
+  // Undo last action - instant, brings item back on screen
+  const handleUndo = useCallback(() => {
     if (!lastAction) return;
 
-    try {
-      await fetch(`/api/triage/${lastAction.itemId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "restore" }),
-      });
+    const itemToRestore = lastAction.item;
 
-      // Add item back to list
-      setItems((prev) => [lastAction.item, ...prev]);
-      setLastAction(null);
-      toast.success("Action undone");
-    } catch (error) {
-      console.error("Failed to undo:", error);
-      toast.error("Failed to undo");
-    }
+    // Immediately add item back to front and reset index to show it
+    setItems((prev) => [itemToRestore, ...prev]);
+    setCurrentIndex(0);
+    setLastAction(null);
+
+    // Fire restore API in background
+    fetch(`/api/triage/${lastAction.itemId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "restore" }),
+    }).catch((error) => {
+      console.error("Failed to restore:", error);
+      toast.error("Failed to restore on server");
+    });
+
+    toast.success("Restored");
   }, [lastAction]);
 
   // Reset inbox (for development)
@@ -484,6 +448,12 @@ export function TriageClient() {
             handleUndo();
           }
           break;
+        case "z":
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault();
+            handleUndo();
+          }
+          break;
       }
     };
 
@@ -542,7 +512,6 @@ export function TriageClient() {
     <AppShell
       rightSidebar={
         <TriageSidebar
-          item={currentItem}
           stats={stats}
           isExpanded={isSidebarExpanded}
           onToggleExpand={() => setIsSidebarExpanded(!isSidebarExpanded)}
@@ -604,7 +573,7 @@ export function TriageClient() {
         </header>
 
         {/* Card area */}
-        <div className="flex-1 flex items-start justify-center pt-12 p-6 relative overflow-hidden">
+        <div className="flex-1 flex items-start justify-center pt-12 p-6 relative overflow-y-auto">
           {/* Card stack effect - show next cards behind */}
           {filteredItems.slice(currentIndex + 1, currentIndex + 3).map((item, idx) => (
             <div
@@ -639,26 +608,6 @@ export function TriageClient() {
             )}
           </div>
 
-          {/* Action indicators - animated feedback */}
-          {animatingOut && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
-              {animatingOut === "left" && (
-                <div className="animate-action-pop bg-red-500/20 text-red-400 rounded-full p-6 border-2 border-red-500/40 shadow-lg shadow-red-500/20">
-                  <Archive className="w-12 h-12" />
-                </div>
-              )}
-              {animatingOut === "up" && (
-                <div className="animate-action-pop bg-gold/20 text-gold rounded-full p-6 border-2 border-gold/40 shadow-lg shadow-gold/20">
-                  <Brain className="w-12 h-12" />
-                </div>
-              )}
-              {animatingOut === "right" && (
-                <div className="animate-action-pop bg-blue-500/20 text-blue-400 rounded-full p-6 border-2 border-blue-500/40 shadow-lg shadow-blue-500/20">
-                  <Zap className="w-12 h-12" />
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Bottom keyboard hints (always visible) */}

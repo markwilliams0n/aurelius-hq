@@ -257,6 +257,9 @@ Extract entities (JSON array only):`;
 /**
  * Check if a new fact is semantically redundant with existing facts
  * Returns true if the fact should be SKIPPED (it's redundant)
+ *
+ * NOTE: We use strict string matching only. LLM-based semantic checks
+ * were too aggressive and incorrectly marked different facts as redundant.
  */
 export async function isFactRedundant(
   newFact: string,
@@ -265,43 +268,52 @@ export async function isFactRedundant(
 ): Promise<boolean> {
   if (existingFacts.length === 0) return false;
 
-  // Quick string-based pre-check to avoid LLM calls for obvious cases
+  // String-based check - only skip obviously duplicate facts
   const newLower = newFact.toLowerCase().trim();
+
   for (const existing of existingFacts) {
     const existingLower = existing.toLowerCase().trim();
-    // Exact or near-exact match
-    if (existingLower === newLower) return true;
-    // One contains the other
+
+    // Exact match
+    if (existingLower === newLower) {
+      console.log(`[Redundancy] Exact match: "${newFact.slice(0, 50)}..."`);
+      return true;
+    }
+
+    // Very high similarity (one contains the other AND similar length)
     if (existingLower.includes(newLower) || newLower.includes(existingLower)) {
       const ratio = Math.min(existingLower.length, newLower.length) /
                     Math.max(existingLower.length, newLower.length);
-      if (ratio > 0.7) return true;
+      // Only skip if VERY similar (>85% overlap)
+      if (ratio > 0.85) {
+        console.log(`[Redundancy] High similarity (${(ratio * 100).toFixed(0)}%): "${newFact.slice(0, 50)}..."`);
+        return true;
+      }
+    }
+
+    // Check for same key information (numbers, dates) in similar context
+    // Extract numbers from both facts
+    const newNumbers = newLower.match(/\d+\.?\d*/g) || [];
+    const existingNumbers = existingLower.match(/\d+\.?\d*/g) || [];
+
+    // If both have the same numbers and similar words, likely duplicate
+    if (newNumbers.length > 0 && existingNumbers.length > 0) {
+      const sameNumbers = newNumbers.filter(n => existingNumbers.includes(n));
+      if (sameNumbers.length === newNumbers.length && sameNumbers.length === existingNumbers.length) {
+        // Same numbers - check if similar words
+        const newWords = new Set(newLower.split(/\s+/).filter(w => w.length > 3));
+        const existingWords = new Set(existingLower.split(/\s+/).filter(w => w.length > 3));
+        const overlap = [...newWords].filter(w => existingWords.has(w)).length;
+        const overlapRatio = overlap / Math.max(newWords.size, existingWords.size);
+        if (overlapRatio > 0.5) {
+          console.log(`[Redundancy] Same numbers + similar words: "${newFact.slice(0, 50)}..."`);
+          return true;
+        }
+      }
     }
   }
 
-  // Use LLM for semantic check
-  const prompt = `You are checking if a new fact about "${entityName}" is redundant with existing facts.
-
-EXISTING FACTS:
-${existingFacts.slice(0, 10).map((f, i) => `${i + 1}. ${f}`).join('\n')}
-
-NEW FACT: "${newFact}"
-
-Is the new fact redundant? A fact is redundant if:
-- It says the same thing as an existing fact (even in different words)
-- It's a less specific version of an existing fact
-- The information is already captured elsewhere
-
-Answer ONLY "yes" or "no":`;
-
-  try {
-    const response = await generate(prompt, { temperature: 0, maxTokens: 10 });
-    const answer = response.toLowerCase().trim();
-    return answer.startsWith('yes');
-  } catch (error) {
-    console.warn('[Ollama] Redundancy check failed, allowing fact:', error);
-    return false; // If check fails, allow the fact
-  }
+  return false; // Allow the fact
 }
 
 /**
@@ -329,4 +341,143 @@ Write ONLY the summary, no introduction or explanation:`;
     console.error('[Ollama] Summary generation failed:', error);
     return `${name} is a ${type} in my knowledge base.`;
   }
+}
+
+/**
+ * Email memory extraction result
+ */
+export interface EmailMemoryExtraction {
+  entities: ExtractedEntity[];
+  facts: Array<{
+    content: string;
+    category: 'status' | 'preference' | 'relationship' | 'context' | 'milestone' | 'metric';
+    entityName?: string;
+  }>;
+  actionItems: Array<{
+    description: string;
+    dueDate?: string;
+  }>;
+  summary: string;
+}
+
+/**
+ * Extract memory from email content using local LLM
+ */
+export async function extractEmailMemory(
+  subject: string,
+  sender: string,
+  senderName: string | undefined,
+  content: string,
+  existingEntities?: ExistingEntityHint[]
+): Promise<EmailMemoryExtraction> {
+  // Build context about known entities
+  let knownEntitiesContext = '';
+  if (existingEntities && existingEntities.length > 0) {
+    const people = existingEntities.filter(e => e.type === 'person').slice(0, 10);
+    const companies = existingEntities.filter(e => e.type === 'company').slice(0, 5);
+
+    if (people.length > 0 || companies.length > 0) {
+      knownEntitiesContext = `
+KNOWN ENTITIES (match to these when applicable):
+People: ${people.map(p => p.name).join(', ')}
+Companies: ${companies.map(c => c.name).join(', ')}
+`;
+    }
+  }
+
+  const prompt = `You are extracting memorable information from an email for a personal knowledge management system.
+
+EMAIL:
+From: ${senderName || sender} <${sender}>
+Subject: ${subject}
+
+Content:
+${content.slice(0, 6000)}
+
+${knownEntitiesContext}
+
+CRITICAL: Extract SPECIFIC DATA, not vague summaries.
+
+For ANALYTICS/METRICS emails (Google Search Console, analytics reports, performance data):
+- Extract ACTUAL NUMBERS: clicks, impressions, CTR, positions, percentages
+- Extract TRENDS: "up X% from last month", "down Y clicks"
+- Extract TOP ITEMS: "Top page: /jobs with X clicks", "Best performer: X"
+- Example good fact: "jobs.rostr.cc got 1,234 clicks and 45,678 impressions in January (2.7% CTR)"
+- Example bad fact: "January search performance" (too vague - useless)
+
+For TRANSACTION emails (receipts, confirmations, orders):
+- Extract amounts, dates, order numbers, items purchased
+- Example: "Paid $49.99 to Spotify on Jan 15"
+
+For PERSONAL emails:
+- Extract commitments, deadlines, decisions, asks
+- Who said what, what was agreed upon
+
+Extract:
+
+1. **Entities** - People, companies, or projects with SPECIFIC facts about them
+
+2. **Facts** - SPECIFIC, DATA-RICH facts worth remembering:
+   - Always include numbers, percentages, dates when available
+   - "Clicks: 1,234" not "Got some clicks"
+   - "Meeting scheduled for Feb 10 at 2pm" not "Meeting upcoming"
+
+3. **Action Items** - ONLY tasks EXPLICITLY stated in the email
+   - Must be something the email ASKS you to do
+   - Good: "Please review the attached document", "Let me know by Friday"
+   - BAD: Navigation labels ("Full report", "Learn more", "View dashboard")
+   - BAD: Made-up tasks not in the email
+   - If unsure, return empty array - don't guess
+
+4. **Summary** - What this email tells us, with key numbers
+
+Output ONLY valid JSON:
+{
+  "entities": [{"name": "...", "type": "person|company|project", "facts": ["..."]}],
+  "facts": [{"content": "...", "category": "status|preference|relationship|context|milestone|metric", "entityName": "..."}],
+  "actionItems": [{"description": "...", "dueDate": "..."}],
+  "summary": "..."
+}
+
+JSON only, no explanation:`;
+
+  try {
+    const response = await generate(prompt, { temperature: 0.1, maxTokens: 2000 });
+
+    // Extract JSON from response
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.warn('[Ollama] No JSON found in email extraction response');
+      return getEmptyEmailExtraction(subject, senderName || sender);
+    }
+
+    // Clean up common JSON issues
+    let jsonStr = jsonMatch[0]
+      .replace(/,\s*\]/g, ']')
+      .replace(/,\s*\}/g, '}')
+      .replace(/[\x00-\x1F\x7F]/g, ' ')
+      .replace(/\n/g, ' ');
+
+    const parsed = JSON.parse(jsonStr) as EmailMemoryExtraction;
+
+    // Validate and return
+    return {
+      entities: (parsed.entities || []).filter(e => e.name && e.type),
+      facts: (parsed.facts || []).filter(f => f.content),
+      actionItems: parsed.actionItems || [],
+      summary: parsed.summary || `Email from ${senderName || sender}: ${subject}`,
+    };
+  } catch (error) {
+    console.error('[Ollama] Email memory extraction failed:', error);
+    return getEmptyEmailExtraction(subject, senderName || sender);
+  }
+}
+
+function getEmptyEmailExtraction(subject: string, sender: string): EmailMemoryExtraction {
+  return {
+    entities: [],
+    facts: [],
+    actionItems: [],
+    summary: `Email from ${sender}: ${subject}`,
+  };
 }

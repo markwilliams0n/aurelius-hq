@@ -1,30 +1,55 @@
-import { NextResponse } from 'next/server';
-import { readActivityLog, clearActivityLog } from '@/lib/memory/activity-log';
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/lib/db';
+import { activityLog } from '@/lib/db/schema';
+import { desc, eq } from 'drizzle-orm';
 
 export const runtime = 'nodejs';
 
 /**
- * GET /api/activity - Fetch activity log
+ * GET /api/activity - Fetch activity log from database
+ * Query params:
+ *   - eventType: filter by event type (e.g., "triage_action")
+ *   - limit: max number of entries (default 50)
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const log = await readActivityLog();
-    return NextResponse.json(log);
+    const { searchParams } = new URL(request.url);
+    const eventType = searchParams.get('eventType');
+    const limit = parseInt(searchParams.get('limit') || '50');
+
+    let query = db
+      .select()
+      .from(activityLog)
+      .orderBy(desc(activityLog.createdAt))
+      .limit(limit);
+
+    if (eventType) {
+      query = db
+        .select()
+        .from(activityLog)
+        .where(eq(activityLog.eventType, eventType as any))
+        .orderBy(desc(activityLog.createdAt))
+        .limit(limit);
+    }
+
+    const activities = await query;
+
+    return NextResponse.json({ activities });
   } catch (error) {
     console.error('Failed to read activity log:', error);
     return NextResponse.json(
-      { error: 'Failed to read activity log', entries: [] },
+      { error: 'Failed to read activity log', activities: [] },
       { status: 500 }
     );
   }
 }
 
 /**
- * DELETE /api/activity - Clear activity log
+ * DELETE /api/activity - Clear activity log (dangerous - probably don't use)
  */
 export async function DELETE() {
   try {
-    await clearActivityLog();
+    await db.delete(activityLog);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Failed to clear activity log:', error);

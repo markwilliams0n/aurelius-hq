@@ -7,7 +7,7 @@ Gmail integration for inbox-zero workflow. Syncs emails into triage, enables fas
 | Property | Value |
 |----------|-------|
 | Connector ID | `gmail` |
-| Status | In Progress |
+| Status | **Active** |
 | Authentication | Service Account (Google Workspace) |
 | Supports Reply | Yes (drafts initially, direct send via setting) |
 | Supports Archive | Yes (syncs back to Gmail) |
@@ -324,9 +324,8 @@ GMAIL_SYNC_DAYS=30               # How far back to sync on first run
 | File | Purpose |
 |------|---------|
 | `src/lib/gmail/client.ts` | Gmail API client (service account auth) |
-| `src/lib/gmail/sync.ts` | Sync logic (fetch, enrich, insert) |
+| `src/lib/gmail/sync.ts` | Sync logic (fetch, enrich, insert, phishing detection) |
 | `src/lib/gmail/actions.ts` | Archive, reply, spam, unsubscribe |
-| `src/lib/gmail/enrichment.ts` | AI enrichment, phishing detection |
 | `src/lib/gmail/types.ts` | TypeScript types |
 | `src/app/api/gmail/sync/route.ts` | Manual sync endpoint |
 | `src/app/api/gmail/reply/route.ts` | Reply/draft endpoint |
@@ -361,38 +360,33 @@ GMAIL_SYNC_DAYS=30               # How far back to sync on first run
 - To Action (defer to task)
 - View in Gmail
 
-## Implementation Phases
+## Implementation Status
 
-### Phase 1: Core Sync
+### Core Sync ✅
 - [x] Service account authentication
 - [x] Fetch unarchived emails
 - [x] Content mapping + deduplication
-- [ ] Basic enrichment (summary, priority)
 - [x] Insert to inbox_items
+- [x] Heartbeat integration (auto-sync)
 
-### Phase 2: Smart Features
-- [ ] Thread handling (collapse/expand)
-- [x] Smart sender tags
-- [x] Phishing detection
-- [ ] Intent + deadline detection
+### Smart Features ✅
+- [x] Smart sender tags (Internal, Direct, CC, Auto, Newsletter, Group, Suspicious)
+- [x] Phishing detection (brand impersonation, lookalike domains, urgency patterns)
 - [x] Gravatar avatars
+- [x] Thread deduplication
+- [ ] Thread collapse/expand in UI
+- [ ] Intent + deadline detection
 
-### Phase 3: Actions
-- [x] Archive (sync to Gmail)
+### Actions ✅
+- [x] Archive (bi-directional sync to Gmail)
 - [x] Reply (draft mode)
+- [x] Spam (sync to Gmail)
 - [x] Unsubscribe (URL extraction)
-- [x] Spam
 - [ ] Always Archive (rule creation)
 
-### Phase 4: AI Power Features
+### Future Enhancements
 - [ ] AI draft replies
 - [ ] Pre-vetting + suggested actions
 - [ ] Style guide integration
-- [ ] Learn from behavior
-- [ ] Batch operations
-
-### Phase 5: Polish
 - [ ] To Action (task integration)
-- [ ] Attachment preview/memory extraction
-- [ ] Direct send mode
-- [ ] Settings UI for style guide
+- [ ] Direct send mode (`GMAIL_ENABLE_SEND=true`)

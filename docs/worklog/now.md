@@ -6,47 +6,33 @@
 
 **2026-02-03 Night**
 
-Gmail Connector Implementation:
-- **Full Gmail connector** on `feature/gmail-connector` branch (14 commits)
-- **Core modules**:
-  - `src/lib/gmail/types.ts` - TypeScript types for Gmail data
-  - `src/lib/gmail/client.ts` - Gmail API with Service Account auth
-  - `src/lib/gmail/sync.ts` - Sync logic with smart sender analysis
-  - `src/lib/gmail/actions.ts` - Archive, spam, reply, unsubscribe
-- **API endpoints**:
-  - `POST/GET /api/gmail/sync` - Manual sync trigger
-  - `POST /api/gmail/reply` - Create reply drafts or send
-- **Smart features**:
-  - Sender tags: Internal, Direct, CC, Auto, Newsletter, Group, Suspicious
-  - Phishing detection: brand impersonation, lookalike domains, urgency patterns
-  - Gravatar avatars
-  - Thread deduplication
-- **Integrations**:
-  - Heartbeat syncs Gmail (Step 3)
-  - Triage archive/spam actions sync back to Gmail
-- **Test suite**: 36 tests covering sync, actions, phishing detection
-- **Docs**: Updated `docs/connectors/gmail.md`, `.env.example`
+Gmail Connector + Memory System Fixes:
+- **Gmail connector** complete with all core features:
+  - Service Account auth with domain-wide delegation
+  - Smart sender tags (Internal, Direct, CC, Auto, Newsletter, Suspicious)
+  - Phishing detection (brand impersonation, lookalike domains)
+  - Bi-directional sync (archive/spam sync back to Gmail)
+  - Reply support (drafts, with optional direct send)
+  - Heartbeat integration for auto-sync
+  - 36 tests covering sync, actions, phishing detection
 
-**2026-02-03 Early AM**
+- **Memory system fixes**:
+  - Heartbeat now processes pre-extracted content from daily notes
+  - Fixed over-aggressive redundancy detection (string-based instead of LLM)
+  - QMD search now indexes facts from summary.md
+  - Triage chat uses shared context builder (no more hallucinations)
 
-Smart Entity Resolution System (merged to main):
-- Multi-signal entity matching with weighted scoring
-- Partial name matching, cross-type protection
-- Batch/fact deduplication, location/term filtering
-- Comprehensive test suite (24 tests, 87.5% pass)
+- **UI fixes**:
+  - Triage cards scroll properly when tasks overflow
 
 ## In Progress
 
-On `feature/gmail-connector`:
-- Core implementation complete ✓
-- Tests passing ✓
-- Ready for merge to main
+Ready to merge `feature/gmail-connector` to main.
 
 ## Up Next
 
-- [ ] Merge `feature/gmail-connector` to main
 - [ ] Test Gmail sync with real inbox
-- [ ] Add UI components for Gmail-specific features
+- [ ] Add UI components for Gmail-specific features (thread expand/collapse)
 - [ ] Consider: Linear connector (similar pattern)
 
 ## Known Issues (Documented)

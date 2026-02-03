@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { inboxItems } from "@/lib/db/schema";
 import { eq, or } from "drizzle-orm";
 import { syncArchiveToGmail, syncSpamToGmail } from "@/lib/gmail/actions";
+import { logActivity } from "@/lib/activity";
 
 // Check if string is a valid UUID
 function isUUID(str: string): boolean {
@@ -66,21 +67,20 @@ export async function POST(
     updatedAt: new Date(),
   };
 
+  // Track background tasks for this action
+  const backgroundTasks: Promise<void>[] = [];
+
   switch (action) {
     case "archive":
       updates.status = "archived";
       updates.snoozedUntil = null;
-      // Sync to Gmail if this is a Gmail item
-      console.log(`[Triage] Archive action for item ${item.id}, connector: ${item.connector}`);
+      // Sync to Gmail in background (don't wait)
       if (item.connector === "gmail") {
-        console.log(`[Triage] Syncing archive to Gmail for ${item.id}...`);
-        try {
-          await syncArchiveToGmail(item.id);
-          console.log(`[Triage] Gmail sync complete for ${item.id}`);
-        } catch (error) {
-          console.error("[Triage] Failed to sync archive to Gmail:", error);
-          // Continue with local archive even if Gmail sync fails
-        }
+        backgroundTasks.push(
+          syncArchiveToGmail(item.id).catch((error) => {
+            console.error("[Triage] Background Gmail archive failed:", error);
+          })
+        );
       }
       break;
 
@@ -124,14 +124,13 @@ export async function POST(
     case "spam":
       updates.status = "archived";
       updates.snoozedUntil = null;
-      // Mark as spam in Gmail if this is a Gmail item
+      // Mark as spam in Gmail in background (don't wait)
       if (item.connector === "gmail") {
-        try {
-          await syncSpamToGmail(item.id);
-        } catch (error) {
-          console.error("[Triage] Failed to mark as spam in Gmail:", error);
-          // Continue with local archive even if Gmail sync fails
-        }
+        backgroundTasks.push(
+          syncSpamToGmail(item.id).catch((error) => {
+            console.error("[Triage] Background Gmail spam failed:", error);
+          })
+        );
       }
       break;
 
@@ -147,12 +146,49 @@ export async function POST(
       );
   }
 
-  // Update in database
+  // Update in database - this we await since we return the item
   const [updatedItem] = await db
     .update(inboxItems)
     .set(updates)
     .where(eq(inboxItems.id, item.id))
     .returning();
+
+  // Log action to activity log in background (don't wait)
+  const actionDescriptions: Record<string, string> = {
+    archive: `Archived: ${item.subject}`,
+    snooze: `Snoozed: ${item.subject}`,
+    spam: `Marked as spam: ${item.subject}`,
+    restore: `Restored: ${item.subject}`,
+    flag: `Flagged: ${item.subject}`,
+    actioned: `Marked done: ${item.subject}`,
+  };
+
+  backgroundTasks.push(
+    logActivity({
+      eventType: "triage_action",
+      actor: "user",
+      description: actionDescriptions[action] || `${action}: ${item.subject}`,
+      metadata: {
+        action,
+        itemId: item.externalId || item.id,
+        connector: item.connector,
+        subject: item.subject,
+        sender: item.senderName || item.sender,
+        previousStatus: item.status,
+        newStatus: updates.status,
+        ...(action === "snooze" && { snoozeUntil: updates.snoozedUntil }),
+      },
+    }).catch((error) => {
+      console.error("[Triage] Background activity logging failed:", error);
+    })
+  );
+
+  // Fire all background tasks without waiting
+  if (backgroundTasks.length > 0) {
+    Promise.all(backgroundTasks).catch(() => {
+      // Errors already logged in individual catch blocks
+    });
+  }
 
   return NextResponse.json({
     success: true,

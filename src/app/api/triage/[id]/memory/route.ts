@@ -1,12 +1,25 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { inboxItems } from "@/lib/db/schema";
+import { inboxItems, activityLog as activityLogTable } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { upsertEntity } from "@/lib/memory/entities";
-import { createFact } from "@/lib/memory/facts";
 import { appendToDailyNote } from "@/lib/memory/daily-notes";
+import { extractEmailMemory, isOllamaAvailable } from "@/lib/memory/ollama";
+import { listEntities } from "@/lib/memory/entities";
+import { logActivity } from "@/lib/activity";
 
-// POST /api/triage/[id]/memory - Extract memory from triage item
+/**
+ * POST /api/triage/[id]/memory - Save triage item to daily notes for memory processing
+ *
+ * ARCHITECTURE: This endpoint saves rich content to daily notes.
+ * The heartbeat process then extracts entities and facts from daily notes.
+ * This centralizes memory processing in heartbeat for consistency.
+ *
+ * Flow:
+ * 1. User triggers "save to memory" on a triage item
+ * 2. This endpoint extracts key info using Ollama and saves to daily notes
+ * 3. Heartbeat later processes daily notes → creates entities/facts in life/
+ * 4. QMD indexes life/ for search
+ */
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -26,306 +39,197 @@ export async function POST(
     return NextResponse.json({ error: "Item not found" }, { status: 404 });
   }
 
-  try {
-    // Extract and save facts to the real memory system
-    const savedFacts = await extractAndSaveTriageMemory(item);
-
-    return NextResponse.json({
-      success: true,
+  // Log the action immediately (queued state)
+  const activityEntry = await logActivity({
+    eventType: "triage_action",
+    actor: "user",
+    description: `Saving memory from: ${item.subject}`,
+    metadata: {
+      action: "memory",
       itemId: id,
-      facts: savedFacts,
-      message: `Extracted ${savedFacts.length} facts from this item`,
-    });
-  } catch (error) {
-    console.error("Failed to extract memory:", error);
+      connector: item.connector,
+      subject: item.subject,
+      sender: item.senderName || item.sender,
+      status: "processing",
+    },
+  });
 
-    // Fall back to simulated extraction if database isn't available
-    const simulatedFacts = simulateFactExtraction(item);
-    return NextResponse.json({
-      success: true,
-      itemId: id,
-      facts: simulatedFacts,
-      message: `Extracted ${simulatedFacts.length} facts (simulated)`,
-      simulated: true,
-    });
-  }
+  // Process in background (don't await)
+  processMemoryInBackground(item, activityEntry.id).catch((error) => {
+    console.error("[Memory] Background processing failed:", error);
+  });
+
+  // Return immediately
+  return NextResponse.json({
+    success: true,
+    itemId: id,
+    status: "queued",
+    activityId: activityEntry.id,
+    message: "Memory extraction started in background",
+  });
 }
 
-// Extract facts from triage item and save to memory system
-async function extractAndSaveTriageMemory(item: any): Promise<
-  Array<{
-    id: string;
-    content: string;
-    category: string;
-    entityName: string;
-    entityType: string;
-  }>
-> {
-  const savedFacts: Array<{
-    id: string;
-    content: string;
-    category: string;
-    entityName: string;
-    entityType: string;
-  }> = [];
+// Background processing - extract with Ollama and save to daily notes
+async function processMemoryInBackground(item: any, activityId: string) {
+  const startTime = Date.now();
 
-  // 1. Create/update sender entity
-  if (item.senderName || item.sender) {
-    const senderName = item.senderName || item.sender;
-    const entityType = determineEntityType(item);
-
-    try {
-      const entity = await upsertEntity(senderName, entityType, {
-        email: item.sender,
-        connector: item.connector,
-        lastContactedAt: new Date().toISOString(),
-      });
-
-      // Save fact about the contact
-      const factContent = `${senderName} contacted us about: "${item.subject}"`;
-      const fact = await createFact(
-        entity.id,
-        factContent,
-        "context",
-        "chat", // source type - using "chat" for triage
-        item.externalId
-      );
-
-      savedFacts.push({
-        id: fact.id,
-        content: factContent,
-        category: "context",
-        entityName: senderName,
-        entityType,
-      });
-
-      // If high priority, save that as a status fact
-      if (item.priority === "urgent" || item.priority === "high") {
-        const priorityFact = await createFact(
-          entity.id,
-          `High priority item from ${senderName}: "${item.subject}" requires attention`,
-          "status",
-          "chat",
-          item.externalId
-        );
-
-        savedFacts.push({
-          id: priorityFact.id,
-          content: priorityFact.content,
-          category: "status",
-          entityName: senderName,
-          entityType,
-        });
-      }
-    } catch (error) {
-      console.error("Failed to save sender entity:", error);
-    }
-  }
-
-  // 2. Extract company from email domain
-  if (item.connector === "gmail" && item.sender?.includes("@")) {
-    const domain = item.sender.split("@")[1];
-    if (domain && !isPersonalDomain(domain)) {
-      const companyName = domainToCompanyName(domain);
-      const senderName = item.senderName || item.sender;
-
-      try {
-        const companyEntity = await upsertEntity(companyName, "company", {
-          domain,
-        });
-
-        // Create relationship fact
-        const relationshipFact = await createFact(
-          companyEntity.id,
-          `${senderName} works at ${companyName}`,
-          "relationship",
-          "chat",
-          item.externalId
-        );
-
-        savedFacts.push({
-          id: relationshipFact.id,
-          content: relationshipFact.content,
-          category: "relationship",
-          entityName: companyName,
-          entityType: "company",
-        });
-      } catch (error) {
-        console.error("Failed to save company entity:", error);
-      }
-    }
-  }
-
-  // 3. For Linear items, extract project context
-  if (item.connector === "linear" && item.sender) {
-    try {
-      const projectEntity = await upsertEntity(item.sender, "project", {
-        source: "linear",
-      });
-
-      const projectFact = await createFact(
-        projectEntity.id,
-        `Issue "${item.subject}" in project ${item.sender}`,
-        "context",
-        "chat",
-        item.externalId
-      );
-
-      savedFacts.push({
-        id: projectFact.id,
-        content: projectFact.content,
-        category: "context",
-        entityName: item.sender,
-        entityType: "project",
-      });
-    } catch (error) {
-      console.error("Failed to save project entity:", error);
-    }
-  }
-
-  // 4. Save to daily notes for context
   try {
-    const noteEntry = formatTriageNoteEntry(item, savedFacts);
-    await appendToDailyNote(noteEntry);
+    const result = await extractAndSaveToDailyNotes(item);
+    const duration = Date.now() - startTime;
+
+    // Update activity log with success
+    await db
+      .update(activityLogTable)
+      .set({
+        description: `Saved memory from: ${item.subject}`,
+        metadata: {
+          action: "memory",
+          itemId: item.externalId,
+          connector: item.connector,
+          subject: item.subject,
+          sender: item.senderName || item.sender,
+          status: "completed",
+          factsCount: result.factsExtracted,
+          facts: result.facts.slice(0, 5),
+          durationMs: duration,
+        },
+      })
+      .where(eq(activityLogTable.id, activityId));
+
+    console.log(`[Memory] Saved to daily notes in ${duration}ms (${result.factsExtracted} facts extracted)`);
   } catch (error) {
-    console.error("Failed to save to daily notes:", error);
+    const duration = Date.now() - startTime;
+
+    // Update activity log with error
+    await db
+      .update(activityLogTable)
+      .set({
+        description: `Failed to extract memory from: ${item.subject}`,
+        metadata: {
+          action: "memory",
+          itemId: item.externalId,
+          connector: item.connector,
+          subject: item.subject,
+          sender: item.senderName || item.sender,
+          status: "failed",
+          error: String(error),
+          durationMs: duration,
+        },
+      })
+      .where(eq(activityLogTable.id, activityId));
+
+    console.error("[Memory] Background extraction failed:", error);
   }
-
-  return savedFacts;
 }
 
-// Determine entity type based on connector
-function determineEntityType(item: any): "person" | "project" | "team" {
-  if (item.connector === "linear") {
-    return "project";
-  }
-  if (item.connector === "slack" && item.sender?.startsWith("#")) {
-    return "team";
-  }
-  return "person";
-}
-
-// Check if domain is personal
-function isPersonalDomain(domain: string): boolean {
-  const personalDomains = [
-    "gmail.com",
-    "yahoo.com",
-    "hotmail.com",
-    "outlook.com",
-    "icloud.com",
-    "protonmail.com",
-    "aol.com",
-    "live.com",
-    "msn.com",
-  ];
-  return personalDomains.includes(domain.toLowerCase());
-}
-
-// Convert domain to company name
-function domainToCompanyName(domain: string): string {
-  return domain
-    .replace(/\.(com|io|co|net|org|dev|app|ai)$/i, "")
-    .split(".")[0]
-    .split("-")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-// Format entry for daily notes - include meaningful content for context
-function formatTriageNoteEntry(
-  item: any,
-  savedFacts: Array<{ content: string; category: string; entityName: string }>
-): string {
+// Extract from triage item and save to daily notes
+// Heartbeat will later process daily notes into entities/facts
+async function extractAndSaveToDailyNotes(item: any): Promise<{
+  factsExtracted: number;
+  facts: string[];
+}> {
   const senderName = item.senderName || item.sender;
   const priority = item.priority === "urgent" || item.priority === "high"
     ? ` (${item.priority.toUpperCase()})`
     : "";
 
+  // Get email content
+  let emailContent = item.content || "";
+  if (!emailContent && item.rawPayload?.bodyHtml) {
+    emailContent = (item.rawPayload.bodyHtml as string)
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  // Try Ollama extraction for rich content
+  const ollamaAvailable = await isOllamaAvailable();
+  let extractedFacts: string[] = [];
+  let summary = "";
+  let actionItems: Array<{ description: string; dueDate?: string }> = [];
+
+  if (ollamaAvailable && emailContent) {
+    try {
+      // Get existing entities for context
+      const existingEntities = await listEntities(undefined, 30);
+      const entityHints = existingEntities.map(e => ({
+        name: e.name,
+        type: e.type as 'person' | 'company' | 'project',
+        recentFacts: [],
+      }));
+
+      const extraction = await extractEmailMemory(
+        item.subject,
+        item.sender,
+        item.senderName,
+        emailContent,
+        entityHints
+      );
+
+      summary = extraction.summary;
+      actionItems = extraction.actionItems;
+
+      // Collect all facts from extraction
+      for (const entity of extraction.entities) {
+        extractedFacts.push(...entity.facts);
+      }
+      for (const fact of extraction.facts) {
+        extractedFacts.push(fact.content);
+      }
+    } catch (error) {
+      console.error("[Memory] Ollama extraction failed:", error);
+    }
+  }
+
+  // Build daily note entry
   let entry = `**${senderName}** via ${item.connector}${priority}: "${item.subject}"`;
 
-  // Add a brief content preview if available
-  if (item.content) {
-    const preview = item.content.slice(0, 200).trim();
-    if (preview.length < item.content.length) {
-      entry += `\n\n> ${preview}...`;
-    } else {
-      entry += `\n\n> ${preview}`;
+  // Add summary
+  if (summary) {
+    entry += `\n\n> ${summary}`;
+  }
+
+  // Add action items
+  if (actionItems.length > 0) {
+    entry += "\n\n**Action Items:**";
+    for (const action of actionItems) {
+      entry += `\n- [ ] ${action.description}${action.dueDate ? ` (due: ${action.dueDate})` : ''}`;
     }
   }
 
-  // Add extracted facts as bullet points for context
-  if (savedFacts.length > 0) {
-    entry += "\n\n**Extracted:**";
-    for (const fact of savedFacts.slice(0, 5)) { // Limit to 5 facts
-      entry += `\n- ${fact.content}`;
+  // Add extracted facts
+  if (extractedFacts.length > 0) {
+    entry += "\n\n**Key Facts:**";
+    for (const fact of extractedFacts.slice(0, 10)) {
+      entry += `\n- ${fact}`;
     }
-    if (savedFacts.length > 5) {
-      entry += `\n- _(+${savedFacts.length - 5} more)_`;
-    }
-  }
-
-  return entry;
-}
-
-// Fallback simulation when database isn't available
-function simulateFactExtraction(item: any): Array<{
-  id: string;
-  content: string;
-  category: string;
-  entityName: string;
-  entityType: string;
-}> {
-  const facts: Array<{
-    id: string;
-    content: string;
-    category: string;
-    entityName: string;
-    entityType: string;
-  }> = [];
-
-  // Extract sender-related facts
-  if (item.senderName) {
-    facts.push({
-      id: crypto.randomUUID(),
-      content: `${item.senderName} contacted us about: ${item.subject}`,
-      category: "context",
-      entityName: item.senderName,
-      entityType: "person",
-    });
-
-    if (item.connector === "gmail" && item.sender) {
-      const domain = item.sender.split("@")[1];
-      if (domain && !isPersonalDomain(domain)) {
-        facts.push({
-          id: crypto.randomUUID(),
-          content: `${item.senderName} works at ${domainToCompanyName(domain)}`,
-          category: "relationship",
-          entityName: item.senderName,
-          entityType: "person",
-        });
-      }
+    if (extractedFacts.length > 10) {
+      entry += `\n- _(+${extractedFacts.length - 10} more)_`;
     }
   }
 
-  if (item.priority === "urgent" || item.priority === "high") {
-    facts.push({
-      id: crypto.randomUUID(),
-      content: `High priority item from ${item.senderName || item.sender}: "${item.subject}"`,
-      category: "status",
-      entityName: item.senderName || item.sender,
-      entityType: "person",
-    });
+  // Add content preview for heartbeat to process later
+  if (emailContent && emailContent.length > 100) {
+    const cleanContent = emailContent
+      .replace(/https?:\/\/\S+/g, '') // Remove URLs
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 1000);
+
+    entry += `\n\n**Content:**\n${cleanContent}${emailContent.length > 1000 ? '...' : ''}`;
   }
 
-  if (item.connector === "linear") {
-    facts.push({
-      id: crypto.randomUUID(),
-      content: `Issue "${item.subject}" in project ${item.sender}`,
-      category: "context",
-      entityName: item.sender,
-      entityType: "project",
-    });
-  }
+  // Save to daily notes
+  await appendToDailyNote(entry);
 
-  return facts;
+  return {
+    factsExtracted: extractedFacts.length,
+    facts: extractedFacts,
+  };
 }
