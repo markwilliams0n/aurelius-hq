@@ -70,5 +70,17 @@
     "id": "chrif-growth-1770081318011",
     "lastAccessed": "2026-02-03T01:52:46.197Z",
     "accessCount": 1
+  },
+  {
+    "fact": "AI support is a priority for Vivian Donahue\"s onboarding",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chrif-growth-1770129019918",
+    "lastAccessed": "2026-02-03T14:30:19.918Z",
+    "accessCount": 0
   }
 ]

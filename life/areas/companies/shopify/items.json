@@ -46,5 +46,17 @@
     "id": "shopify-1770060348636",
     "lastAccessed": "2026-02-02T19:25:48.636Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Elena Vasquez opened pilot talks",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "shopify-1770093925357",
+    "lastAccessed": "2026-02-03T04:45:25.357Z",
+    "accessCount": 0
   }
 ]

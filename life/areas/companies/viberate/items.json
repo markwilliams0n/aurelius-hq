@@ -1,1 +1,14 @@
-[]
+[
+  {
+    "fact": "Mentioned in Priya Mehta\"s evaluation",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "viberate-1770107412564",
+    "lastAccessed": "2026-02-03T08:30:12.564Z",
+    "accessCount": 0
+  }
+]

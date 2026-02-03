@@ -1,0 +1,50 @@
+[
+  {
+    "fact": "Locked: $45k",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-advertising-1770108313008-0",
+    "lastAccessed": "2026-02-03T08:45:13.008Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "6-mo NI",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-advertising-1770108313008-1",
+    "lastAccessed": "2026-02-03T08:45:13.008Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "$45k",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-advertising-1770123614668",
+    "lastAccessed": "2026-02-03T13:00:14.668Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "6-mo NI...",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-advertising-1770123614669",
+    "lastAccessed": "2026-02-03T13:00:14.669Z",
+    "accessCount": 0
+  }
+]

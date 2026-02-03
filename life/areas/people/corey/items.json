@@ -94,5 +94,17 @@
     "id": "corey-1770077729215",
     "lastAccessed": "2026-02-03T00:15:29.215Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Is putting together a custom deck for Priya\"s team",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "corey-1770106512792",
+    "lastAccessed": "2026-02-03T08:15:12.792Z",
+    "accessCount": 0
   }
 ]

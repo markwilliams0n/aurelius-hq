@@ -22,5 +22,41 @@
     "id": "ticketing-data-extraction-capabilities-1770081318019-1",
     "lastAccessed": "2026-02-03T01:52:46.197Z",
     "accessCount": 1
+  },
+  {
+    "fact": "ROSTR is building",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "ticketing-data-extraction-capabilities-1770103814371",
+    "lastAccessed": "2026-02-03T07:30:14.371Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "ROSTR team to validate ticketing data extraction capabilities",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "ticketing-data-extraction-capabilities-1770125420388",
+    "lastAccessed": "2026-02-03T13:30:20.388Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Potential custom project and ticketing data extraction capabilities with StubHub",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "ticketing-data-extraction-capabilities-1770129019959",
+    "lastAccessed": "2026-02-03T14:30:19.959Z",
+    "accessCount": 0
   }
 ]

@@ -1,1 +1,14 @@
-[]
+[
+  {
+    "fact": "Noted - your friend works at ACME Industries in New York",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "aurelius-1770107424593",
+    "lastAccessed": "2026-02-03T08:30:24.593Z",
+    "accessCount": 0
+  }
+]

@@ -94,5 +94,77 @@
     "id": "viberate-1770087613396",
     "lastAccessed": "2026-02-03T03:00:13.396Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Chartmetric comparison",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "viberate-1770093914894",
+    "lastAccessed": "2026-02-03T04:45:14.894Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Mentioned in conversation about ROSTR Pro",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "viberate-1770095718257",
+    "lastAccessed": "2026-02-03T05:15:18.257Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Mentioned by Danny Feldman as alternative to ROSTR Pro",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "viberate-1770097517541",
+    "lastAccessed": "2026-02-03T05:45:17.541Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Comparison to ROSTR Pro by Priya Mehta",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "viberate-1770109214901",
+    "lastAccessed": "2026-02-03T09:00:14.901Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Competitor to ROSTR Pro",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "viberate-1770111012178",
+    "lastAccessed": "2026-02-03T09:30:12.178Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Mentioned by Danny Feldman as a comparison for ROSTR Pro",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "viberate-1770118213955",
+    "lastAccessed": "2026-02-03T11:30:13.955Z",
+    "accessCount": 0
   }
 ]

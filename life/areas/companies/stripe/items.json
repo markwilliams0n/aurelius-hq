@@ -35,5 +35,17 @@
     "id": "stripe-1769993916201",
     "lastAccessed": "2026-02-02T00:58:36.201Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Marcus Webb joined in January",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "stripe-1770093925351",
+    "lastAccessed": "2026-02-03T04:45:25.351Z",
+    "accessCount": 0
   }
 ]

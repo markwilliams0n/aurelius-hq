@@ -262,15 +262,22 @@ export async function fetchUnarchived(options?: {
  * Archive an email in Gmail
  */
 export async function archiveEmail(messageId: string): Promise<void> {
+  console.log(`[Gmail] Archiving message ${messageId}...`);
   const gmail = await getGmailClient();
 
-  await gmail.users.messages.modify({
-    userId: 'me',
-    id: messageId,
-    requestBody: {
-      removeLabelIds: ['INBOX'],
-    },
-  });
+  try {
+    const result = await gmail.users.messages.modify({
+      userId: 'me',
+      id: messageId,
+      requestBody: {
+        removeLabelIds: ['INBOX'],
+      },
+    });
+    console.log(`[Gmail] Archive result for ${messageId}:`, result.status);
+  } catch (error: any) {
+    console.error(`[Gmail] Archive API error for ${messageId}:`, error?.message || error);
+    throw error;
+  }
 }
 
 /**

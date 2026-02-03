@@ -10,5 +10,17 @@
     "id": "linear-1770089306134",
     "lastAccessed": "2026-02-03T03:28:26.134Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Santiago Brusco worked on",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "linear-1770099319403",
+    "lastAccessed": "2026-02-03T06:15:19.403Z",
+    "accessCount": 0
   }
 ]

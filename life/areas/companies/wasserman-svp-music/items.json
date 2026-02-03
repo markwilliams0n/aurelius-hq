@@ -10,5 +10,17 @@
     "id": "wasserman-svp-music-1770060340697-0",
     "lastAccessed": "2026-02-02T19:25:40.697Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Rachel Thornton works at",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "wasserman-svp-music-1770106512879",
+    "lastAccessed": "2026-02-03T08:15:12.879Z",
+    "accessCount": 0
   }
 ]

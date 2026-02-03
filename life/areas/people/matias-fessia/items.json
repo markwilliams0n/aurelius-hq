@@ -262,5 +262,101 @@
     "id": "matias-fessia-1770089408783",
     "lastAccessed": "2026-02-03T03:30:08.783Z",
     "accessCount": 0
+  },
+  {
+    "fact": "ROSTR team member",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "matias-fessia-1770093914815",
+    "lastAccessed": "2026-02-03T04:45:14.815Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "artist-profile rewrite",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "matias-fessia-1770093925411",
+    "lastAccessed": "2026-02-03T04:45:25.411Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Rebuilding artist profile components",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "matias-fessia-1770099319476",
+    "lastAccessed": "2026-02-03T06:15:19.476Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Works at ROSTR",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "matias-fessia-1770106512816",
+    "lastAccessed": "2026-02-03T08:15:12.816Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Is in Córdoba",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "matias-fessia-1770107412520",
+    "lastAccessed": "2026-02-03T08:30:12.520Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "ROSTR engineer",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "matias-fessia-1770111012151",
+    "lastAccessed": "2026-02-03T09:30:12.151Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "has been rebuilding the artist profile components",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "matias-fessia-1770112820595",
+    "lastAccessed": "2026-02-03T10:00:20.595Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Is an engineer at ROSTR",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "matias-fessia-1770126312718",
+    "lastAccessed": "2026-02-03T13:45:12.718Z",
+    "accessCount": 0
   }
 ]

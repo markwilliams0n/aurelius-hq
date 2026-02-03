@@ -58,9 +58,12 @@ export async function POST(
       updates.status = "archived";
       updates.snoozedUntil = null;
       // Sync to Gmail if this is a Gmail item
+      console.log(`[Triage] Archive action for item ${item.id}, connector: ${item.connector}`);
       if (item.connector === "gmail") {
+        console.log(`[Triage] Syncing archive to Gmail for ${item.id}...`);
         try {
           await syncArchiveToGmail(item.id);
+          console.log(`[Triage] Gmail sync complete for ${item.id}`);
         } catch (error) {
           console.error("[Triage] Failed to sync archive to Gmail:", error);
           // Continue with local archive even if Gmail sync fails
