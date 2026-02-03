@@ -119,5 +119,53 @@
     "id": "marcus-webb-1770060486471",
     "lastAccessed": "2026-02-02T19:28:06.471Z",
     "accessCount": 0
+  },
+  {
+    "fact": "January hire",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-webb-1770079526728",
+    "lastAccessed": "2026-02-03T00:45:26.728Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Core API redesign, joined Meridian Labs from Stripe in January",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-webb-1770083119279",
+    "lastAccessed": "2026-02-03T01:45:19.279Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Core API redesign, ex-Stripe, Jan hire",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-webb-1770086722988",
+    "lastAccessed": "2026-02-03T02:45:22.988Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Core API redesign, joined Stripe in January",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-webb-1770089418460",
+    "lastAccessed": "2026-02-03T03:30:18.460Z",
+    "accessCount": 0
   }
 ]

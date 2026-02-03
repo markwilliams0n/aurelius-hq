@@ -1,0 +1,14 @@
+[
+  {
+    "fact": "Has inconsistencies",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "polestar-data-1770079513590-0",
+    "lastAccessed": "2026-02-03T00:45:13.590Z",
+    "accessCount": 0
+  }
+]

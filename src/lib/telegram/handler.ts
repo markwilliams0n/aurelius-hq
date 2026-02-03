@@ -4,11 +4,9 @@
  * Full integration with Aurelius HQ - same AI, memory, tools, and conversation storage
  */
 
-import { chatStreamWithTools, DEFAULT_MODEL, type Message } from '@/lib/ai/client';
-import { buildChatPrompt } from '@/lib/ai/prompts';
-import { buildMemoryContext } from '@/lib/memory/search';
+import { chatStreamWithTools, type Message } from '@/lib/ai/client';
+import { buildAgentContext } from '@/lib/ai/context';
 import { extractAndSaveMemories, containsMemorableContent } from '@/lib/memory/extraction';
-import { getConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import { conversations } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
@@ -169,25 +167,15 @@ async function handleChatMessage(message: TelegramMessage): Promise<void> {
       content: m.content,
     }));
 
-    // Build memory context using QMD search (same as web chat)
-    const memoryContext = await buildMemoryContext(userText);
-
-    // Get soul config
-    const soulConfig = await getConfig('soul');
-
-    // Build system prompt (same as web chat)
-    const systemPrompt = buildChatPrompt(
-      memoryContext,
-      soulConfig?.content || null,
-      DEFAULT_MODEL
-    );
-
-    // Add Telegram-specific context to the prompt
-    const telegramPrompt = systemPrompt + `
-
-## Telegram Context
+    // Build agent context with Telegram-specific additions
+    const telegramContext = `## Telegram Context
 You're responding via Telegram. Keep responses concise and mobile-friendly.
 The user is ${message.from?.first_name || 'a user'}${message.from?.username ? ` (@${message.from.username})` : ''}.`;
+
+    const { systemPrompt: telegramPrompt } = await buildAgentContext({
+      query: userText,
+      additionalContext: telegramContext,
+    });
 
     // Build messages for AI
     const aiMessages: Message[] = [...aiHistory, { role: 'user', content: userText }];

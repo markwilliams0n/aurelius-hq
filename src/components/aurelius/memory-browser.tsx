@@ -23,6 +23,7 @@ import {
   ChevronRight,
   ArrowLeft,
   FolderKanban,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -65,6 +66,8 @@ type SearchResult = {
   score: number;
   collection: string;
   entityType: string;
+  entityName: string;
+  category: string;
 };
 
 const typeIcons: Record<string, React.ReactNode> = {
@@ -92,6 +95,7 @@ export function MemoryBrowser({
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [deepSearch, setDeepSearch] = useState(false);
   const [expandedEntity, setExpandedEntity] = useState<string | null>(null);
   const [currentPath, setCurrentPath] = useState<string | null>(null);
   const [browseData, setBrowseData] = useState<{
@@ -115,7 +119,8 @@ export function MemoryBrowser({
 
     setIsSearching(true);
     try {
-      const res = await fetch(`/api/memory/search?q=${encodeURIComponent(search)}`);
+      const searchType = deepSearch ? 'hybrid' : 'keyword';
+      const res = await fetch(`/api/memory/search?q=${encodeURIComponent(search)}&type=${searchType}`);
       const data = await res.json();
       setSearchResults(data.results || []);
       setActiveTab("search");
@@ -135,6 +140,7 @@ export function MemoryBrowser({
       const data = await res.json();
       setBrowseData(data);
       setCurrentPath(path);
+      setActiveTab("browse"); // Switch to browse tab when navigating
     } catch (error) {
       console.error("Browse error:", error);
       toast.error("Could not load path");
@@ -183,13 +189,25 @@ export function MemoryBrowser({
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search memory with QMD..."
+            placeholder={deepSearch ? "Semantic search..." : "Search memory..."}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
             className="pl-10"
           />
         </div>
+        <button
+          onClick={() => setDeepSearch(!deepSearch)}
+          className={`px-3 rounded-md border transition-colors flex items-center gap-1.5 text-sm ${
+            deepSearch
+              ? "bg-gold/20 border-gold/40 text-gold"
+              : "bg-secondary/50 border-border text-muted-foreground hover:text-foreground hover:border-gold/30"
+          }`}
+          title={deepSearch ? "Deep search: semantic + reranking (slower)" : "Quick search: keyword matching (fast)"}
+        >
+          <Sparkles className="w-4 h-4" />
+          <span className="hidden sm:inline">{deepSearch ? "Deep" : "Quick"}</span>
+        </button>
         <Button onClick={handleSearch} disabled={isSearching}>
           {isSearching ? "..." : "Search"}
         </Button>
@@ -269,7 +287,7 @@ export function MemoryBrowser({
       )}
 
       {activeTab === "search" && (
-        <SearchResultsView results={searchResults} />
+        <SearchResultsView results={searchResults} onNavigate={browseTo} />
       )}
     </div>
   );
@@ -540,30 +558,171 @@ function DailyNotesView({ recentNotes }: { recentNotes: string[] }) {
   );
 }
 
-function SearchResultsView({ results }: { results: SearchResult[] }) {
+// Type badge colors
+const typeBadgeStyles: Record<string, string> = {
+  person: "bg-blue-500/20 text-blue-400 border-blue-500/40",
+  company: "bg-purple-500/20 text-purple-400 border-purple-500/40",
+  project: "bg-green-500/20 text-green-400 border-green-500/40",
+  resource: "bg-orange-500/20 text-orange-400 border-orange-500/40",
+  "daily-note": "bg-gold/20 text-gold border-gold/40",
+  unknown: "bg-gray-500/20 text-gray-400 border-gray-500/40",
+};
+
+// Relevance indicator (score to visual)
+function RelevanceIndicator({ score }: { score: number }) {
+  // Score typically ranges 0-1, higher is better
+  const percentage = Math.min(100, Math.round(score * 100));
+  const bars = Math.ceil((percentage / 100) * 4); // 1-4 bars
+
+  return (
+    <div className="flex gap-0.5 items-center" title={`Relevance: ${percentage}%`}>
+      {[1, 2, 3, 4].map((i) => (
+        <div
+          key={i}
+          className={`w-1 rounded-full transition-all ${
+            i <= bars ? "bg-gold h-3" : "bg-border h-2"
+          }`}
+        />
+      ))}
+    </div>
+  );
+}
+
+// Type filter options
+const typeFilters = [
+  { value: "all", label: "All", icon: null },
+  { value: "person", label: "People", icon: <User className="w-3 h-3" /> },
+  { value: "company", label: "Companies", icon: <Building className="w-3 h-3" /> },
+  { value: "project", label: "Projects", icon: <Briefcase className="w-3 h-3" /> },
+  { value: "resource", label: "Resources", icon: <BookOpen className="w-3 h-3" /> },
+  { value: "daily-note", label: "Notes", icon: <Calendar className="w-3 h-3" /> },
+];
+
+function SearchResultsView({
+  results,
+  onNavigate,
+}: {
+  results: SearchResult[];
+  onNavigate: (path: string) => void;
+}) {
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+
+  // Filter results by type
+  const filteredResults = typeFilter === "all"
+    ? results
+    : results.filter(r => r.entityType === typeFilter);
+
+  // Count results by type for filter badges
+  const typeCounts = results.reduce((acc, r) => {
+    acc[r.entityType] = (acc[r.entityType] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  // Convert search result path to browse path
+  const getNavigatePath = (result: SearchResult): string => {
+    // Remove leading "life/" and file extensions
+    let path = result.path
+      .replace(/^life\//, "")
+      .replace(/\/summary\.md$/, "")
+      .replace(/\/items\.json$/, "")
+      .replace(/\.md$/, "")
+      .replace(/\.json$/, "");
+
+    // For daily notes, use the daily browse path
+    if (result.entityType === "daily-note") {
+      const dateMatch = result.path.match(/(\d{4}-\d{2}-\d{2})/);
+      if (dateMatch) {
+        return `daily/${dateMatch[1]}.md`;
+      }
+    }
+
+    return path;
+  };
+
   return (
     <div className="space-y-4">
-      {results.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          No results found
-        </div>
-      ) : (
-        results.map((result, i) => (
-          <div
-            key={i}
-            className="p-4 rounded-lg bg-secondary/50 border border-border"
-          >
-            <div className="flex items-center gap-2 mb-2">
-              {typeIcons[result.entityType] || <Hash className="w-4 h-4" />}
-              <span className="text-sm text-muted-foreground">{result.path}</span>
-              <span className="text-xs text-gold ml-auto">
-                Score: {result.score.toFixed(2)}
+      {/* Type filter */}
+      <div className="flex gap-2 flex-wrap">
+        {typeFilters.map((filter) => {
+          const count = filter.value === "all" ? results.length : (typeCounts[filter.value] || 0);
+          const isActive = typeFilter === filter.value;
+
+          // Don't show filter if no results of that type
+          if (filter.value !== "all" && count === 0) return null;
+
+          return (
+            <button
+              key={filter.value}
+              onClick={() => setTypeFilter(filter.value)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                isActive
+                  ? "bg-gold/20 text-gold border border-gold/40"
+                  : "bg-secondary/50 text-muted-foreground border border-border hover:border-gold/30"
+              }`}
+            >
+              {filter.icon}
+              {filter.label}
+              <span className={`ml-1 ${isActive ? "text-gold" : "text-muted-foreground"}`}>
+                {count}
               </span>
-            </div>
-            <p className="text-sm">{result.content}</p>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Results */}
+      <div className="space-y-3">
+        {filteredResults.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            {results.length === 0 ? "No results found" : "No results for this filter"}
           </div>
-        ))
-      )}
+        ) : (
+          filteredResults.map((result, i) => (
+            <button
+              key={i}
+              onClick={() => onNavigate(getNavigatePath(result))}
+              className="w-full text-left p-4 rounded-lg bg-secondary/50 border border-border hover:border-gold/30 hover:bg-secondary/70 transition-colors cursor-pointer"
+            >
+              {/* Header: Icon, Name, Type Badge, Relevance */}
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-full bg-gold/10 border border-gold/30 flex items-center justify-center text-gold shrink-0">
+                  {typeIcons[result.entityType] || <Hash className="w-4 h-4" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-medium text-foreground truncate">
+                      {result.entityName || "Unknown"}
+                    </h4>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full border shrink-0 ${
+                        typeBadgeStyles[result.entityType] || typeBadgeStyles.unknown
+                      }`}
+                    >
+                      {result.entityType === "daily-note" ? "note" : result.entityType}
+                    </span>
+                  </div>
+                  {result.category && (
+                    <p className="text-xs text-muted-foreground">{result.category}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <RelevanceIndicator score={result.score} />
+                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                </div>
+              </div>
+
+              {/* Content snippet - only show if meaningful */}
+              {result.content &&
+               result.content.length > 10 &&
+               !result.content.toLowerCase().includes(result.entityName.toLowerCase()) && (
+                <p className="text-sm text-muted-foreground line-clamp-2 ml-12">
+                  {result.content}
+                </p>
+              )}
+            </button>
+          ))
+        )}
+      </div>
     </div>
   );
 }

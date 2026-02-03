@@ -95,5 +95,17 @@
     "id": "david-okafor-1770060635681",
     "lastAccessed": "2026-02-02T19:30:35.681Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Lagos contractor for Meridian Labs",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "david-okafor-1770083119280",
+    "lastAccessed": "2026-02-03T01:45:19.280Z",
+    "accessCount": 0
   }
 ]

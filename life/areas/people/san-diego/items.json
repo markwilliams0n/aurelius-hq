@@ -23,5 +23,17 @@
     "id": "san-diego-1769991487892",
     "lastAccessed": "2026-02-02T00:18:07.892Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Where Adam Watson is based",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "san-diego-1770084913824",
+    "lastAccessed": "2026-02-03T02:15:13.824Z",
+    "accessCount": 0
   }
 ]

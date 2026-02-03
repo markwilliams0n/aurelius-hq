@@ -1,1 +1,50 @@
-[]
+[
+  {
+    "fact": "Will discuss custom project potential with Michelle Swing",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "jeff-1770077729249",
+    "lastAccessed": "2026-02-03T02:10:57.375Z",
+    "accessCount": 3
+  },
+  {
+    "fact": "Part of the StubHub team",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "jeff-1770082213849",
+    "lastAccessed": "2026-02-03T02:10:57.375Z",
+    "accessCount": 3
+  },
+  {
+    "fact": "Working with Michelle Swing on custom project possibilities",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "jeff-1770084913757",
+    "lastAccessed": "2026-02-03T02:15:13.757Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Part of StubHub team",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "jeff-1770085813194",
+    "lastAccessed": "2026-02-03T02:30:13.194Z",
+    "accessCount": 0
+  }
+]

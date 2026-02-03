@@ -1,7 +1,7 @@
 # Santiago Brusco
 
 **Type:** person
-**Created:** 2026-02-02
+**Created:** 2026-02-03
 
 ## Summary
 

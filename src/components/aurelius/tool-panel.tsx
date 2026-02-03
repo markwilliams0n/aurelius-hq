@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  X,
   FileText,
   Settings,
   Check,
@@ -10,10 +9,11 @@ import {
   Loader2,
   AlertTriangle,
   Plus,
-  GripVertical,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { RightSidebar, SIDEBAR_DEFAULT_WIDTH } from "./right-sidebar";
 
 // Panel content types
 export type ConfigViewContent = {
@@ -56,101 +56,55 @@ interface ToolPanelProps {
   onWidthChange?: (width: number) => void;
 }
 
-const MIN_WIDTH = 280;
-const MAX_WIDTH = 800;
-const DEFAULT_WIDTH = 384;
+function getTitle(content: PanelContent): string {
+  if (!content) return "";
+  switch (content.type) {
+    case "config_view": return `Config: ${content.key}`;
+    case "config_diff": return `Proposed Change: ${content.key}`;
+    case "tool_result": return `Tool: ${content.toolName}`;
+    case "daily_notes": return "Today's Notes";
+  }
+}
 
-export function ToolPanel({ content, onClose, onApprove, onReject, width = DEFAULT_WIDTH, onWidthChange }: ToolPanelProps) {
-  const [isResizing, setIsResizing] = useState(false);
-  const panelRef = useRef<HTMLElement>(null);
+function getIcon(content: PanelContent) {
+  if (!content) return null;
+  switch (content.type) {
+    case "config_view": return <FileText className="w-4 h-4 text-gold" />;
+    case "config_diff": return <Settings className="w-4 h-4 text-yellow-500" />;
+    case "tool_result": return <Settings className="w-4 h-4 text-muted-foreground" />;
+    case "daily_notes": return <FileText className="w-4 h-4 text-gold" />;
+  }
+}
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(true);
-  }, []);
-
-  useEffect(() => {
-    if (!isResizing) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!panelRef.current || !onWidthChange) return;
-      const rect = panelRef.current.getBoundingClientRect();
-      const newWidth = rect.right - e.clientX;
-      onWidthChange(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, newWidth)));
-    };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-    };
-
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [isResizing, onWidthChange]);
-
+export function ToolPanel({ content, onClose, onApprove, onReject, width = SIDEBAR_DEFAULT_WIDTH, onWidthChange }: ToolPanelProps) {
   if (!content) return null;
 
   return (
-    <aside
-      ref={panelRef}
-      className="h-full border-l border-border bg-background flex flex-col relative"
-      style={{ width: `${width}px` }}
+    <RightSidebar
+      title={getTitle(content)}
+      icon={getIcon(content)}
+      onClose={onClose}
+      width={width}
+      onWidthChange={onWidthChange}
+      resizable={!!onWidthChange}
     >
-      {/* Resize handle */}
-      {onWidthChange && (
-        <div
-          onMouseDown={handleMouseDown}
-          className={`absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-gold/30 transition-colors z-10 flex items-center ${
-            isResizing ? "bg-gold/50" : ""
-          }`}
-        >
-          <GripVertical className="w-3 h-3 text-muted-foreground/50 -ml-1" />
-        </div>
+      {content.type === "config_view" && (
+        <ConfigViewPanel content={content} />
       )}
-
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-border flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-2">
-          {content.type === "config_view" && <FileText className="w-4 h-4 text-gold" />}
-          {content.type === "config_diff" && <Settings className="w-4 h-4 text-yellow-500" />}
-          {content.type === "tool_result" && <Settings className="w-4 h-4 text-muted-foreground" />}
-          {content.type === "daily_notes" && <FileText className="w-4 h-4 text-gold" />}
-          <h3 className="font-medium text-sm">
-            {content.type === "config_view" && `Config: ${content.key}`}
-            {content.type === "config_diff" && `Proposed Change: ${content.key}`}
-            {content.type === "tool_result" && `Tool: ${content.toolName}`}
-            {content.type === "daily_notes" && "Today's Notes"}
-          </h3>
-        </div>
-        <Button variant="ghost" size="sm" onClick={onClose} className="h-7 w-7 p-0">
-          <X className="w-4 h-4" />
-        </Button>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        {content.type === "config_view" && (
-          <ConfigViewPanel content={content} />
-        )}
-        {content.type === "config_diff" && (
-          <ConfigDiffPanel
-            content={content}
-            onApprove={onApprove}
-            onReject={onReject}
-          />
-        )}
-        {content.type === "tool_result" && (
-          <ToolResultPanel content={content} />
-        )}
-        {content.type === "daily_notes" && (
-          <DailyNotesPanel />
-        )}
-      </div>
-    </aside>
+      {content.type === "config_diff" && (
+        <ConfigDiffPanel
+          content={content}
+          onApprove={onApprove}
+          onReject={onReject}
+        />
+      )}
+      {content.type === "tool_result" && (
+        <ToolResultPanel content={content} />
+      )}
+      {content.type === "daily_notes" && (
+        <DailyNotesPanel />
+      )}
+    </RightSidebar>
   );
 }
 

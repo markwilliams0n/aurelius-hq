@@ -8,8 +8,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "sarah-chen-1769989834253-0",
-    "lastAccessed": "2026-02-01T23:50:34.253Z",
-    "accessCount": 0,
+    "lastAccessed": "2026-02-03T01:44:57.418Z",
+    "accessCount": 1,
     "tier": "hot"
   },
   {
@@ -21,8 +21,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "sarah-chen-1769990901593",
-    "lastAccessed": "2026-02-02T00:08:21.593Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:44:57.418Z",
+    "accessCount": 1
   },
   {
     "fact": "lead engineer, Austin / bi-weekly SF flights",
@@ -33,8 +33,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "sarah-chen-1769991487899",
-    "lastAccessed": "2026-02-02T00:18:07.899Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:44:57.418Z",
+    "accessCount": 1
   },
   {
     "fact": "Lead engineer",
@@ -45,8 +45,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "sarah-chen-1769993916212",
-    "lastAccessed": "2026-02-02T00:58:36.212Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:44:57.418Z",
+    "accessCount": 1
   },
   {
     "fact": "Austin / bi-weekly SF flights",
@@ -57,8 +57,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "sarah-chen-1769993916213",
-    "lastAccessed": "2026-02-02T00:58:36.213Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:44:57.418Z",
+    "accessCount": 1
   },
   {
     "fact": "Lead engineer at Meridian Labs",
@@ -69,8 +69,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "sarah-chen-1769996382515",
-    "lastAccessed": "2026-02-02T01:39:42.515Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:44:57.418Z",
+    "accessCount": 1
   },
   {
     "fact": "working out of Austin office",
@@ -81,8 +81,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "sarah-chen-1769996382516",
-    "lastAccessed": "2026-02-02T01:39:42.516Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:44:57.418Z",
+    "accessCount": 1
   },
   {
     "fact": "Lead engineer at Meridian Labs, Austin / bi-weekly SF flights",
@@ -93,8 +93,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "sarah-chen-1769997700442",
-    "lastAccessed": "2026-02-02T02:01:40.442Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:44:57.418Z",
+    "accessCount": 1
   },
   {
     "fact": "works from Austin and San Francisco",
@@ -105,8 +105,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "sarah-chen-1770060256242",
-    "lastAccessed": "2026-02-02T19:24:16.242Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:44:57.418Z",
+    "accessCount": 1
   },
   {
     "fact": "Lead engineer of Project Atlas",
@@ -117,7 +117,43 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "sarah-chen-1770060422034",
-    "lastAccessed": "2026-02-02T19:27:02.034Z",
+    "lastAccessed": "2026-02-03T01:44:57.418Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "Lead engineer at Meridian Labs, works out of Austin office",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "sarah-chen-1770083119279",
+    "lastAccessed": "2026-02-03T01:45:19.279Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "works out of Austin office",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "sarah-chen-1770084019653",
+    "lastAccessed": "2026-02-03T02:00:19.653Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Lead engineer of Project Atlas, works from Austin and San Francisco",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "sarah-chen-1770089418460",
+    "lastAccessed": "2026-02-03T03:30:18.460Z",
     "accessCount": 0
   }
 ]

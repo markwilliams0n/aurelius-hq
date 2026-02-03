@@ -142,5 +142,77 @@
     "id": "celso-cardenas-1770061992853",
     "lastAccessed": "2026-02-02T19:53:12.853Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Front-end engineer at ROSTR Pro",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1770077743580",
+    "lastAccessed": "2026-02-03T00:15:43.580Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Ramp-up on the codebase and picking up smaller UI tickets, new hire in January",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1770083119278",
+    "lastAccessed": "2026-02-03T01:45:19.278Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Front-end engineer, 3-month tenure",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1770085138755",
+    "lastAccessed": "2026-02-03T02:18:58.755Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Front-end engineer, 3-month tenure, UI ramp-up",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1770086722987",
+    "lastAccessed": "2026-02-03T02:45:22.987Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "New hire",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1770088530147",
+    "lastAccessed": "2026-02-03T03:15:30.147Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "started in January",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "celso-cardenas-1770088530148",
+    "lastAccessed": "2026-02-03T03:15:30.148Z",
+    "accessCount": 0
   }
 ]

@@ -46,6 +46,8 @@ src/
 
 ### 2. Memory System
 
+> **Detailed docs:** [docs/systems/memory.md](docs/systems/memory.md) | [Daily Notes](docs/systems/daily-notes.md)
+
 **Three storage layers:**
 
 | Layer | Location | Purpose |
@@ -54,15 +56,51 @@ src/
 | Files | `memory/*.md` | Daily notes, conversation logs |
 | Search | QMD CLI | Hybrid BM25 + vector search |
 
+**Chat context sources:**
+- **Recent Activity** (last 24h): Direct file read from daily notes
+- **Relevant Memory**: QMD search on `life/` collection
+
 **Key files:**
 - `lib/memory/facts.ts` - Fact CRUD operations
 - `lib/memory/entities.ts` - Entity management (person, project, topic, etc.)
 - `lib/memory/documents.ts` - Document ingestion + chunking
 - `lib/memory/search.ts` - QMD-based hybrid search
-- `lib/memory/daily-notes.ts` - Append-only daily logs
+- `lib/memory/daily-notes.ts` - Append-only daily logs + recent notes retrieval
 - `lib/memory/extraction.ts` - Extract memories from conversations
 
-### 3. Database Schema (`lib/db/schema/`)
+### 3. Heartbeat System
+
+> **Detailed docs:** [docs/systems/heartbeat.md](docs/systems/heartbeat.md)
+
+Heartbeat is the central background process that converts raw inputs into searchable knowledge:
+
+```
+Raw Inputs                         Searchable Knowledge
+──────────                         ────────────────────
+Daily notes (memory/*.md)    ┐
+                             ├──→  HEARTBEAT  ──→  Entity files (life/)
+Granola meetings             ┘     (every 15m)     QMD search index
+                                                   Triage inbox
+```
+
+**What it does:**
+1. Extracts entities from daily notes (people, companies, projects)
+2. Syncs Granola meetings → triage inbox + database
+3. Reindexes QMD search (BM25 + vector embeddings)
+
+**Without heartbeat:** Information enters the system but isn't searchable. The AI can only recall what's been indexed.
+
+**Scheduling:**
+- Runs automatically every 15 minutes via `node-cron` (configurable)
+- Manual trigger via System page or `POST /api/heartbeat`
+
+**Key files:**
+- `lib/memory/heartbeat.ts` - Main heartbeat logic
+- `lib/memory/ollama.ts` - LLM entity extraction
+- `app/api/heartbeat/route.ts` - API endpoint
+- `instrumentation.ts` - Scheduler setup
+
+### 4. Database Schema (`lib/db/schema/`)
 
 ```
 entities          - People, projects, topics, companies
@@ -76,7 +114,7 @@ configs           - Versioned configuration (soul, prompts, etc.)
 pending_changes   - Config changes awaiting approval
 ```
 
-### 4. Chat Flow (`api/chat/route.ts`)
+### 5. Chat Flow (`api/chat/route.ts`)
 
 ```
 User message
@@ -96,7 +134,7 @@ Save to conversation
 Return streamed response
 ```
 
-### 5. Configuration System (`lib/config.ts`)
+### 6. Configuration System (`lib/config.ts`)
 
 - **Keys**: `soul`, `system_prompt`, `agents`, `processes`
 - **Versioned**: Every change creates new version
@@ -180,6 +218,25 @@ api/connectors/granola/
 │  (nav)     │    (children)      │  (optional)   │
 └─────────────────────────────────────────────────┘
 ```
+
+## Deployment
+
+**This app runs locally**, not on Vercel or other cloud platforms.
+
+- **Runtime**: Local development server (`bun run dev` or `next dev`)
+- **Database**: Neon PostgreSQL (cloud-hosted, accessed from local)
+- **Background tasks**: Must be scheduled locally (node-cron, system cron, or launchd)
+- **Telegram**: Requires tunnel (ngrok) for webhook to reach local server
+
+**Not using:**
+- Vercel (no serverless functions, no Vercel cron)
+- Docker (runs directly on macOS)
+- PM2 or similar process managers
+
+**Implications for scheduling:**
+- Heartbeat and synthesis must be triggered via local scheduler
+- No `maxDuration` limits apply (those are Vercel-specific, can be removed)
+- Long-running operations are fine
 
 ## Environment Variables
 

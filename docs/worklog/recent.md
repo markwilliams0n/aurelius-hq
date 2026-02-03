@@ -23,7 +23,7 @@ Work completed in the last 2-4 weeks.
 - Backfill script for existing items (created 168 tasks)
 
 ### Documentation
-- `docs/triage.md` - Triage system overview
+- `docs/systems/triage.md` - Triage system overview
 - `docs/connectors/index.md` - Connector registry
 - `docs/connectors/granola.md` - Granola connector docs
 - `docs/connectors/README.md` - Connector setup wizard

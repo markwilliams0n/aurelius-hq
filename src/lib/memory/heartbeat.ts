@@ -2,12 +2,70 @@ import { execSync } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { listDailyNotes, readDailyNote } from './daily-notes';
-import { isOllamaAvailable, extractEntitiesWithLLM } from './ollama';
+import { isOllamaAvailable, extractEntitiesWithLLM, isFactRedundant, type ExistingEntityHint } from './ollama';
+import { resolveEntities, type ResolvedEntity } from './entity-resolution';
 import { syncGranolaMeetings, type GranolaSyncResult } from '@/lib/granola';
 
 const LIFE_DIR = path.join(process.cwd(), 'life');
+const HEARTBEAT_STATE_FILE = path.join(LIFE_DIR, 'system', 'heartbeat-state.json');
 
 type EntityType = 'person' | 'company' | 'project';
+
+interface HeartbeatState {
+  /** Map of note filename to last processed section timestamp (HH:MM format) */
+  processedNotes: Record<string, string>;
+  lastRun: string;
+}
+
+/**
+ * Parse daily note into sections by ## HH:MM timestamps
+ * Returns sections newer than the given timestamp
+ */
+function getNewSections(content: string, afterTimestamp: string | null): { content: string; latestTimestamp: string | null } {
+  // Split by ## HH:MM pattern
+  const sectionPattern = /^## (\d{2}:\d{2})/gm;
+  const sections: Array<{ timestamp: string; content: string }> = [];
+
+  let lastIndex = 0;
+  let lastTimestamp: string | null = null;
+  let match;
+
+  // Find all section headers
+  const matches: Array<{ timestamp: string; index: number }> = [];
+  while ((match = sectionPattern.exec(content)) !== null) {
+    matches.push({ timestamp: match[1], index: match.index });
+  }
+
+  // Extract sections
+  for (let i = 0; i < matches.length; i++) {
+    const start = matches[i].index;
+    const end = i < matches.length - 1 ? matches[i + 1].index : content.length;
+    sections.push({
+      timestamp: matches[i].timestamp,
+      content: content.slice(start, end)
+    });
+  }
+
+  if (sections.length === 0) {
+    // No sections found, return entire content
+    return { content, latestTimestamp: null };
+  }
+
+  // Filter to only new sections
+  const newSections = afterTimestamp
+    ? sections.filter(s => s.timestamp > afterTimestamp)
+    : sections;
+
+  // Find latest timestamp
+  const latestTimestamp = sections.length > 0
+    ? sections[sections.length - 1].timestamp
+    : null;
+
+  return {
+    content: newSections.map(s => s.content).join('\n'),
+    latestTimestamp
+  };
+}
 
 interface ExtractedEntity {
   name: string;
@@ -28,11 +86,32 @@ interface EntityFact {
   accessCount: number;
 }
 
+import { createHash } from 'crypto';
+
 function slugify(name: string): string {
   return name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
+}
+
+/** Simple hash of content to detect changes */
+function hashContent(content: string): string {
+  return createHash('md5').update(content).digest('hex').slice(0, 16);
+}
+
+async function loadHeartbeatState(): Promise<HeartbeatState> {
+  try {
+    const content = await fs.readFile(HEARTBEAT_STATE_FILE, 'utf-8');
+    return JSON.parse(content);
+  } catch {
+    return { processedNotes: {}, lastRun: '' };
+  }
+}
+
+async function saveHeartbeatState(state: HeartbeatState): Promise<void> {
+  await fs.mkdir(path.dirname(HEARTBEAT_STATE_FILE), { recursive: true });
+  await fs.writeFile(HEARTBEAT_STATE_FILE, JSON.stringify(state, null, 2));
 }
 
 function getEntityPath(type: EntityType, slug: string): string {
@@ -43,6 +122,86 @@ function getEntityPath(type: EntityType, slug: string): string {
   return path.join(LIFE_DIR, typeDir, slug);
 }
 
+/**
+ * Load existing entities as hints for the extraction LLM
+ * Prioritizes recently accessed entities
+ */
+async function loadExistingEntityHints(): Promise<ExistingEntityHint[]> {
+  const hints: ExistingEntityHint[] = [];
+
+  const typeDirs: Array<{ dir: string; type: 'person' | 'company' | 'project' }> = [
+    { dir: 'areas/people', type: 'person' },
+    { dir: 'areas/companies', type: 'company' },
+    { dir: 'projects', type: 'project' },
+  ];
+
+  for (const { dir, type } of typeDirs) {
+    const fullDir = path.join(LIFE_DIR, dir);
+    try {
+      const items = await fs.readdir(fullDir, { withFileTypes: true });
+
+      for (const item of items) {
+        if (!item.isDirectory() || item.name.startsWith('_')) continue;
+
+        const entityPath = path.join(fullDir, item.name);
+        const itemsPath = path.join(entityPath, 'items.json');
+
+        // Convert slug to display name
+        const displayName = item.name
+          .split('-')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+
+        let recentFacts: string[] = [];
+        let lastAccessed: string | null = null;
+
+        try {
+          const content = await fs.readFile(itemsPath, 'utf-8');
+          const facts = JSON.parse(content);
+
+          // Get most recent access time for sorting
+          for (const f of facts) {
+            if (f.lastAccessed && (!lastAccessed || f.lastAccessed > lastAccessed)) {
+              lastAccessed = f.lastAccessed;
+            }
+          }
+
+          // Get a few recent facts for context
+          recentFacts = facts
+            .filter((f: { status?: string }) => f.status === 'active')
+            .slice(0, 2)
+            .map((f: { fact: string }) => f.fact);
+        } catch {
+          // No items file
+        }
+
+        hints.push({
+          name: displayName,
+          type,
+          recentFacts,
+          _lastAccessed: lastAccessed, // For sorting
+        } as ExistingEntityHint & { _lastAccessed: string | null });
+      }
+    } catch {
+      // Directory doesn't exist
+    }
+  }
+
+  // Sort by recency (most recently accessed first)
+  hints.sort((a, b) => {
+    const aTime = (a as ExistingEntityHint & { _lastAccessed: string | null })._lastAccessed || '1970-01-01';
+    const bTime = (b as ExistingEntityHint & { _lastAccessed: string | null })._lastAccessed || '1970-01-01';
+    return bTime.localeCompare(aTime);
+  });
+
+  // Clean up internal property
+  for (const hint of hints) {
+    delete (hint as ExistingEntityHint & { _lastAccessed?: string | null })._lastAccessed;
+  }
+
+  return hints;
+}
+
 async function entityExists(type: EntityType, name: string): Promise<boolean> {
   const entityPath = getEntityPath(type, slugify(name));
   try {
@@ -50,6 +209,18 @@ async function entityExists(type: EntityType, name: string): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+async function getExistingFacts(type: EntityType, name: string): Promise<string[]> {
+  const entityPath = getEntityPath(type, slugify(name));
+  const itemsPath = path.join(entityPath, 'items.json');
+  try {
+    const content = await fs.readFile(itemsPath, 'utf-8');
+    const facts: EntityFact[] = JSON.parse(content);
+    return facts.filter(f => f.status === 'active').map(f => f.fact);
+  } catch {
+    return [];
   }
 }
 
@@ -91,11 +262,15 @@ ${summary}
   );
 }
 
+/**
+ * Add a fact to an entity if it doesn't already exist.
+ * Returns true if the fact was added, false if it was a duplicate.
+ */
 async function addFactToEntity(
   type: EntityType,
   name: string,
   fact: Omit<EntityFact, 'id' | 'lastAccessed' | 'accessCount'>
-): Promise<void> {
+): Promise<boolean> {
   const slug = slugify(name);
   const entityPath = getEntityPath(type, slug);
   const itemsPath = path.join(entityPath, 'items.json');
@@ -109,14 +284,23 @@ async function addFactToEntity(
     // File doesn't exist, start fresh
   }
 
-  // Check for duplicate facts
-  const factExists = facts.some(f =>
-    f.fact.toLowerCase() === fact.fact.toLowerCase() &&
-    f.status === 'active'
-  );
+  // Check for duplicate facts (case-insensitive, also check similar wording)
+  const factLower = fact.fact.toLowerCase().trim();
+  const factExists = facts.some(f => {
+    const existingLower = f.fact.toLowerCase().trim();
+    // Exact match
+    if (existingLower === factLower) return true;
+    // Very similar (one contains the other and similar length)
+    if (existingLower.includes(factLower) || factLower.includes(existingLower)) {
+      const lengthRatio = Math.min(existingLower.length, factLower.length) /
+                          Math.max(existingLower.length, factLower.length);
+      if (lengthRatio > 0.8) return true;
+    }
+    return false;
+  });
 
   if (factExists) {
-    return; // Don't add duplicate facts
+    return false; // Don't add duplicate facts
   }
 
   // Add new fact
@@ -130,6 +314,7 @@ async function addFactToEntity(
   facts.push(newFact);
 
   await fs.writeFile(itemsPath, JSON.stringify(facts, null, 2));
+  return true; // Fact was added
 }
 
 export interface EntityDetail {
@@ -140,6 +325,21 @@ export interface EntityDetail {
   source: string;
 }
 
+export interface HeartbeatOptions {
+  /** Skip QMD reindex (faster heartbeat, but new content won't be searchable until next full run) */
+  skipReindex?: boolean;
+  /** Skip Granola sync */
+  skipGranola?: boolean;
+  /** Skip entity extraction from daily notes */
+  skipExtraction?: boolean;
+}
+
+export interface StepResult {
+  success: boolean;
+  durationMs: number;
+  error?: string;
+}
+
 export interface HeartbeatResult {
   entitiesCreated: number;
   entitiesUpdated: number;
@@ -147,6 +347,17 @@ export interface HeartbeatResult {
   entities: EntityDetail[];
   extractionMethod: 'ollama' | 'pattern';
   granola?: GranolaSyncResult;
+  /** Granular step results for debugging */
+  steps: {
+    extraction?: StepResult;
+    granola?: StepResult;
+    qmdUpdate?: StepResult;
+    qmdEmbed?: StepResult;
+  };
+  /** Whether all steps succeeded */
+  allStepsSucceeded: boolean;
+  /** Warnings from partial failures */
+  warnings: string[];
 }
 
 /**
@@ -154,111 +365,281 @@ export interface HeartbeatResult {
  * 1. Scan recent daily notes
  * 2. Extract entities and facts (using Ollama LLM or pattern matching fallback)
  * 3. Create/update entity files
- * 4. Reindex QMD
+ * 4. Sync Granola meetings
+ * 5. Reindex QMD
+ *
+ * Each step is isolated - failures in one step don't prevent others from running.
  */
-export async function runHeartbeat(): Promise<HeartbeatResult> {
+export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<HeartbeatResult> {
   console.log('[Heartbeat] Starting...');
+  const overallStart = Date.now();
 
   let entitiesCreated = 0;
   let entitiesUpdated = 0;
   const entityDetails: EntityDetail[] = [];
+  const warnings: string[] = [];
+  const steps: HeartbeatResult['steps'] = {};
 
-  // Check if Ollama is available for LLM extraction
-  const useOllama = await isOllamaAvailable();
-  console.log(`[Heartbeat] Extraction method: ${useOllama ? 'Ollama LLM' : 'Pattern matching'}`);
+  // Determine extraction method
+  let useOllama = false;
+  if (!options.skipExtraction) {
+    useOllama = await isOllamaAvailable();
+    console.log(`[Heartbeat] Extraction method: ${useOllama ? 'Ollama LLM' : 'Pattern matching'}`);
+  }
 
-  // 1. Get recent daily notes (last 3 days)
-  const notes = await listDailyNotes();
-  const recentNotes = notes.slice(0, 3);
+  // Step 1: Entity extraction from daily notes
+  if (!options.skipExtraction) {
+    const extractionStart = Date.now();
+    try {
+      // Load state to track which notes have been processed
+      const state = await loadHeartbeatState();
 
-  for (const noteFile of recentNotes) {
-    const date = noteFile.replace('.md', '');
-    const content = await readDailyNote(date);
-    if (!content) continue;
+      // Load existing entities to provide context to extraction LLM
+      console.log('[Heartbeat] Loading existing entities for context...');
+      const existingEntityHints = useOllama ? await loadExistingEntityHints() : [];
+      console.log(`[Heartbeat] Loaded ${existingEntityHints.length} existing entities as context`);
 
-    // 2. Extract entities (try Ollama first, fall back to patterns)
-    let extracted: ExtractedEntity[];
-    if (useOllama) {
-      try {
-        extracted = await extractEntitiesWithLLM(content, `memory/${date}.md`);
-        console.log(`[Heartbeat] Ollama extracted ${extracted.length} entities from ${date}`);
-      } catch (error) {
-        console.warn('[Heartbeat] Ollama extraction failed, using pattern matching:', error);
-        extracted = extractEntitiesFromNote(content, date);
-      }
-    } else {
-      extracted = extractEntitiesFromNote(content, date);
-    }
+      const notes = await listDailyNotes();
+      const recentNotes = notes.slice(0, 3);
 
-    // 3. Create/update entity files
-    for (const entity of extracted) {
-      const exists = await entityExists(entity.type, entity.name);
+      for (const noteFile of recentNotes) {
+        const date = noteFile.replace('.md', '');
+        const fullContent = await readDailyNote(date);
+        if (!fullContent) continue;
 
-      if (!exists) {
-        await createEntity(
-          entity.type,
-          entity.name,
-          `Extracted from daily notes on ${date}`,
-          entity.facts.map(f => ({
-            fact: f,
-            category: 'context' as const,
-            timestamp: date,
-            source: `memory/${date}.md`,
-            status: 'active' as const,
-            supersededBy: null,
-            relatedEntities: []
-          }))
-        );
-        console.log(`[Heartbeat] Created entity: ${entity.name} (${entity.type})`);
-        entitiesCreated++;
-        entityDetails.push({
-          name: entity.name,
-          type: entity.type,
-          facts: entity.facts,
-          action: 'created',
-          source: `memory/${date}.md`
-        });
-      } else {
-        // Add new facts to existing entity
-        for (const fact of entity.facts) {
-          await addFactToEntity(entity.type, entity.name, {
-            fact,
-            category: 'context',
-            timestamp: date,
-            source: `memory/${date}.md`,
-            status: 'active',
-            supersededBy: null,
-            relatedEntities: []
-          });
+        // Get only NEW sections (after last processed timestamp for this note)
+        const lastProcessedTimestamp = state.processedNotes[noteFile] || null;
+        const { content, latestTimestamp } = getNewSections(fullContent, lastProcessedTimestamp);
+
+        if (!content.trim()) {
+          console.log(`[Heartbeat] Skipping ${date} (no new sections)`);
+          continue;
         }
-        console.log(`[Heartbeat] Updated entity: ${entity.name}`);
-        entitiesUpdated++;
-        entityDetails.push({
-          name: entity.name,
-          type: entity.type,
-          facts: entity.facts,
-          action: 'updated',
-          source: `memory/${date}.md`
-        });
+
+        console.log(`[Heartbeat] Processing ${date} sections after ${lastProcessedTimestamp || 'start'}`);
+
+        // Track the latest timestamp we'll save after processing
+        const newTimestamp = latestTimestamp;
+
+        let extracted: ExtractedEntity[];
+        if (useOllama) {
+          try {
+            // Pass existing entities so LLM can use full names when possible
+            extracted = await extractEntitiesWithLLM(content, `memory/${date}.md`, existingEntityHints);
+            console.log(`[Heartbeat] Ollama extracted ${extracted.length} entities from ${date}`);
+          } catch (error) {
+            console.warn('[Heartbeat] Ollama extraction failed, using pattern matching:', error);
+            extracted = extractEntitiesFromNote(content, date);
+            warnings.push(`Ollama failed for ${date}, used pattern matching`);
+          }
+        } else {
+          extracted = extractEntitiesFromNote(content, date);
+        }
+
+        // Resolve extracted entities to existing ones using smart matching
+        // Pass the original content for better context in LLM resolution
+        console.log(`[Heartbeat] Resolving ${extracted.length} entities...`);
+        const resolved = await resolveEntities(extracted, content);
+
+        for (const resolution of resolved) {
+          const { extracted: entity, match, isNew, reason, confidence } = resolution;
+
+          if (isNew) {
+            // Create new entity
+            await createEntity(
+              entity.type,
+              entity.name,
+              `Extracted from daily notes on ${date}`,
+              entity.facts.map(f => ({
+                fact: f,
+                category: 'context' as const,
+                timestamp: date,
+                source: `memory/${date}.md`,
+                status: 'active' as const,
+                supersededBy: null,
+                relatedEntities: []
+              }))
+            );
+            console.log(`[Heartbeat] Created entity: ${entity.name} (${entity.type}) - ${reason}`);
+            entitiesCreated++;
+            entityDetails.push({
+              name: entity.name,
+              type: entity.type,
+              facts: entity.facts,
+              action: 'created',
+              source: `memory/${date}.md`
+            });
+          } else if (match) {
+            // Update existing entity (resolved match)
+            const targetName = match.name;
+            const targetType = match.type;
+
+            console.log(`[Heartbeat] Resolved "${entity.name}" → "${targetName}" (${(confidence * 100).toFixed(0)}% confidence)`);
+
+            // Get existing facts for semantic deduplication
+            const existingFacts = await getExistingFacts(targetType, targetName);
+
+            // Try to add each fact, using semantic deduplication if Ollama available
+            let factsAdded = 0;
+            const addedFacts: string[] = [];
+            for (const fact of entity.facts) {
+              // First check semantic redundancy with Ollama
+              if (useOllama && existingFacts.length > 0) {
+                const isRedundant = await isFactRedundant(fact, existingFacts, targetName);
+                if (isRedundant) {
+                  console.log(`[Heartbeat] Skipping redundant fact for ${targetName}: "${fact.slice(0, 50)}..."`);
+                  continue;
+                }
+              }
+
+              const wasAdded = await addFactToEntity(targetType, targetName, {
+                fact,
+                category: 'context',
+                timestamp: date,
+                source: `memory/${date}.md`,
+                status: 'active',
+                supersededBy: null,
+                relatedEntities: []
+              });
+              if (wasAdded) {
+                factsAdded++;
+                addedFacts.push(fact);
+                existingFacts.push(fact); // Add to existing for subsequent checks
+              }
+            }
+            // Only count as updated if we actually added new facts
+            if (factsAdded > 0) {
+              console.log(`[Heartbeat] Updated entity: ${targetName} (+${factsAdded} facts)`);
+              entitiesUpdated++;
+              entityDetails.push({
+                name: targetName,
+                type: targetType,
+                facts: addedFacts,
+                action: 'updated',
+                source: `memory/${date}.md`
+              });
+            }
+          }
+        }
+
+        // Mark this note as processed with the latest timestamp
+        if (newTimestamp) {
+          state.processedNotes[noteFile] = newTimestamp;
+        }
+      }
+
+      // Save state after processing all notes
+      state.lastRun = new Date().toISOString();
+      await saveHeartbeatState(state);
+
+      steps.extraction = {
+        success: true,
+        durationMs: Date.now() - extractionStart,
+      };
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error('[Heartbeat] Entity extraction failed:', errMsg);
+      warnings.push(`Entity extraction failed: ${errMsg}`);
+      steps.extraction = {
+        success: false,
+        durationMs: Date.now() - extractionStart,
+        error: errMsg,
+      };
+    }
+  }
+
+  // Step 2: Sync Granola meetings to triage
+  let granolaResult: GranolaSyncResult | undefined;
+  if (!options.skipGranola) {
+    const granolaStart = Date.now();
+    try {
+      granolaResult = await syncGranolaMeetings();
+      if (granolaResult.synced > 0) {
+        console.log(`[Heartbeat] Granola: synced ${granolaResult.synced} meetings`);
+      }
+      steps.granola = {
+        success: true,
+        durationMs: Date.now() - granolaStart,
+      };
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error('[Heartbeat] Granola sync failed:', errMsg);
+      warnings.push(`Granola sync failed: ${errMsg}`);
+      steps.granola = {
+        success: false,
+        durationMs: Date.now() - granolaStart,
+        error: errMsg,
+      };
+    }
+  }
+
+  // Step 3: Reindex QMD (split into update + embed for better observability)
+  let reindexed = false;
+  if (!options.skipReindex) {
+    // QMD Update (fast - just document index)
+    const updateStart = Date.now();
+    try {
+      execSync('qmd update', {
+        cwd: process.cwd(),
+        stdio: 'pipe',
+        timeout: 60000
+      });
+      console.log('[Heartbeat] QMD update complete');
+      steps.qmdUpdate = {
+        success: true,
+        durationMs: Date.now() - updateStart,
+      };
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error('[Heartbeat] QMD update failed:', errMsg);
+      warnings.push(`QMD update failed: ${errMsg}`);
+      steps.qmdUpdate = {
+        success: false,
+        durationMs: Date.now() - updateStart,
+        error: errMsg,
+      };
+    }
+
+    // QMD Embed (slow - vector embeddings)
+    const embedStart = Date.now();
+    try {
+      execSync('qmd embed', {
+        cwd: process.cwd(),
+        stdio: 'pipe',
+        timeout: 180000 // 3 minutes for embed (was 2 min, often timed out)
+      });
+      console.log('[Heartbeat] QMD embed complete');
+      reindexed = true;
+      steps.qmdEmbed = {
+        success: true,
+        durationMs: Date.now() - embedStart,
+      };
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error('[Heartbeat] QMD embed failed:', errMsg);
+      warnings.push(`QMD embed failed: ${errMsg}`);
+      steps.qmdEmbed = {
+        success: false,
+        durationMs: Date.now() - embedStart,
+        error: errMsg,
+      };
+      // If update succeeded but embed failed, still consider partially reindexed
+      if (steps.qmdUpdate?.success) {
+        reindexed = true; // Documents are indexed, just not embedded
+        warnings.push('QMD update succeeded but embed failed - keyword search works, semantic search may be stale');
       }
     }
   }
 
-  // 4. Sync Granola meetings to triage
-  let granolaResult: GranolaSyncResult | undefined;
-  try {
-    granolaResult = await syncGranolaMeetings();
-    if (granolaResult.synced > 0) {
-      console.log(`[Heartbeat] Granola: synced ${granolaResult.synced} meetings`);
-    }
-  } catch (error) {
-    console.error('[Heartbeat] Granola sync failed:', error);
-  }
+  const totalDuration = Date.now() - overallStart;
+  const allStepsSucceeded = Object.values(steps).every(s => s?.success ?? true);
 
-  // 5. Reindex QMD
-  const reindexed = await reindexQMD();
-
-  console.log(`[Heartbeat] Complete - created: ${entitiesCreated}, updated: ${entitiesUpdated}`);
+  console.log(
+    `[Heartbeat] Complete in ${totalDuration}ms - ` +
+    `created: ${entitiesCreated}, updated: ${entitiesUpdated}, ` +
+    `reindexed: ${reindexed}` +
+    (warnings.length > 0 ? ` (${warnings.length} warnings)` : '')
+  );
 
   return {
     entitiesCreated,
@@ -267,6 +648,9 @@ export async function runHeartbeat(): Promise<HeartbeatResult> {
     entities: entityDetails,
     extractionMethod: useOllama ? 'ollama' : 'pattern',
     granola: granolaResult,
+    steps,
+    allStepsSucceeded,
+    warnings,
   };
 }
 
@@ -304,27 +688,3 @@ function extractEntitiesFromNote(content: string, date: string): ExtractedEntity
   return entities;
 }
 
-/**
- * Reindex QMD collections
- */
-async function reindexQMD(): Promise<boolean> {
-  try {
-    execSync('qmd update', {
-      cwd: process.cwd(),
-      stdio: 'pipe',
-      timeout: 60000
-    });
-
-    execSync('qmd embed', {
-      cwd: process.cwd(),
-      stdio: 'pipe',
-      timeout: 120000
-    });
-
-    console.log('[Heartbeat] QMD reindexed');
-    return true;
-  } catch (error) {
-    console.error('[Heartbeat] QMD reindex failed:', error);
-    return false;
-  }
-}

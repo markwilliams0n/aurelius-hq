@@ -70,5 +70,53 @@
     "id": "wasserman-1770060241764",
     "lastAccessed": "2026-02-02T19:24:01.764Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Rachel Thornton SVP Music",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "wasserman-1770075912538",
+    "lastAccessed": "2026-02-02T23:45:12.538Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Has a partnership team that needs venue lists filtered by ticketing company",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "wasserman-1770077729292",
+    "lastAccessed": "2026-02-03T00:15:29.292Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Rachel Thornton\"s role",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "wasserman-1770084913821",
+    "lastAccessed": "2026-02-03T02:15:13.821Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Music division of Fender, led by Rachel Thornton",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "wasserman-1770085398561",
+    "lastAccessed": "2026-02-03T02:23:18.561Z",
+    "accessCount": 0
   }
 ]

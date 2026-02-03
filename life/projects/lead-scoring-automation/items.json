@@ -22,5 +22,17 @@
     "id": "lead-scoring-automation-1770060625896",
     "lastAccessed": "2026-02-02T19:30:25.896Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Recommended by Aurelius for new CRO onboarding",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lead-scoring-automation-1770081318015",
+    "lastAccessed": "2026-02-03T01:15:18.015Z",
+    "accessCount": 0
   }
 ]

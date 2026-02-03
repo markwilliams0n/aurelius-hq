@@ -8,8 +8,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "rostr-1770060241768-0",
-    "lastAccessed": "2026-02-02T19:24:01.768Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 2
   },
   {
     "fact": "pro tier",
@@ -20,8 +20,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "rostr-1770060412074",
-    "lastAccessed": "2026-02-02T19:26:52.074Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 2
   },
   {
     "fact": "professional tier of the main product",
@@ -32,8 +32,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "rostr-1770060412075",
-    "lastAccessed": "2026-02-02T19:26:52.075Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 2
   },
   {
     "fact": "professional tier of main product",
@@ -44,8 +44,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "rostr-1770060625866",
-    "lastAccessed": "2026-02-02T19:30:25.866Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 2
   },
   {
     "fact": "Professional tier with Pro version",
@@ -56,8 +56,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "rostr-1770062025799",
-    "lastAccessed": "2026-02-02T19:53:45.799Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 2
   },
   {
     "fact": "Enterprise interest from WME",
@@ -68,8 +68,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "rostr-1770062025799",
-    "lastAccessed": "2026-02-02T19:53:45.799Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 2
   },
   {
     "fact": "Professional tier of ROSTR product",
@@ -80,8 +80,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "rostr-1770066680212",
-    "lastAccessed": "2026-02-02T21:11:20.212Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 2
   },
   {
     "fact": "Professional tier of the main ROSTR product",
@@ -92,7 +92,79 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "rostr-1770066852565",
-    "lastAccessed": "2026-02-02T21:14:12.565Z",
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 2
+  },
+  {
+    "fact": "Has been evaluated by Priya Mehta against Chartmetric and Viberate",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-1770077729256",
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 2
+  },
+  {
+    "fact": "Professional tier of the main product, evaluated by Priya Mehta",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-1770078612587",
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 2
+  },
+  {
+    "fact": "Building venue directory for Q1 and promoter directory for Q2 2024",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-1770078612588",
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 2
+  },
+  {
+    "fact": "Is a professional tier of ROSTR Pro",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-1770079513586",
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 2
+  },
+  {
+    "fact": "Pro tier of main product",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-1770085129677",
+    "lastAccessed": "2026-02-03T02:18:49.677Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "The main product with a pro tier called ROSTR Pro",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-1770089408788",
+    "lastAccessed": "2026-02-03T03:30:08.788Z",
     "accessCount": 0
   }
 ]

@@ -34,5 +34,17 @@
     "id": "growth-forecasting-models-1770060625889",
     "lastAccessed": "2026-02-02T19:30:25.889Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Recommended by Aurelius for new CRO onboarding",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "growth-forecasting-models-1770081318011",
+    "lastAccessed": "2026-02-03T01:15:18.011Z",
+    "accessCount": 0
   }
 ]

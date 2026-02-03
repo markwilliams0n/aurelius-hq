@@ -8,8 +8,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "uta-1769996008393-0",
-    "lastAccessed": "2026-02-02T01:33:28.393Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 2
   },
   {
     "fact": "Officially dead due to internal-build decision by Marcus Lane.",
@@ -20,8 +20,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "uta-1769996008393-1",
-    "lastAccessed": "2026-02-02T01:33:28.393Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 2
   },
   {
     "fact": "Officially dead (internal-build decision",
@@ -32,8 +32,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "uta-1769996368938",
-    "lastAccessed": "2026-02-02T01:39:28.938Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 2
   },
   {
     "fact": "Marcus Lane)",
@@ -44,8 +44,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "uta-1769996368939",
-    "lastAccessed": "2026-02-02T01:39:28.939Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 2
   },
   {
     "fact": "Officially dead due to internal-build decision by Marcus Lane",
@@ -56,8 +56,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "uta-1769997691175",
-    "lastAccessed": "2026-02-02T02:01:31.175Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 2
   },
   {
     "fact": "deal stalled",
@@ -68,8 +68,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "uta-1770060340695",
-    "lastAccessed": "2026-02-02T19:25:40.695Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 2
   },
   {
     "fact": "post-mortem requested in Slack",
@@ -80,7 +80,7 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "uta-1770060340696",
-    "lastAccessed": "2026-02-02T19:25:40.696Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 2
   }
 ]

@@ -58,5 +58,89 @@
     "id": "fender-1770060340690",
     "lastAccessed": "2026-02-02T19:25:40.690Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Had an advertising deal with Wasserman SVP Music that cost $45k",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-1770077729288",
+    "lastAccessed": "2026-02-03T00:15:29.288Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Has advertising locked with StubHub for $45k",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-1770079513588",
+    "lastAccessed": "2026-02-03T00:45:13.588Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Advertising locked with StubHub",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-1770081318006",
+    "lastAccessed": "2026-02-03T01:15:18.006Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "$45k",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-1770081318007",
+    "lastAccessed": "2026-02-03T01:15:18.007Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Advertising locked with Wasserman SVP Music",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-1770084913823",
+    "lastAccessed": "2026-02-03T02:15:13.823Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Advertising locked with StubHub for $45k, 6-mo NI",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-1770085398560",
+    "lastAccessed": "2026-02-03T02:23:18.560Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Advertising locked with StubHub for $45k, 6-mo",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-1770086713300",
+    "lastAccessed": "2026-02-03T02:45:13.300Z",
+    "accessCount": 0
   }
 ]

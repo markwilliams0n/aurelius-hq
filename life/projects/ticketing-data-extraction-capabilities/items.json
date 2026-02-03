@@ -1,0 +1,26 @@
+[
+  {
+    "fact": "Discussed with ROSTR",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "ticketing-data-extraction-capabilities-1770081318019-0",
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "potential custom project",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "ticketing-data-extraction-capabilities-1770081318019-1",
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 1
+  }
+]

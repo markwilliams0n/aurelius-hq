@@ -1,0 +1,26 @@
+[
+  {
+    "fact": "Professional tier of main product",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-1770089051175-0",
+    "lastAccessed": "2026-02-03T03:24:11.175Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "enterprise interest from WME",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-1770089051175-1",
+    "lastAccessed": "2026-02-03T03:24:11.175Z",
+    "accessCount": 0
+  }
+]

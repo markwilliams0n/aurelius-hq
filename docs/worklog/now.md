@@ -4,38 +4,57 @@
 
 ## Just Completed (Last Session)
 
-**2026-02-02 Evening**
+**2026-02-03 Early AM**
 
-Triage & Connectors:
-- Suggested tasks extraction (For You / For Others sections)
-- Snooze shortcut (s) with preset time options
-- Shift+↑ for Memory + Archive combo
-- Full Granola connector with auto memory extraction
-- Connector registry and documentation
+Smart Entity Resolution System:
+- **New `entity-resolution.ts`** - Multi-signal entity matching with weighted scoring:
+  - Name similarity (50%): exact match, prefix, abbreviation
+  - Context overlap (35%): shared keywords between content and entity facts
+  - Recency/decay (15%): recently accessed entities rank higher
+- **Partial name matching**: "Adam" → "Adam Watson" when context aligns
+- **Cross-type protection**: Won't create "Adam Watson" as company if person exists
+- **Batch deduplication**: Multiple mentions in one note → one entity
+- **Fact deduplication**: Redundant facts (same info rephrased) skipped
+- **Location/term filtering**: San Diego, Austin, AI, ML filtered out
+- **Comprehensive test suite**: `scripts/test-heartbeat-scenarios.ts` (24 tests, 87.5% pass)
+- **Updated heartbeat docs**: `docs/systems/heartbeat.md` with entity resolution details
 
-Workflow & Tooling:
-- `/new-connector` - Guided connector design brainstorming
-- `/new-feature` - Create feature branch
-- `/switch-branch` - Smart branch switching
-- `/finish-feature` - Merge feature to main
-- `/wrap-up` - Update worklog (this skill)
+**2026-02-02 Night (earlier)**
 
-Documentation:
-- `docs/worklog/` - Session persistence (now.md, recent.md, changelog.md)
-- `docs/roadmap/` - Forward planning (next.md, later.md)
-- `docs/connectors/` - Triage, Granola docs, setup wizard
-- Updated CLAUDE.md with session start + worklog maintenance
+Memory System Improvements:
+- Fixed QMD search showing git diff markers
+- Added Ollama semantic extraction for chat → daily notes
+- Improved triage note formatting
+- Added synthesis scheduling (daily at 3 AM)
+- Fixed agent not seeing daily notes
+- Fixed Telegram bot missing daily notes
+- Centralized agent context (`buildAgentContext()`)
+- Improved search results UI with clickable results
+- Type filter for search
+- Comprehensive memory system review
 
 ## In Progress
 
-Nothing currently in progress - main is stable.
+On `feature/memory-bot-tuning`:
+- Entity resolution system complete ✓
+- Ready for merge to main
 
-## Up Next (This Session/Week)
+## Up Next
 
-- [ ] Implement real Gmail connector (currently stub/fake data)
-- [ ] Consider Notion connector
-- [ ] Build task/PM system for accepted tasks
-- [ ] Test snooze functionality end-to-end
+- [ ] Merge feature branch to main
+- [ ] Test memory system for a few days
+- [ ] Consider: Heartbeat → DB sync (future)
+- [ ] Proactive work in heartbeat (future - sequence before memory backup)
+
+## Known Issues (Documented)
+
+- Dual storage systems (DB + file) not fully synchronized
+- Heartbeat extracts to file system only, not database
+- 3 edge cases in entity resolution tests (12.5% fail rate):
+  - "Adam Johnson" not always created as separate person
+  - StubHub duplicate on reprocessing historical notes
+  - Cross-type pollution (adam-watson as project exists)
+- See `docs/plans/2026-02-02-memory-system-review.md` for full analysis
 
 ---
 

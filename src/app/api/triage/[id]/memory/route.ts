@@ -185,7 +185,7 @@ async function extractAndSaveTriageMemory(item: any): Promise<
 
   // 4. Save to daily notes for context
   try {
-    const noteEntry = formatTriageNoteEntry(item, savedFacts.length);
+    const noteEntry = formatTriageNoteEntry(item, savedFacts);
     await appendToDailyNote(noteEntry);
   } catch (error) {
     console.error("Failed to save to daily notes:", error);
@@ -231,21 +231,40 @@ function domainToCompanyName(domain: string): string {
     .join(" ");
 }
 
-// Format entry for daily notes
-function formatTriageNoteEntry(item: any, factCount: number): string {
-  const timestamp = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+// Format entry for daily notes - include meaningful content for context
+function formatTriageNoteEntry(
+  item: any,
+  savedFacts: Array<{ content: string; category: string; entityName: string }>
+): string {
+  const senderName = item.senderName || item.sender;
+  const priority = item.priority === "urgent" || item.priority === "high"
+    ? ` (${item.priority.toUpperCase()})`
+    : "";
 
-  return `### Triage: ${item.subject} (${timestamp})
+  let entry = `**${senderName}** via ${item.connector}${priority}: "${item.subject}"`;
 
-**From:** ${item.senderName || item.sender}
-**Source:** ${item.connector}
-**Priority:** ${item.priority}
+  // Add a brief content preview if available
+  if (item.content) {
+    const preview = item.content.slice(0, 200).trim();
+    if (preview.length < item.content.length) {
+      entry += `\n\n> ${preview}...`;
+    } else {
+      entry += `\n\n> ${preview}`;
+    }
+  }
 
-${factCount} facts extracted and saved to memory.
-`;
+  // Add extracted facts as bullet points for context
+  if (savedFacts.length > 0) {
+    entry += "\n\n**Extracted:**";
+    for (const fact of savedFacts.slice(0, 5)) { // Limit to 5 facts
+      entry += `\n- ${fact.content}`;
+    }
+    if (savedFacts.length > 5) {
+      entry += `\n- _(+${savedFacts.length - 5} more)_`;
+    }
+  }
+
+  return entry;
 }
 
 // Fallback simulation when database isn't available

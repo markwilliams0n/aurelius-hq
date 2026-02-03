@@ -106,5 +106,53 @@
     "id": "marcus-lane-1770061982327",
     "lastAccessed": "2026-02-02T19:53:02.327Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Was involved in the internal-build decision for the UTA deal",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-lane-1770079513579",
+    "lastAccessed": "2026-02-03T00:45:13.579Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "UTA deal decision maker",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-lane-1770081317984",
+    "lastAccessed": "2026-02-03T01:15:17.984Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "UTA deal decision-maker",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-lane-1770082213807",
+    "lastAccessed": "2026-02-03T01:30:13.807Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "UTA deal decision-maker, post-mortem requested in Slack",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "marcus-lane-1770083110840",
+    "lastAccessed": "2026-02-03T01:45:10.840Z",
+    "accessCount": 0
   }
 ]

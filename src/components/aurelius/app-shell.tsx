@@ -12,7 +12,7 @@ type AppShellProps = {
 
 export function AppShell({ children, rightSidebar, wideSidebar = false, sidebarWidth }: AppShellProps) {
   return (
-    <div className="min-h-screen flex">
+    <div className="h-screen flex overflow-hidden">
       {/* Left Navigation Sidebar */}
       <AppSidebar />
 
@@ -21,10 +21,10 @@ export function AppShell({ children, rightSidebar, wideSidebar = false, sidebarW
         {children}
       </main>
 
-      {/* Right Sidebar (optional) - uses dynamic width when provided */}
+      {/* Right Sidebar (optional) - fixed height, internal scroll */}
       {rightSidebar && (
         <div
-          className={!wideSidebar ? "w-80" : undefined}
+          className={`h-full overflow-hidden ${!wideSidebar ? "w-80" : ""}`}
           style={wideSidebar && sidebarWidth ? { width: `${sidebarWidth}px` } : undefined}
         >
           {rightSidebar}

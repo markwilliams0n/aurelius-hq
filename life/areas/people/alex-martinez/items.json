@@ -8,7 +8,91 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "alex-martinez-1770066680203-0",
-    "lastAccessed": "2026-02-02T21:11:20.203Z",
+    "lastAccessed": "2026-02-03T01:44:57.418Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "Sent a bug report about payment processing stuck",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "alex-martinez-1770077729238",
+    "lastAccessed": "2026-02-03T01:44:57.418Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "Sent bug report on payment processing stuck",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "alex-martinez-1770078612593",
+    "lastAccessed": "2026-02-03T01:44:57.418Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "Sent a triage message about Payment processing stuck",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "alex-martinez-1770080411661",
+    "lastAccessed": "2026-02-03T01:44:57.418Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "Sent a bug report",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "alex-martinez-1770081317980",
+    "lastAccessed": "2026-02-03T01:44:57.418Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "Sent a triage message",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "alex-martinez-1770084010707",
+    "lastAccessed": "2026-02-03T02:00:10.707Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Posted a bug report on linear",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "alex-martinez-1770088514865",
+    "lastAccessed": "2026-02-03T03:15:14.865Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Sent a triage message about a payment processing issue",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "alex-martinez-1770089408781",
+    "lastAccessed": "2026-02-03T03:30:08.781Z",
     "accessCount": 0
   }
 ]

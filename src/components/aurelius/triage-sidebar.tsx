@@ -16,11 +16,10 @@ import {
   Sparkles,
   Check,
   ListTodo,
-  PanelLeftClose,
-  PanelLeft,
 } from "lucide-react";
 import { TriageItem } from "./triage-card";
 import { cn } from "@/lib/utils";
+import { RightSidebar } from "./right-sidebar";
 
 interface TriageSidebarProps {
   item: TriageItem | null;
@@ -42,57 +41,44 @@ export function TriageSidebar({ item, stats, isExpanded = false, onToggleExpand 
     setIsContentExpanded(false);
   }, [item?.id]);
 
+  // Keyboard shortcuts footer
+  const keyboardShortcuts = (
+    <div className="px-4 py-3 border-t border-border bg-secondary/30">
+      <h4 className="text-xs font-medium mb-2 text-muted-foreground">
+        Keyboard Shortcuts
+      </h4>
+      <div className="grid grid-cols-2 gap-1 text-xs">
+        <ShortcutHint keys="←" label="Archive" />
+        <ShortcutHint keys="↑" label="Memory" />
+        <ShortcutHint keys="⇧↑" label="Mem+Archive" />
+        <ShortcutHint keys="s" label="Snooze" />
+        <ShortcutHint keys="Space" label="Chat" />
+        <ShortcutHint keys="→" label="Actions" />
+        <ShortcutHint keys="Esc" label="Close" />
+      </div>
+    </div>
+  );
+
   return (
-    <aside className="h-screen border-l border-border bg-background flex flex-col overflow-hidden">
-      {/* Stats header */}
+    <RightSidebar
+      title="Inbox Stats"
+      isExpanded={isExpanded}
+      onToggleExpand={onToggleExpand}
+      footer={keyboardShortcuts}
+    >
+      {/* Stats section */}
       <div className="px-4 py-3 border-b border-border">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-medium">Inbox Stats</h3>
-          {onToggleExpand && (
-            <button
-              onClick={onToggleExpand}
-              className="p-1 rounded hover:bg-secondary/50 transition-colors text-muted-foreground hover:text-foreground"
-              title={isExpanded ? "Collapse sidebar" : "Expand sidebar"}
-            >
-              {isExpanded ? (
-                <PanelLeftClose className="w-4 h-4" />
-              ) : (
-                <PanelLeft className="w-4 h-4" />
-              )}
-            </button>
-          )}
-        </div>
         <div className="grid grid-cols-2 gap-2">
-          <StatBadge
-            icon={Inbox}
-            label="New"
-            value={stats.new}
-            color="text-gold"
-          />
-          <StatBadge
-            icon={Archive}
-            label="Archived"
-            value={stats.archived}
-            color="text-muted-foreground"
-          />
-          <StatBadge
-            icon={Clock}
-            label="Snoozed"
-            value={stats.snoozed}
-            color="text-blue-400"
-          />
-          <StatBadge
-            icon={CheckCircle}
-            label="Done"
-            value={stats.actioned}
-            color="text-green-400"
-          />
+          <StatBadge icon={Inbox} label="New" value={stats.new} color="text-gold" />
+          <StatBadge icon={Archive} label="Archived" value={stats.archived} color="text-muted-foreground" />
+          <StatBadge icon={Clock} label="Snoozed" value={stats.snoozed} color="text-blue-400" />
+          <StatBadge icon={CheckCircle} label="Done" value={stats.actioned} color="text-green-400" />
         </div>
       </div>
 
-      {/* Scrollable content area */}
+      {/* Item details */}
       {item && (
-        <div className="flex-1 overflow-y-auto min-h-0">
+        <div>
           {/* Linked entities */}
           {item.enrichment?.linkedEntities &&
             item.enrichment.linkedEntities.length > 0 && (
@@ -222,23 +208,7 @@ export function TriageSidebar({ item, stats, isExpanded = false, onToggleExpand 
           </p>
         </div>
       )}
-
-      {/* Keyboard shortcuts reference */}
-      <div className="px-4 py-3 border-t border-border bg-secondary/30">
-        <h4 className="text-xs font-medium mb-2 text-muted-foreground">
-          Keyboard Shortcuts
-        </h4>
-        <div className="grid grid-cols-2 gap-1 text-xs">
-          <ShortcutHint keys="←" label="Archive" />
-          <ShortcutHint keys="↑" label="Memory" />
-          <ShortcutHint keys="⇧↑" label="Mem+Archive" />
-          <ShortcutHint keys="s" label="Snooze" />
-          <ShortcutHint keys="Space" label="Chat" />
-          <ShortcutHint keys="→" label="Actions" />
-          <ShortcutHint keys="Esc" label="Close" />
-        </div>
-      </div>
-    </aside>
+    </RightSidebar>
   );
 }
 

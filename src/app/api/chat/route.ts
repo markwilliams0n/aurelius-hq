@@ -1,9 +1,7 @@
 import { NextRequest } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getConfig } from "@/lib/config";
 import { chatStreamWithTools, DEFAULT_MODEL, type Message } from "@/lib/ai/client";
-import { buildChatPrompt } from "@/lib/ai/prompts";
-import { buildMemoryContext } from "@/lib/memory/search";
+import { buildAgentContext } from "@/lib/ai/context";
 import { extractAndSaveMemories, containsMemorableContent } from "@/lib/memory/extraction";
 import { db } from "@/lib/db";
 import { conversations } from "@/lib/db/schema";
@@ -57,18 +55,8 @@ export async function POST(request: NextRequest) {
     content: m.content,
   }));
 
-  // Build memory context using QMD search (also tracks access)
-  const memoryContext = await buildMemoryContext(message);
-
-  // Get soul config
-  const soulConfig = await getConfig("soul");
-
-  // Build system prompt
-  const systemPrompt = buildChatPrompt(
-    memoryContext,
-    soulConfig?.content || null,
-    DEFAULT_MODEL
-  );
+  // Build agent context (recent notes + QMD search + soul config)
+  const { systemPrompt } = await buildAgentContext({ query: message });
 
   // Build messages for AI
   const aiMessages: Message[] = [

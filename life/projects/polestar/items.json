@@ -10,5 +10,77 @@
     "id": "polestar-1770066852569",
     "lastAccessed": "2026-02-02T21:14:12.569Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Has data inconsistencies that Michelle Swing needs to check with her team about",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "polestar-1770077729284",
+    "lastAccessed": "2026-02-03T00:15:29.284Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Has data inconsistencies",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "polestar-1770079513587",
+    "lastAccessed": "2026-02-03T00:45:13.587Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Data inconsistencies discussed with Michelle Swing",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "polestar-1770081318005",
+    "lastAccessed": "2026-02-03T01:15:18.005Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Data inconsistencies being checked by Michelle Swing\"s team",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "polestar-1770082213857",
+    "lastAccessed": "2026-02-03T01:30:13.857Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Data source for StubHub",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "polestar-1770085305315",
+    "lastAccessed": "2026-02-03T02:21:45.315Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Data inconsistencies mentioned by Michelle Swing",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "polestar-1770085398559",
+    "lastAccessed": "2026-02-03T02:23:18.559Z",
+    "accessCount": 0
   }
 ]

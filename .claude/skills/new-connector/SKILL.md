@@ -14,7 +14,7 @@ When this skill is invoked:
 1. **Read the connector documentation** to understand the current architecture:
    - Read `docs/connectors/index.md` for the **connector registry** (all connectors, their status, capabilities)
    - Read `docs/connectors/README.md` for the setup wizard interview
-   - Read `docs/triage.md` for triage system overview
+   - Read `docs/systems/triage.md` for triage system overview
    - Read `docs/connectors/granola.md` as a reference implementation
 
 2. **Review existing connectors** to understand patterns:

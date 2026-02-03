@@ -3,6 +3,31 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { recordSearchAccess } from './access-tracking';
 
+/**
+ * Clean QMD file path by removing qmd:// prefix
+ */
+function cleanQmdPath(filePath: string): string {
+  return filePath.replace(/^qmd:\/\//, '');
+}
+
+/**
+ * Clean QMD snippet by removing diff markers like "@@ -1,3 @@ (0 before, 6 after)"
+ * and returning clean content
+ */
+function cleanQmdSnippet(snippet: string, title?: string): string {
+  if (!snippet) return title || '';
+
+  // Remove diff markers: "@@ -1,3 @@ (0 before, 6 after)\n"
+  let cleaned = snippet.replace(/^@@[^@]+@@\s*\([^)]+\)\n?/gm, '');
+
+  // If we stripped everything, use the title
+  if (!cleaned.trim() && title) {
+    return title;
+  }
+
+  return cleaned.trim();
+}
+
 export interface SearchResult {
   path: string;
   content: string;
@@ -40,9 +65,9 @@ export function searchMemory(
 
     try {
       const parsed = JSON.parse(result);
-      return parsed.map((item: { docid?: string; path?: string; content?: string; snippet?: string; score?: number }) => ({
-        path: item.docid || item.path || '',
-        content: item.content || item.snippet || '',
+      return parsed.map((item: { docid?: string; path?: string; file?: string; title?: string; content?: string; snippet?: string; score?: number }) => ({
+        path: cleanQmdPath(item.file || item.path || item.docid || ''),
+        content: cleanQmdSnippet(item.content || item.snippet || '', item.title),
         score: item.score || 0,
         collection: collection
       }));
@@ -77,9 +102,9 @@ export function keywordSearch(
 
     try {
       const parsed = JSON.parse(result);
-      return parsed.map((item: { docid?: string; path?: string; content?: string; snippet?: string; score?: number }) => ({
-        path: item.docid || item.path || '',
-        content: item.content || item.snippet || '',
+      return parsed.map((item: { docid?: string; path?: string; file?: string; title?: string; content?: string; snippet?: string; score?: number }) => ({
+        path: cleanQmdPath(item.file || item.path || item.docid || ''),
+        content: cleanQmdSnippet(item.content || item.snippet || '', item.title),
         score: item.score || 0,
         collection: collection
       }));
@@ -114,9 +139,9 @@ export function semanticSearch(
 
     try {
       const parsed = JSON.parse(result);
-      return parsed.map((item: { docid?: string; path?: string; content?: string; snippet?: string; score?: number }) => ({
-        path: item.docid || item.path || '',
-        content: item.content || item.snippet || '',
+      return parsed.map((item: { docid?: string; path?: string; file?: string; title?: string; content?: string; snippet?: string; score?: number }) => ({
+        path: cleanQmdPath(item.file || item.path || item.docid || ''),
+        content: cleanQmdSnippet(item.content || item.snippet || '', item.title),
         score: item.score || 0,
         collection: collection
       }));
@@ -129,16 +154,33 @@ export function semanticSearch(
   }
 }
 
+export interface BuildContextOptions {
+  /** Maximum number of results */
+  limit?: number;
+  /**
+   * Collection to search. Defaults to 'life'.
+   * Use 'life' for entity-based memory (people, companies, projects).
+   * Use 'memory' for daily notes (but prefer getRecentNotes() for recent content).
+   * Use 'all' to search everything.
+   */
+  collection?: 'life' | 'memory' | 'me' | 'all';
+}
+
 /**
  * Build memory context string for AI prompts
- * Searches across all collections and formats results
+ * Searches specified collection and formats results
  * Also tracks access to returned entities
+ *
+ * Note: For recent daily notes (last 24h), use getRecentNotes() instead.
+ * This function is better for searching older/indexed content.
  */
 export async function buildMemoryContext(
   query: string,
-  limit: number = 5
+  options: BuildContextOptions = {}
 ): Promise<string | null> {
-  const results = searchMemory(query, { limit });
+  const { limit = 5, collection = 'life' } = options;
+
+  const results = searchMemory(query, { limit, collection });
 
   if (results.length === 0) {
     return null;

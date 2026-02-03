@@ -34,5 +34,17 @@
     "id": "customer-segmentation-analysis-1770060625891",
     "lastAccessed": "2026-02-02T19:30:25.891Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Recommended by Aurelius for new CRO onboarding",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "customer-segmentation-analysis-1770081318012",
+    "lastAccessed": "2026-02-03T01:15:18.012Z",
+    "accessCount": 0
   }
 ]

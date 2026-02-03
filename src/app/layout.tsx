@@ -8,6 +8,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Aurelius",
   description: "Personal AI Command Center",
+  icons: {
+    icon: "/avatars/agent.png",
+    apple: "/avatars/agent.png",
+  },
 };
 
 export default function RootLayout({

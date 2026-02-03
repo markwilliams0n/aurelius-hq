@@ -22,5 +22,89 @@
     "id": "michelle-swing-1770066680210-1",
     "lastAccessed": "2026-02-02T21:11:20.210Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Met with ROSTR to explore collaboration on venue and promoter directory features",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "michelle-swing-1770077729248",
+    "lastAccessed": "2026-02-03T00:15:29.248Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Recent CEO of Noise Pop, met with ROSTR to explore collaboration on venue and promoter directory features",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "michelle-swing-1770078612591",
+    "lastAccessed": "2026-02-03T00:30:12.591Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Is the CEO of StubHub and recently rejoined Noise Pop",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "michelle-swing-1770079513584",
+    "lastAccessed": "2026-02-03T00:45:13.584Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Recently rejoined",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "michelle-swing-1770080411663",
+    "lastAccessed": "2026-02-03T01:00:11.663Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "StubHub CEO, recently rejoined, former Noise Pop CEO",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "michelle-swing-1770083110845",
+    "lastAccessed": "2026-02-03T01:45:10.845Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Rejoined StubHub",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "michelle-swing-1770084010709",
+    "lastAccessed": "2026-02-03T02:00:10.709Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "recently rejoined Noise Pop",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "michelle-swing-1770085305311",
+    "lastAccessed": "2026-02-03T02:21:45.311Z",
+    "accessCount": 0
   }
 ]

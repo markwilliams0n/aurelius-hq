@@ -8,7 +8,19 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "rostr-pro-product-1769990901586-0",
-    "lastAccessed": "2026-02-02T00:08:21.586Z",
+    "lastAccessed": "2026-02-03T01:52:46.197Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "Core build team: Adam Watson",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "rostr-pro-product-1770089068252",
+    "lastAccessed": "2026-02-03T03:24:28.252Z",
     "accessCount": 0
   }
 ]

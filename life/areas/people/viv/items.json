@@ -8,7 +8,67 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "viv-1770066680201-0",
-    "lastAccessed": "2026-02-02T21:11:20.201Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T02:06:37.297Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "Is Chrif Growth officer Vivian Donahue",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "viv-1770077729234",
+    "lastAccessed": "2026-02-03T02:06:37.297Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "New Chief Growth Officer",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "viv-1770081318003",
+    "lastAccessed": "2026-02-03T02:06:37.297Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "AI support priority",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "viv-1770081318004",
+    "lastAccessed": "2026-02-03T02:06:37.297Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "AI support is a priority",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "viv-1770082213808",
+    "lastAccessed": "2026-02-03T02:06:37.297Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "Onboarding as Chrif Growth officer, AI support is a priority",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "viv-1770083110842",
+    "lastAccessed": "2026-02-03T02:06:37.297Z",
+    "accessCount": 1
   }
 ]

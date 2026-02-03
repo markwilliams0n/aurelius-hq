@@ -8,8 +8,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "lucas-homer-1769990901574-0",
-    "lastAccessed": "2026-02-02T00:08:21.574Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:51:50.517Z",
+    "accessCount": 1
   },
   {
     "fact": "coordinating daily on backend systems",
@@ -20,8 +20,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "lucas-homer-1769991487895",
-    "lastAccessed": "2026-02-02T00:18:07.895Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:51:50.517Z",
+    "accessCount": 1
   },
   {
     "fact": "Coordinating daily with Matias Fessia on backend systems",
@@ -32,8 +32,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "lucas-homer-1769993916204",
-    "lastAccessed": "2026-02-02T00:58:36.204Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:51:50.517Z",
+    "accessCount": 1
   },
   {
     "fact": "Daily coordination with Matias Fessia on backend systems",
@@ -44,8 +44,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "lucas-homer-1769997155073",
-    "lastAccessed": "2026-02-02T01:52:35.073Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:51:50.517Z",
+    "accessCount": 1
   },
   {
     "fact": "Ojai office",
@@ -56,8 +56,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "lucas-homer-1770060241754",
-    "lastAccessed": "2026-02-02T19:24:01.754Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:51:50.517Z",
+    "accessCount": 1
   },
   {
     "fact": "ROSTR Pro focus",
@@ -68,8 +68,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "lucas-homer-1770060241755",
-    "lastAccessed": "2026-02-02T19:24:01.755Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:51:50.517Z",
+    "accessCount": 1
   },
   {
     "fact": "in Ojai",
@@ -80,8 +80,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "lucas-homer-1770060340687",
-    "lastAccessed": "2026-02-02T19:25:40.687Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:51:50.517Z",
+    "accessCount": 1
   },
   {
     "fact": "part of ROSTR team",
@@ -92,8 +92,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "lucas-homer-1770060340687",
-    "lastAccessed": "2026-02-02T19:25:40.687Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:51:50.517Z",
+    "accessCount": 1
   },
   {
     "fact": "Coordinating daily with Adam Watson on backend systems",
@@ -104,8 +104,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "lucas-homer-1770060348640",
-    "lastAccessed": "2026-02-02T19:25:48.640Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:51:50.517Z",
+    "accessCount": 1
   },
   {
     "fact": "Engineer at ROSTR",
@@ -116,8 +116,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "lucas-homer-1770060475577",
-    "lastAccessed": "2026-02-02T19:27:55.577Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:51:50.517Z",
+    "accessCount": 1
   },
   {
     "fact": "Backend systems",
@@ -128,8 +128,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "lucas-homer-1770060635686",
-    "lastAccessed": "2026-02-02T19:30:35.686Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:51:50.517Z",
+    "accessCount": 1
   },
   {
     "fact": "coordinating daily with Adam Watson in San Diego",
@@ -140,8 +140,8 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "lucas-homer-1770060635687",
-    "lastAccessed": "2026-02-02T19:30:35.687Z",
-    "accessCount": 0
+    "lastAccessed": "2026-02-03T01:51:50.517Z",
+    "accessCount": 1
   },
   {
     "fact": "Ojai location",
@@ -152,7 +152,151 @@
     "supersededBy": null,
     "relatedEntities": [],
     "id": "lucas-homer-1770062025787",
-    "lastAccessed": "2026-02-02T19:53:45.787Z",
+    "lastAccessed": "2026-02-03T01:51:50.517Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "Is at ROSTR in Ojai",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1770077729244",
+    "lastAccessed": "2026-02-03T01:51:50.517Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "Backend systems with Matias Fessia",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1770077743570",
+    "lastAccessed": "2026-02-03T01:51:50.517Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "In Ojai, involved in ROSTR Pro focus",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1770078612590",
+    "lastAccessed": "2026-02-03T01:51:50.517Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "Works at ROSTR in Ojai",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1770079513583",
+    "lastAccessed": "2026-02-03T01:51:50.517Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "Engineer",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1770081317981",
+    "lastAccessed": "2026-02-03T01:51:50.517Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "Ojai",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1770081317982",
+    "lastAccessed": "2026-02-03T01:51:50.517Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "working on ROSTR Pro",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1770082213809",
+    "lastAccessed": "2026-02-03T01:51:50.517Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "Engineer at ROSTR, based in Ojai",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1770083110844",
+    "lastAccessed": "2026-02-03T01:51:50.517Z",
+    "accessCount": 1
+  },
+  {
+    "fact": "Coordinating daily with Matias Fessia on backend systems for ROSTR Pro",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1770084927019",
+    "lastAccessed": "2026-02-03T02:15:27.019Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Coordinating daily with Adam Watson in Ojai on the backend systems.",
+    "category": "context",
+    "timestamp": "2026-02-01",
+    "source": "memory/2026-02-01.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1770085138753",
+    "lastAccessed": "2026-02-03T02:18:58.753Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "based in Ojai",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1770085305309",
+    "lastAccessed": "2026-02-03T02:21:45.309Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Works on ROSTR in Ojai",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "lucas-homer-1770089408782",
+    "lastAccessed": "2026-02-03T03:30:08.782Z",
     "accessCount": 0
   }
 ]

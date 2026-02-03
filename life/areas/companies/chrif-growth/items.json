@@ -1,1 +1,14 @@
-[]
+[
+  {
+    "fact": "Vivian Donahue\"s role",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "chrif-growth-1770089280886",
+    "lastAccessed": "2026-02-03T03:28:00.886Z",
+    "accessCount": 0
+  }
+]

@@ -1,4 +1,5 @@
 import { appendToDailyNote } from './daily-notes';
+import { isOllamaAvailable, generate } from './ollama';
 
 /**
  * Extract and save noteworthy information from a conversation turn.
@@ -8,11 +9,54 @@ export async function extractAndSaveMemories(
   userMessage: string,
   assistantResponse: string
 ): Promise<void> {
-  // For now, just save the conversation exchange to daily notes
-  // Later: use local LLM to extract structured facts
+  // Try to use Ollama for semantic extraction
+  const useOllama = await isOllamaAvailable();
 
-  const entry = formatConversationEntry(userMessage, assistantResponse);
-  await appendToDailyNote(entry);
+  if (useOllama) {
+    const entry = await extractSemanticNote(userMessage, assistantResponse);
+    await appendToDailyNote(entry);
+  } else {
+    // Fallback to simple formatting
+    const entry = formatConversationEntry(userMessage, assistantResponse);
+    await appendToDailyNote(entry);
+  }
+}
+
+/**
+ * Use Ollama to extract a semantic summary of the conversation
+ */
+async function extractSemanticNote(
+  userMessage: string,
+  assistantResponse: string
+): Promise<string> {
+  const prompt = `You are summarizing a conversation for memory storage. Extract the key information.
+
+User said: "${userMessage.slice(0, 1000)}"
+
+Assistant replied: "${assistantResponse.slice(0, 1000)}"
+
+Write a brief note (2-4 sentences) capturing the key facts, decisions, or information shared. Focus on:
+- Names of people, companies, projects mentioned
+- Decisions made or preferences expressed
+- Important facts or context shared
+- Action items or follow-ups
+
+Write ONLY the note, no introduction. Start with the main topic:`;
+
+  try {
+    const response = await generate(prompt, { temperature: 0.2, maxTokens: 300 });
+    const note = response.trim();
+
+    // Validate we got something useful
+    if (note.length > 20 && note.length < 1000) {
+      return note;
+    }
+  } catch (error) {
+    console.error('[Extraction] Ollama failed, using fallback:', error);
+  }
+
+  // Fallback to simple format
+  return formatConversationEntry(userMessage, assistantResponse);
 }
 
 function formatConversationEntry(

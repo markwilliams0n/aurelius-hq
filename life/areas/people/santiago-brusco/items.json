@@ -1,113 +1,5 @@
 [
   {
-    "fact": "Title: PM; BA, 2",
-    "category": "context",
-    "timestamp": "2026-02-01",
-    "source": "memory/2026-02-01.md",
-    "status": "active",
-    "supersededBy": null,
-    "relatedEntities": [],
-    "id": "santiago-brusco-1769990901580-0",
-    "lastAccessed": "2026-02-02T00:08:21.580Z",
-    "accessCount": 0
-  },
-  {
-    "fact": "Role: PM",
-    "category": "context",
-    "timestamp": "2026-02-01",
-    "source": "memory/2026-02-01.md",
-    "status": "active",
-    "supersededBy": null,
-    "relatedEntities": [],
-    "id": "santiago-brusco-1769990901580-1",
-    "lastAccessed": "2026-02-02T00:08:21.580Z",
-    "accessCount": 0
-  },
-  {
-    "fact": "Related to UI ramp",
-    "category": "context",
-    "timestamp": "2026-02-01",
-    "source": "memory/2026-02-01.md",
-    "status": "active",
-    "supersededBy": null,
-    "relatedEntities": [],
-    "id": "santiago-brusco-1769990901580-2",
-    "lastAccessed": "2026-02-02T00:08:21.580Z",
-    "accessCount": 0
-  },
-  {
-    "fact": "PM BA 2-week Linear cycles scope lock",
-    "category": "context",
-    "timestamp": "2026-02-01",
-    "source": "memory/2026-02-01.md",
-    "status": "active",
-    "supersededBy": null,
-    "relatedEntities": [],
-    "id": "santiago-brusco-1769991487897",
-    "lastAccessed": "2026-02-02T00:18:07.897Z",
-    "accessCount": 0
-  },
-  {
-    "fact": "PM at BA",
-    "category": "context",
-    "timestamp": "2026-02-01",
-    "source": "memory/2026-02-01.md",
-    "status": "active",
-    "supersededBy": null,
-    "relatedEntities": [],
-    "id": "santiago-brusco-1769993916207",
-    "lastAccessed": "2026-02-02T00:58:36.207Z",
-    "accessCount": 0
-  },
-  {
-    "fact": "2-week Linear cycles",
-    "category": "context",
-    "timestamp": "2026-02-01",
-    "source": "memory/2026-02-01.md",
-    "status": "active",
-    "supersededBy": null,
-    "relatedEntities": [],
-    "id": "santiago-brusco-1769993916208",
-    "lastAccessed": "2026-02-02T00:58:36.208Z",
-    "accessCount": 0
-  },
-  {
-    "fact": "scope lock",
-    "category": "context",
-    "timestamp": "2026-02-01",
-    "source": "memory/2026-02-01.md",
-    "status": "active",
-    "supersededBy": null,
-    "relatedEntities": [],
-    "id": "santiago-brusco-1769993916208",
-    "lastAccessed": "2026-02-02T00:58:36.208Z",
-    "accessCount": 0
-  },
-  {
-    "fact": "PM",
-    "category": "context",
-    "timestamp": "2026-02-01",
-    "source": "memory/2026-02-01.md",
-    "status": "active",
-    "supersededBy": null,
-    "relatedEntities": [],
-    "id": "santiago-brusco-1769997155078",
-    "lastAccessed": "2026-02-02T01:52:35.078Z",
-    "accessCount": 0
-  },
-  {
-    "fact": "BA",
-    "category": "context",
-    "timestamp": "2026-02-01",
-    "source": "memory/2026-02-01.md",
-    "status": "active",
-    "supersededBy": null,
-    "relatedEntities": [],
-    "id": "santiago-brusco-1769997155079",
-    "lastAccessed": "2026-02-02T01:52:35.079Z",
-    "accessCount": 0
-  },
-  {
     "fact": "PM at BA, 2-week Linear cycles, scope lock",
     "category": "context",
     "timestamp": "2026-02-01",
@@ -115,20 +7,8 @@
     "status": "active",
     "supersededBy": null,
     "relatedEntities": [],
-    "id": "santiago-brusco-1769997700421",
-    "lastAccessed": "2026-02-02T02:01:40.421Z",
-    "accessCount": 0
-  },
-  {
-    "fact": "Project Manager at BA",
-    "category": "context",
-    "timestamp": "2026-02-01",
-    "source": "memory/2026-02-01.md",
-    "status": "active",
-    "supersededBy": null,
-    "relatedEntities": [],
-    "id": "santiago-brusco-1770060422033",
-    "lastAccessed": "2026-02-02T19:27:02.033Z",
+    "id": "santiago-brusco-1770089418458-0",
+    "lastAccessed": "2026-02-03T03:30:18.458Z",
     "accessCount": 0
   }
 ]

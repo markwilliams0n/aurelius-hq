@@ -106,5 +106,41 @@
     "id": "priya-mehta-1770060412062",
     "lastAccessed": "2026-02-02T19:26:52.062Z",
     "accessCount": 0
+  },
+  {
+    "fact": "Has been evaluating ROSTR Pro against Chartmetric and Viberate",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "priya-mehta-1770077729201",
+    "lastAccessed": "2026-02-03T00:15:29.201Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Head of data strategy",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "priya-mehta-1770081317977",
+    "lastAccessed": "2026-02-03T01:15:17.977Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "Being evaluated by Danny Feldman for ROSTR Pro",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "priya-mehta-1770082213805",
+    "lastAccessed": "2026-02-03T01:30:13.806Z",
+    "accessCount": 0
   }
 ]

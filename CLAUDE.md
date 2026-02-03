@@ -1,5 +1,24 @@
 # Claude Code Rules for Aurelius HQ
 
+## Deployment Context
+
+**This app runs locally on macOS**, not on Vercel/cloud platforms:
+- Local Next.js dev server (`bun run dev`)
+- Database is Neon PostgreSQL (cloud), accessed from local
+- Background scheduling needs local solutions (node-cron, launchd, system cron)
+- Telegram webhooks require ngrok tunnel to reach local server
+
+**Do NOT assume Vercel** - no serverless functions, no Vercel cron, no `maxDuration` limits apply.
+
+## Claude Can Manage Local Processes
+
+You (Claude) can and should manage local development processes when needed:
+- **Restart dev server**: Find PID with `pgrep -f "next dev"`, kill it, then `bun run dev &`
+- **Check running processes**: `ps aux | grep node`
+- **View logs**: The dev server runs in background, check output in terminal
+
+When restarting the server, always use specific PIDs (not `pkill -f`).
+
 ## Session Start
 
 1. **Check `docs/worklog/now.md`** - Current context: what we just did, what's in progress, what's next

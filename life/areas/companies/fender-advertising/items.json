@@ -1,0 +1,26 @@
+[
+  {
+    "fact": "Locked for $45k",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-advertising-1770088514873-0",
+    "lastAccessed": "2026-02-03T03:15:14.873Z",
+    "accessCount": 0
+  },
+  {
+    "fact": "6-mo NI",
+    "category": "context",
+    "timestamp": "2026-02-02",
+    "source": "memory/2026-02-02.md",
+    "status": "active",
+    "supersededBy": null,
+    "relatedEntities": [],
+    "id": "fender-advertising-1770088514873-1",
+    "lastAccessed": "2026-02-03T03:15:14.873Z",
+    "accessCount": 0
+  }
+]
