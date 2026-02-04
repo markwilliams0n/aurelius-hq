@@ -93,17 +93,28 @@ export function TriageDetailModal({ item, onClose }: TriageDetailModalProps) {
     minute: "2-digit",
   });
 
-  // Handle escape key
+  // Get Linear URL for keyboard shortcut
+  const linearUrl = item.connector === "linear"
+    ? (item.enrichment as Record<string, unknown>)?.linearUrl as string | undefined
+    : undefined;
+
+  // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         onClose();
       }
+      // L to open in Linear
+      if (e.key === "l" || e.key === "L") {
+        if (linearUrl) {
+          window.open(linearUrl, "_blank", "noopener,noreferrer");
+        }
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [onClose, linearUrl]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
@@ -402,16 +413,18 @@ export function TriageDetailModal({ item, onClose }: TriageDetailModalProps) {
                 Close
               </span>
 
-              {/* View in Linear button */}
-              {item.connector === "linear" && (item.enrichment as Record<string, unknown>)?.linearUrl && (
+              {/* Open in Linear shortcut */}
+              {linearUrl && (
                 <a
-                  href={(item.enrichment as Record<string, unknown>).linearUrl as string}
+                  href={linearUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 transition-colors"
+                  className="flex items-center gap-1.5 hover:text-indigo-400 transition-colors"
                 >
-                  <ExternalLink className="w-3 h-3" />
-                  View in Linear
+                  <kbd className="px-1.5 py-0.5 rounded bg-secondary border border-border font-mono text-[10px]">
+                    L
+                  </kbd>
+                  Open in Linear
                 </a>
               )}
             </div>
