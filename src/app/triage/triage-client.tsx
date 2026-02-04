@@ -442,6 +442,17 @@ export function TriageClient() {
           e.preventDefault();
           handleSpam();
           break;
+        case "l":
+        case "L":
+          // Open in Linear (if Linear item with URL)
+          if (currentItem?.connector === "linear") {
+            const linearUrl = (currentItem.enrichment as Record<string, unknown>)?.linearUrl as string | undefined;
+            if (linearUrl) {
+              e.preventDefault();
+              window.open(linearUrl, "_blank", "noopener,noreferrer");
+            }
+          }
+          break;
         case "u":
           if (e.metaKey || e.ctrlKey) {
             e.preventDefault();
@@ -461,6 +472,7 @@ export function TriageClient() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     viewMode,
+    currentItem,
     handleArchive,
     handleMemory,
     handleMemoryAndArchive,
