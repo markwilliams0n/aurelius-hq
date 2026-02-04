@@ -4,9 +4,8 @@
  * GraphQL client for Linear API with API key auth.
  */
 
-import { db } from '@/lib/db';
-import { configs } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { promises as fs } from 'fs';
+import path from 'path';
 import type {
   LinearNotification,
   LinearNotificationsResponse,
@@ -14,6 +13,7 @@ import type {
 } from './types';
 
 const LINEAR_API_URL = 'https://api.linear.app/graphql';
+const SYNC_STATE_PATH = path.join(process.cwd(), '.linear-sync-state.json');
 
 /**
  * Check if Linear connector is configured
@@ -60,17 +60,14 @@ async function graphql<T>(
 
 /**
  * Fetch unread/unarchived notifications
+ * Uses inline fragments for IssueNotification since Notification is a union type
  */
 export async function fetchNotifications(
   cursor?: string
 ): Promise<{ notifications: LinearNotification[]; hasMore: boolean; endCursor?: string }> {
   const query = `
     query Notifications($after: String) {
-      notifications(
-        first: 50
-        after: $after
-        filter: { readAt: { null: true } }
-      ) {
+      notifications(first: 50, after: $after) {
         nodes {
           id
           type
@@ -83,54 +80,56 @@ export async function fetchNotifications(
             email
             avatarUrl
           }
-          issue {
-            id
-            identifier
-            title
-            description
-            url
-            priority
-            createdAt
-            updatedAt
-            state {
+          ... on IssueNotification {
+            issue {
               id
-              name
-              type
-            }
-            project {
-              id
-              name
-              state
-            }
-            labels {
-              nodes {
+              identifier
+              title
+              description
+              url
+              priority
+              createdAt
+              updatedAt
+              state {
                 id
                 name
-                color
+                type
+              }
+              project {
+                id
+                name
+                state
+              }
+              labels {
+                nodes {
+                  id
+                  name
+                  color
+                }
+              }
+              assignee {
+                id
+                name
+                email
+                avatarUrl
+              }
+              creator {
+                id
+                name
+                email
+                avatarUrl
               }
             }
-            assignee {
+            comment {
               id
-              name
-              email
-              avatarUrl
-            }
-            creator {
-              id
-              name
-              email
-              avatarUrl
-            }
-          }
-          comment {
-            id
-            body
-            createdAt
-            user {
-              id
-              name
-              email
-              avatarUrl
+              body
+              createdAt
+              user {
+                id
+                name
+                email
+                avatarUrl
+              }
             }
           }
         }
@@ -146,8 +145,13 @@ export async function fetchNotifications(
     after: cursor,
   });
 
+  // Filter to only unread notifications (readAt is null)
+  const unreadNotifications = data.notifications.nodes.filter(
+    (n) => !n.readAt && !n.archivedAt
+  );
+
   return {
-    notifications: data.notifications.nodes,
+    notifications: unreadNotifications,
     hasMore: data.notifications.pageInfo.hasNextPage,
     endCursor: data.notifications.pageInfo.endCursor ?? undefined,
   };
@@ -195,55 +199,22 @@ export async function getCurrentUser(): Promise<{
 }
 
 /**
- * Get sync state from database
+ * Get sync state from file
  */
 export async function getSyncState(): Promise<LinearSyncState> {
-  const result = await db
-    .select()
-    .from(configs)
-    .where(eq(configs.key, 'connector:linear:sync'))
-    .limit(1);
-
-  if (result.length === 0) {
-    return {};
-  }
-
   try {
-    return JSON.parse(result[0].content) as LinearSyncState;
+    const content = await fs.readFile(SYNC_STATE_PATH, 'utf-8');
+    return JSON.parse(content);
   } catch {
     return {};
   }
 }
 
 /**
- * Save sync state to database
+ * Save sync state to file
  */
 export async function saveSyncState(state: LinearSyncState): Promise<void> {
-  const content = JSON.stringify(state);
-
-  const existing = await db
-    .select()
-    .from(configs)
-    .where(eq(configs.key, 'connector:linear:sync'))
-    .limit(1);
-
-  if (existing.length === 0) {
-    await db.insert(configs).values({
-      key: 'connector:linear:sync',
-      content,
-      version: 1,
-      createdBy: 'system',
-    });
-  } else {
-    await db
-      .update(configs)
-      .set({
-        content,
-        version: existing[0].version + 1,
-        updatedAt: new Date(),
-      })
-      .where(eq(configs.key, 'connector:linear:sync'));
-  }
+  await fs.writeFile(SYNC_STATE_PATH, JSON.stringify(state, null, 2));
 }
 
 /**

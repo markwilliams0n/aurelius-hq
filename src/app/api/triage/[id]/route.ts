@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { inboxItems } from "@/lib/db/schema";
 import { eq, or } from "drizzle-orm";
 import { syncArchiveToGmail, syncSpamToGmail } from "@/lib/gmail/actions";
+import { archiveNotification } from "@/lib/linear";
 import { logActivity } from "@/lib/activity";
 
 // Check if string is a valid UUID
@@ -79,6 +80,18 @@ export async function POST(
         backgroundTasks.push(
           syncArchiveToGmail(item.id).catch((error) => {
             console.error("[Triage] Background Gmail archive failed:", error);
+          })
+        );
+      }
+      // Sync to Linear in background (mark notification as read)
+      if (item.connector === "linear" && item.externalId) {
+        backgroundTasks.push(
+          archiveNotification(item.externalId).then((success) => {
+            if (success) {
+              console.log("[Triage] Linear notification archived:", item.externalId);
+            }
+          }).catch((error) => {
+            console.error("[Triage] Background Linear archive failed:", error);
           })
         );
       }
