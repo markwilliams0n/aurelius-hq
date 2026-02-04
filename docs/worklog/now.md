@@ -4,6 +4,16 @@
 
 ## Just Completed (Last Session)
 
+**2026-02-03 (Continued)**
+
+Linear Connector:
+- Full Linear integration via GraphQL API
+- Notification sync via heartbeat (same pattern as Gmail)
+- Archive syncs back to Linear (marks as read)
+- `L` keyboard shortcut to open in Linear (list + modal)
+- Rich metadata display: state, priority, project, labels, actor
+- Documentation + design docs
+
 **2026-02-03 Night**
 
 Gmail Connector + Memory System Fixes:
@@ -27,13 +37,13 @@ Gmail Connector + Memory System Fixes:
 
 ## In Progress
 
-Ready to merge `feature/gmail-connector` to main.
+Nothing active - ready for next task.
 
 ## Up Next
 
 - [ ] Test Gmail sync with real inbox
 - [ ] Add UI components for Gmail-specific features (thread expand/collapse)
-- [ ] Consider: Linear connector (similar pattern)
+- [ ] Linear PM view (dedicated issue management)
 
 ## Known Issues (Documented)
 
