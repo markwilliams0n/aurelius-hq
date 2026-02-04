@@ -6,6 +6,7 @@ import { isOllamaAvailable, extractEntitiesWithLLM, isFactRedundant, type Existi
 import { resolveEntities, type ResolvedEntity } from './entity-resolution';
 import { syncGranolaMeetings, type GranolaSyncResult } from '@/lib/granola';
 import { syncGmailMessages, type GmailSyncResult } from '@/lib/gmail';
+import { syncLinearNotifications, type LinearSyncResult } from '@/lib/linear';
 import { createBackup, type BackupResult } from './backup';
 
 const LIFE_DIR = path.join(process.cwd(), 'life');
@@ -439,6 +440,8 @@ export interface HeartbeatOptions {
   skipGranola?: boolean;
   /** Skip Gmail sync */
   skipGmail?: boolean;
+  /** Skip Linear sync */
+  skipLinear?: boolean;
   /** Skip entity extraction from daily notes */
   skipExtraction?: boolean;
 }
@@ -457,6 +460,7 @@ export interface HeartbeatResult {
   extractionMethod: 'ollama' | 'pattern';
   granola?: GranolaSyncResult;
   gmail?: GmailSyncResult;
+  linear?: LinearSyncResult;
   backup?: BackupResult;
   /** Granular step results for debugging */
   steps: {
@@ -464,6 +468,7 @@ export interface HeartbeatResult {
     extraction?: StepResult;
     granola?: StepResult;
     gmail?: StepResult;
+    linear?: StepResult;
     qmdUpdate?: StepResult;
     qmdEmbed?: StepResult;
   };
@@ -481,7 +486,8 @@ export interface HeartbeatResult {
  * 3. Create/update entity files
  * 4. Sync Granola meetings
  * 5. Sync Gmail messages
- * 6. Reindex QMD
+ * 6. Sync Linear notifications
+ * 7. Reindex QMD
  *
  * Each step is isolated - failures in one step don't prevent others from running.
  */
@@ -782,7 +788,33 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
     }
   }
 
-  // Step 4: Reindex QMD (split into update + embed for better observability)
+  // Step 4: Sync Linear notifications to triage
+  let linearResult: LinearSyncResult | undefined;
+  if (!options.skipLinear) {
+    const linearStart = Date.now();
+    try {
+      linearResult = await syncLinearNotifications();
+      if (linearResult.synced > 0) {
+        console.log(`[Heartbeat] Linear: synced ${linearResult.synced} notifications`);
+      }
+      steps.linear = {
+        success: !linearResult.error,
+        durationMs: Date.now() - linearStart,
+        error: linearResult.error,
+      };
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error('[Heartbeat] Linear sync failed:', errMsg);
+      warnings.push(`Linear sync failed: ${errMsg}`);
+      steps.linear = {
+        success: false,
+        durationMs: Date.now() - linearStart,
+        error: errMsg,
+      };
+    }
+  }
+
+  // Step 5: Reindex QMD (split into update + embed for better observability)
   let reindexed = false;
   if (!options.skipReindex) {
     // QMD Update (fast - just document index)
@@ -858,6 +890,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
     extractionMethod: useOllama ? 'ollama' : 'pattern',
     granola: granolaResult,
     gmail: gmailResult,
+    linear: linearResult,
     backup: backupResult,
     steps,
     allStepsSucceeded,
