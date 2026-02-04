@@ -114,26 +114,40 @@ Central reference for all triage connectors, their capabilities, and status.
 ### linear
 | Property | Value |
 |----------|-------|
-| **Status** | Stub (fake data only) |
-| **Added** | 2026-02-01 |
-| **Description** | Issues from Linear |
-| **Documentation** | None yet |
+| **Status** | **Active** |
+| **Added** | 2026-02-03 |
+| **Description** | Notifications from Linear |
+| **Documentation** | [linear.md](./linear.md) |
 
 **Capabilities:**
 | Feature | Supported | Notes |
 |---------|-----------|-------|
 | Reply | No | Use Linear UI for comments |
-| Archive | Yes | |
+| Archive | Yes | Marks notification as read |
 | Memory | Yes | Manual only |
 | Chat | Yes | |
-| Custom Actions | No | Could add: change status, assign |
-| Task Extraction | Yes | AI extraction |
+| Custom Actions | Yes | View in Linear link |
+| Task Extraction | No | Linear issues are tasks |
 
-**Custom Enrichment Fields:** None (could add: `issueState`, `assignee`, `project`, `cycle`)
+**Custom Enrichment Fields:**
+- `notificationType` - Assignment, mention, comment, status change
+- `issueState` - Current issue status
+- `issuePriority` - Priority level (0-4)
+- `issueProject` - Project name
+- `issueLabels` - Label names
+- `actor` - Who triggered the notification
+- `linearUrl` - Direct link to issue
 
-**Sync:** Not implemented (using fake data)
+**Sync:**
+- Trigger: Heartbeat (centralized, default 15 min)
+- Query: Unread notifications
+- Deduplication: By notification ID
 
-**Files:** None yet (uses fake data generator)
+**Files:**
+- `src/lib/linear/client.ts`
+- `src/lib/linear/sync.ts`
+- `src/lib/linear/types.ts`
+- `src/app/api/linear/sync/route.ts`
 
 ---
 
@@ -170,7 +184,7 @@ Central reference for all triage connectors, their capabilities, and status.
 | granola | No | Yes | Yes | Granola + AI | Active |
 | gmail | Yes | No | Yes | AI | **Active** |
 | slack | Yes | No | No | AI only | Stub |
-| linear | No | No | No | AI only | Stub |
+| linear | No | No | Yes | None (issues are tasks) | **Active** |
 | manual | No | No | No | AI only | Active |
 
 ## Adding New Connectors
@@ -189,10 +203,10 @@ When adding a new connector:
 
 ### Recently Completed
 - [x] **Gmail** - Full implementation with Service Account auth, phishing detection, bi-directional sync ([docs](./gmail.md))
+- [x] **Linear** - Notification sync with API key auth, enrichment, archive action ([docs](./linear.md))
 
 ### Planned
 - [ ] **Slack** - Full implementation with OAuth
-- [ ] **Linear** - Full implementation with API key
 - [ ] **Notion** - Database items and pages
 - [ ] **Calendar** - Google/Outlook calendar events
 
