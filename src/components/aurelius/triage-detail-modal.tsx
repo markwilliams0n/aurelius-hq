@@ -107,6 +107,7 @@ export function TriageDetailModal({ item, onClose }: TriageDetailModalProps) {
       // L to open in Linear
       if (e.key === "l" || e.key === "L") {
         if (linearUrl) {
+          e.preventDefault();
           window.open(linearUrl, "_blank", "noopener,noreferrer");
         }
       }
