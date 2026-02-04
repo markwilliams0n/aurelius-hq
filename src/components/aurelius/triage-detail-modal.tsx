@@ -20,6 +20,7 @@ import {
   Send,
   AtSign,
   Globe,
+  ExternalLink,
 } from "lucide-react";
 
 // Smart analysis tag config
@@ -265,6 +266,77 @@ export function TriageDetailModal({ item, onClose }: TriageDetailModalProps) {
           )}
         </div>
 
+        {/* Linear-specific metadata */}
+        {item.connector === "linear" && (() => {
+          const linearEnrichment = item.enrichment as Record<string, unknown> | undefined;
+          if (!linearEnrichment) return null;
+
+          const issueState = linearEnrichment.issueState as string | undefined;
+          const issuePriority = linearEnrichment.issuePriority as number | undefined;
+          const issueProject = linearEnrichment.issueProject as string | undefined;
+          const issueLabels = linearEnrichment.issueLabels as string[] | undefined;
+          const notificationType = linearEnrichment.notificationType as string | undefined;
+          const actor = linearEnrichment.actor as { name: string } | undefined;
+
+          const priorityLabels: Record<number, string> = {
+            0: "No priority",
+            1: "Urgent",
+            2: "High",
+            3: "Normal",
+            4: "Low",
+          };
+
+          return (
+            <div className="px-6 py-3 border-b border-border bg-indigo-500/5 shrink-0">
+              <div className="flex items-center gap-4 flex-wrap text-sm">
+                {/* Notification type */}
+                {notificationType && actor && (
+                  <span className="text-muted-foreground">
+                    {actor.name} • {notificationType.replace(/([A-Z])/g, ' $1').trim()}
+                  </span>
+                )}
+
+                {/* Issue state */}
+                {issueState && (
+                  <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-500/20 text-indigo-300">
+                    {issueState}
+                  </span>
+                )}
+
+                {/* Priority */}
+                {issuePriority !== undefined && issuePriority > 0 && (
+                  <span className={cn(
+                    "flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium",
+                    issuePriority === 1 && "bg-red-500/20 text-red-400",
+                    issuePriority === 2 && "bg-orange-500/20 text-orange-400",
+                    issuePriority === 3 && "bg-blue-500/20 text-blue-400",
+                    issuePriority === 4 && "bg-slate-500/20 text-slate-400"
+                  )}>
+                    {priorityLabels[issuePriority] || "Unknown"}
+                  </span>
+                )}
+
+                {/* Project */}
+                {issueProject && (
+                  <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-500/20 text-violet-300">
+                    {issueProject}
+                  </span>
+                )}
+
+                {/* Labels */}
+                {issueLabels && issueLabels.length > 0 && issueLabels.map((label) => (
+                  <span
+                    key={label}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-slate-500/20 text-slate-300"
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* AI Enrichment */}
         {(item.enrichment?.summary || item.enrichment?.contextFromMemory) && (
           <div className="px-6 py-3 border-b border-border bg-gold/5 shrink-0">
@@ -329,6 +401,19 @@ export function TriageDetailModal({ item, onClose }: TriageDetailModalProps) {
                 </kbd>
                 Close
               </span>
+
+              {/* View in Linear button */}
+              {item.connector === "linear" && (item.enrichment as Record<string, unknown>)?.linearUrl && (
+                <a
+                  href={(item.enrichment as Record<string, unknown>).linearUrl as string}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 transition-colors"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  View in Linear
+                </a>
+              )}
             </div>
 
             {/* Linked entities */}
