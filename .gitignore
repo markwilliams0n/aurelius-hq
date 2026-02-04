@@ -45,3 +45,6 @@ next-env.d.ts
 # connector credentials/state
 .granola-credentials.json
 .gmail-sync-state.json
+
+# memory backups (personal data)
+/backups/
