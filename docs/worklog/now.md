@@ -4,6 +4,16 @@
 
 ## Just Completed (Last Session)
 
+**2026-02-05 (Continued)**
+
+Heartbeat & System Page:
+- Fixed scheduled heartbeats invisible on System page (was logging to file, now logs to DB)
+- Streaming heartbeat progress via SSE — live ticker shows each step as it runs
+- Gmail inbox reconciliation on heartbeat — auto-archives stale triage items
+- Rich expanded heartbeat details: step breakdown with timing, connector stats, expandable entities/facts, warnings
+- Triage actions hidden from System feed by default (toggle to show)
+- PR #5 merged to main
+
 **2026-02-05**
 
 Slack Connector:
@@ -61,7 +71,6 @@ Nothing active - ready for next task.
 
 - Gmail: `GMAIL_ENABLE_SEND=true` required to send (drafts by default)
 - Gmail: Service Account needs domain-wide delegation setup
-- Memory: Dual storage systems (DB + file) not fully synchronized
 - Memory: 3 edge cases in entity resolution tests (12.5% fail rate)
 
 ---
