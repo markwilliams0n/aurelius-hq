@@ -46,8 +46,7 @@ async function runHeartbeatSafe(): Promise<void> {
   try {
     // Dynamic import to avoid circular dependencies
     const { runHeartbeat } = await import('./memory/heartbeat');
-    const { appendActivityLog } = await import('./memory/activity-log');
-    const { randomUUID } = await import('crypto');
+    const { logActivity } = await import('./activity');
 
     const result = await runHeartbeat();
 
@@ -58,40 +57,48 @@ async function runHeartbeatSafe(): Promise<void> {
       `reindexed: ${result.reindexed}`
     );
 
-    // Log to activity log
-    await appendActivityLog({
-      id: randomUUID(),
-      type: 'heartbeat',
-      trigger: 'scheduled',
-      success: true,
-      entitiesCreated: result.entitiesCreated,
-      entitiesUpdated: result.entitiesUpdated,
-      reindexed: result.reindexed,
-      entities: result.entities,
-      extractionMethod: result.extractionMethod,
-      duration,
-      timestamp: new Date().toISOString(),
+    // Log to database (visible on System page)
+    await logActivity({
+      eventType: 'heartbeat_run',
+      actor: 'system',
+      description: `Heartbeat: ${result.entitiesCreated} created, ${result.entitiesUpdated} updated`,
+      metadata: {
+        trigger: 'scheduled',
+        success: result.allStepsSucceeded,
+        entitiesCreated: result.entitiesCreated,
+        entitiesUpdated: result.entitiesUpdated,
+        reindexed: result.reindexed,
+        entities: result.entities,
+        extractionMethod: result.extractionMethod,
+        steps: result.steps,
+        gmail: result.gmail,
+        granola: result.granola,
+        linear: result.linear,
+        slack: result.slack,
+        warnings: result.warnings,
+        duration,
+        error: result.warnings.length > 0 ? result.warnings.join('; ') : undefined,
+      },
     });
   } catch (error) {
     const duration = Date.now() - startTime;
     console.error(`[Scheduler] Heartbeat failed after ${duration}ms:`, error);
 
     try {
-      const { appendActivityLog } = await import('./memory/activity-log');
-      const { randomUUID } = await import('crypto');
-      await appendActivityLog({
-        id: randomUUID(),
-        type: 'heartbeat',
-        trigger: 'scheduled',
-        success: false,
-        entitiesCreated: 0,
-        entitiesUpdated: 0,
-        reindexed: false,
-        entities: [],
-        extractionMethod: 'pattern',
-        duration,
-        timestamp: new Date().toISOString(),
-        error: error instanceof Error ? error.message : String(error),
+      const { logActivity } = await import('./activity');
+      await logActivity({
+        eventType: 'heartbeat_run',
+        actor: 'system',
+        description: `Heartbeat failed: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: {
+          trigger: 'scheduled',
+          success: false,
+          entitiesCreated: 0,
+          entitiesUpdated: 0,
+          reindexed: false,
+          duration,
+          error: error instanceof Error ? error.message : String(error),
+        },
       });
     } catch (logError) {
       console.error('[Scheduler] Failed to log heartbeat failure:', logError);
@@ -226,8 +233,7 @@ async function runSynthesisSafe(): Promise<void> {
 
   try {
     const { runWeeklySynthesis } = await import('./memory/synthesis');
-    const { appendActivityLog } = await import('./memory/activity-log');
-    const { randomUUID } = await import('crypto');
+    const { logActivity } = await import('./activity');
 
     const result = await runWeeklySynthesis();
 
@@ -238,37 +244,40 @@ async function runSynthesisSafe(): Promise<void> {
       `regenerated: ${result.summariesRegenerated}`
     );
 
-    // Log to activity log
-    await appendActivityLog({
-      id: randomUUID(),
-      type: 'synthesis',
-      trigger: 'scheduled',
-      success: result.errors.length === 0,
-      entitiesProcessed: result.entitiesProcessed,
-      factsArchived: result.factsArchived,
-      summariesRegenerated: result.summariesRegenerated,
-      duration,
-      timestamp: new Date().toISOString(),
-      error: result.errors.length > 0 ? result.errors.join('; ') : undefined,
+    // Log to database (visible on System page)
+    await logActivity({
+      eventType: 'synthesis_run',
+      actor: 'system',
+      description: `Synthesis: ${result.factsArchived} archived, ${result.summariesRegenerated} regenerated`,
+      metadata: {
+        trigger: 'scheduled',
+        success: result.errors.length === 0,
+        entitiesProcessed: result.entitiesProcessed,
+        factsArchived: result.factsArchived,
+        summariesRegenerated: result.summariesRegenerated,
+        duration,
+        error: result.errors.length > 0 ? result.errors.join('; ') : undefined,
+      },
     });
   } catch (error) {
     const duration = Date.now() - startTime;
     console.error(`[Scheduler] Synthesis failed after ${duration}ms:`, error);
 
     try {
-      const { appendActivityLog } = await import('./memory/activity-log');
-      const { randomUUID } = await import('crypto');
-      await appendActivityLog({
-        id: randomUUID(),
-        type: 'synthesis',
-        trigger: 'scheduled',
-        success: false,
-        entitiesProcessed: 0,
-        factsArchived: 0,
-        summariesRegenerated: 0,
-        duration,
-        timestamp: new Date().toISOString(),
-        error: error instanceof Error ? error.message : String(error),
+      const { logActivity } = await import('./activity');
+      await logActivity({
+        eventType: 'synthesis_run',
+        actor: 'system',
+        description: `Synthesis failed: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: {
+          trigger: 'scheduled',
+          success: false,
+          entitiesProcessed: 0,
+          factsArchived: 0,
+          summariesRegenerated: 0,
+          duration,
+          error: error instanceof Error ? error.message : String(error),
+        },
       });
     } catch (logError) {
       console.error('[Scheduler] Failed to log synthesis failure:', logError);

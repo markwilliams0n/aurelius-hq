@@ -117,5 +117,7 @@ export interface GmailSyncResult {
   synced: number;
   skipped: number;
   errors: number;
+  /** Triage items auto-archived because email was removed from Gmail inbox */
+  archived: number;
   emails: Array<{ id: string; threadId: string; subject: string }>;
 }
