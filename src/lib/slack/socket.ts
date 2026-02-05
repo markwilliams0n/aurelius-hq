@@ -13,8 +13,22 @@ import { WebClient } from '@slack/web-api';
 import { db } from '@/lib/db';
 import { inboxItems } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
+import { chat } from '@/lib/ai/client';
 import type { SlackEnrichment, SlackMessageType } from './types';
 import type { NewInboxItem } from '@/lib/db/schema/triage';
+
+/**
+ * AI analysis result for a Slack message
+ */
+interface MessageAnalysis {
+  summary: string;
+  suggestedTasks: Array<{
+    title: string;
+    description?: string;
+    priority?: 'high' | 'medium' | 'low';
+  }>;
+  hasExplicitInstruction: boolean;
+}
 
 let socketClient: SocketModeClient | null = null;
 let webClient: WebClient | null = null;
@@ -212,6 +226,61 @@ function formatThread(thread: {
 }
 
 /**
+ * Analyze a message with AI to generate summary and suggested tasks
+ */
+async function analyzeMessage(
+  content: string,
+  mentionText?: string
+): Promise<MessageAnalysis> {
+  const prompt = `Analyze this Slack message/thread and provide:
+1. A brief summary (1-2 sentences)
+2. Any actionable tasks that should be created
+3. Whether the user gave an explicit instruction (like "make a task to..." or "remind me to..." or "add to...")
+
+${mentionText ? `The user @mentioned the bot with: "${mentionText}"` : ''}
+
+Message content:
+${content}
+
+Respond in JSON format:
+{
+  "summary": "Brief summary of the content",
+  "suggestedTasks": [
+    {"title": "Task title", "description": "Optional details", "priority": "high|medium|low"}
+  ],
+  "hasExplicitInstruction": true/false
+}
+
+If there are no clear tasks, return an empty array for suggestedTasks.
+If the user explicitly asked to create a task, make sure hasExplicitInstruction is true and include that task.`;
+
+  try {
+    const response = await chat(prompt);
+
+    // Extract JSON from response (handle markdown code blocks)
+    let jsonStr = response;
+    const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (jsonMatch) {
+      jsonStr = jsonMatch[1];
+    }
+
+    const result = JSON.parse(jsonStr.trim());
+    return {
+      summary: result.summary || '',
+      suggestedTasks: result.suggestedTasks || [],
+      hasExplicitInstruction: result.hasExplicitInstruction || false,
+    };
+  } catch (error) {
+    console.error('[Slack] AI analysis failed:', error);
+    return {
+      summary: '',
+      suggestedTasks: [],
+      hasExplicitInstruction: false,
+    };
+  }
+}
+
+/**
  * Save a message to the triage inbox
  */
 async function saveToInbox(event: {
@@ -226,10 +295,11 @@ async function saveToInbox(event: {
   originalSource?: string;  // e.g., "Direct Message | Today at 07:49"
   isThread?: boolean;       // Whether this is a full thread capture
   threadParticipants?: string[];  // Names of thread participants
+  mentionText?: string;     // The text of the @mention (for instruction detection)
 }): Promise<void> {
   const {
     channel, user, text, ts, thread_ts, channel_type,
-    originalSender, originalSource, isThread, threadParticipants
+    originalSender, originalSource, isThread, threadParticipants, mentionText
   } = event;
 
   // Skip if already exists
@@ -321,6 +391,23 @@ async function saveToInbox(event: {
   if (isIm || isMpim) {
     tags.push('DM');
   }
+
+  // AI analysis for summary and suggested tasks
+  console.log(`[Slack] Analyzing message with AI...`);
+  const analysis = await analyzeMessage(text, mentionText);
+
+  if (analysis.summary) {
+    (enrichment as Record<string, unknown>).aiSummary = analysis.summary;
+  }
+  if (analysis.suggestedTasks.length > 0) {
+    (enrichment as Record<string, unknown>).suggestedTasks = analysis.suggestedTasks;
+    tags.push('Has Tasks');
+  }
+  if (analysis.hasExplicitInstruction) {
+    tags.push('Instruction');
+  }
+
+  console.log(`[Slack] Analysis complete: ${analysis.suggestedTasks.length} tasks suggested`);
 
   // Build inbox item
   const item: NewInboxItem = {
@@ -483,6 +570,9 @@ function setupEventHandlers(client: SocketModeClient): void {
       return;
     }
 
+    // Capture the mention text (what the user typed after @Aurelius)
+    const mentionText = (event.text || '').replace(/<@[A-Z0-9]+>/g, '').trim();
+
     // Check if this is in a thread - if so, fetch the full thread
     const threadTs = event.thread_ts || event.ts;
     const isInThread = !!event.thread_ts;
@@ -556,6 +646,7 @@ function setupEventHandlers(client: SocketModeClient): void {
         originalSource,
         isThread: isInThread,
         threadParticipants: isInThread ? threadParticipants : undefined,
+        mentionText, // Pass the instruction text for AI analysis
       });
     } catch (error) {
       console.error('[Slack] Failed to save mention:', error);
