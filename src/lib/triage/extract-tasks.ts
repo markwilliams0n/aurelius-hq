@@ -191,6 +191,8 @@ export async function extractAndSaveTasks(
     subject?: string;
     attendees?: string;
     transcript?: string;
+    /** Default "unknown" assignee types to "self" (useful for Slack @mentions) */
+    defaultToSelf?: boolean;
   }
 ): Promise<TaskExtractionResult> {
   const result = await extractTasksFromContent(content, context);
@@ -200,11 +202,15 @@ export async function extractAndSaveTasks(
   }
 
   // Save tasks to database
+  // For connectors like Slack where the user is explicitly asking for tasks,
+  // default "unknown" assignee types to "self"
   const tasksToInsert: NewSuggestedTask[] = result.tasks.map((task) => ({
     sourceItemId,
     description: task.description,
     assignee: task.assignee,
-    assigneeType: task.assigneeType,
+    assigneeType: context.defaultToSelf && task.assigneeType === "unknown"
+      ? "self"
+      : task.assigneeType,
     dueDate: task.dueDate,
     confidence: task.confidence,
     status: "suggested" as const,

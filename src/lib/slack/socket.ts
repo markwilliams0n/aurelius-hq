@@ -13,22 +13,10 @@ import { WebClient } from '@slack/web-api';
 import { db } from '@/lib/db';
 import { inboxItems } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { chat } from '@/lib/ai/client';
+import { insertInboxItemWithTasks } from '@/lib/triage/insert-with-tasks';
+import { generate, isOllamaAvailable } from '@/lib/memory/ollama';
 import type { SlackEnrichment, SlackMessageType } from './types';
 import type { NewInboxItem } from '@/lib/db/schema/triage';
-
-/**
- * AI analysis result for a Slack message
- */
-interface MessageAnalysis {
-  summary: string;
-  suggestedTasks: Array<{
-    title: string;
-    description?: string;
-    priority?: 'high' | 'medium' | 'low';
-  }>;
-  hasExplicitInstruction: boolean;
-}
 
 let socketClient: SocketModeClient | null = null;
 let webClient: WebClient | null = null;
@@ -226,57 +214,51 @@ function formatThread(thread: {
 }
 
 /**
- * Analyze a message with AI to generate summary and suggested tasks
+ * Generate an AI summary for a Slack message using Ollama
  */
-async function analyzeMessage(
+async function generateSlackSummary(
   content: string,
-  mentionText?: string
-): Promise<MessageAnalysis> {
-  const prompt = `Analyze this Slack message/thread and provide:
-1. A brief summary (1-2 sentences)
-2. Any actionable tasks that should be created
-3. Whether the user gave an explicit instruction (like "make a task to..." or "remind me to..." or "add to...")
+  context: {
+    isThread?: boolean;
+    participants?: string[];
+    channelName?: string;
+    hasUserInstruction?: boolean;
+  }
+): Promise<string | null> {
+  // Check if Ollama is available
+  const available = await isOllamaAvailable();
+  if (!available) {
+    console.log('[Slack] Ollama not available, skipping summary generation');
+    return null;
+  }
 
-${mentionText ? `The user @mentioned the bot with: "${mentionText}"` : ''}
+  const contextInfo = context.isThread
+    ? `a Slack thread with ${context.participants?.length || 'multiple'} participants`
+    : `a Slack message from ${context.channelName || 'a channel'}`;
 
-Message content:
-${content}
+  const prompt = `You are summarizing ${contextInfo} for a personal triage system.
 
-Respond in JSON format:
-{
-  "summary": "Brief summary of the content",
-  "suggestedTasks": [
-    {"title": "Task title", "description": "Optional details", "priority": "high|medium|low"}
-  ],
-  "hasExplicitInstruction": true/false
-}
+MESSAGE CONTENT:
+${content.slice(0, 4000)}
 
-If there are no clear tasks, return an empty array for suggestedTasks.
-If the user explicitly asked to create a task, make sure hasExplicitInstruction is true and include that task.`;
+Write a brief 1-3 sentence summary that captures:
+1. The main topic or purpose
+2. Key decisions, asks, or action items mentioned
+3. Who needs to do what (if applicable)
+
+${context.hasUserInstruction ? 'Note: The user has given a specific instruction at the top - make sure to acknowledge what they asked for.' : ''}
+
+Keep it concise and actionable. Write ONLY the summary, no introduction:`;
 
   try {
-    const response = await chat(prompt);
-
-    // Extract JSON from response (handle markdown code blocks)
-    let jsonStr = response;
-    const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1];
-    }
-
-    const result = JSON.parse(jsonStr.trim());
-    return {
-      summary: result.summary || '',
-      suggestedTasks: result.suggestedTasks || [],
-      hasExplicitInstruction: result.hasExplicitInstruction || false,
-    };
+    const summary = await generate(prompt, {
+      temperature: 0.3,
+      maxTokens: 300,
+    });
+    return summary.trim() || null;
   } catch (error) {
-    console.error('[Slack] AI analysis failed:', error);
-    return {
-      summary: '',
-      suggestedTasks: [],
-      hasExplicitInstruction: false,
-    };
+    console.error('[Slack] Failed to generate summary:', error);
+    return null;
   }
 }
 
@@ -295,11 +277,10 @@ async function saveToInbox(event: {
   originalSource?: string;  // e.g., "Direct Message | Today at 07:49"
   isThread?: boolean;       // Whether this is a full thread capture
   threadParticipants?: string[];  // Names of thread participants
-  mentionText?: string;     // The text of the @mention (for instruction detection)
 }): Promise<void> {
   const {
     channel, user, text, ts, thread_ts, channel_type,
-    originalSender, originalSource, isThread, threadParticipants, mentionText
+    originalSender, originalSource, isThread, threadParticipants
   } = event;
 
   // Skip if already exists
@@ -349,6 +330,15 @@ async function saveToInbox(event: {
   // Get permalink
   const permalink = await getPermalink(channel, ts);
 
+  // Generate AI summary using Ollama
+  const hasUserInstruction = text.startsWith('USER INSTRUCTION:');
+  const summary = await generateSlackSummary(text, {
+    isThread,
+    participants: threadParticipants,
+    channelName: channelInfo?.name,
+    hasUserInstruction,
+  });
+
   // Build enrichment
   const enrichment: SlackEnrichment & {
     isForwarded?: boolean;
@@ -356,6 +346,7 @@ async function saveToInbox(event: {
     originalSource?: string;
     isThread?: boolean;
     threadParticipants?: string[];
+    summary?: string;
   } = {
     messageType,
     channelId: channel,
@@ -366,6 +357,12 @@ async function saveToInbox(event: {
     userDisplayName: senderName,
     slackUrl: permalink || '',
   };
+
+  // Add AI summary if generated
+  if (summary) {
+    enrichment.summary = summary;
+    console.log(`[Slack] Generated summary: ${summary.slice(0, 100)}...`);
+  }
 
   // Add forwarding info if applicable
   if (isForwarded) {
@@ -392,23 +389,6 @@ async function saveToInbox(event: {
     tags.push('DM');
   }
 
-  // AI analysis for summary and suggested tasks
-  console.log(`[Slack] Analyzing message with AI...`);
-  const analysis = await analyzeMessage(text, mentionText);
-
-  if (analysis.summary) {
-    (enrichment as Record<string, unknown>).aiSummary = analysis.summary;
-  }
-  if (analysis.suggestedTasks.length > 0) {
-    (enrichment as Record<string, unknown>).suggestedTasks = analysis.suggestedTasks;
-    tags.push('Has Tasks');
-  }
-  if (analysis.hasExplicitInstruction) {
-    tags.push('Instruction');
-  }
-
-  console.log(`[Slack] Analysis complete: ${analysis.suggestedTasks.length} tasks suggested`);
-
   // Build inbox item
   const item: NewInboxItem = {
     connector: 'slack',
@@ -427,8 +407,9 @@ async function saveToInbox(event: {
     receivedAt: new Date(parseFloat(ts) * 1000),
   };
 
-  // Save to database
-  await db.insert(inboxItems).values(item);
+  // Save to database with AI task extraction
+  // Slack tasks default to "self" since user is explicitly asking Aurelius to track them
+  await insertInboxItemWithTasks(item, { defaultToSelf: true });
   console.log(`[Slack] Saved to triage: ${subject}`);
 
   // Acknowledge with a reaction
@@ -570,9 +551,6 @@ function setupEventHandlers(client: SocketModeClient): void {
       return;
     }
 
-    // Capture the mention text (what the user typed after @Aurelius)
-    const mentionText = (event.text || '').replace(/<@[A-Z0-9]+>/g, '').trim();
-
     // Check if this is in a thread - if so, fetch the full thread
     const threadTs = event.thread_ts || event.ts;
     const isInThread = !!event.thread_ts;
@@ -582,18 +560,28 @@ function setupEventHandlers(client: SocketModeClient): void {
     let originalSource: string | undefined;
     let threadParticipants: string[] = [];
 
+    // Capture the user's instruction (what they typed after @Aurelius)
+    const userInstruction = (event.text || '').replace(/<@[A-Z0-9]+>/g, '').trim();
+
     if (isInThread) {
       // Fetch the entire thread
       console.log(`[Slack] Mention in thread ${threadTs}, fetching full thread...`);
       const thread = await getThreadReplies(event.channel, threadTs);
 
       if (thread && thread.messages.length > 0) {
-        messageText = formatThread(thread);
+        const threadContent = formatThread(thread);
         threadParticipants = thread.participantNames;
         console.log(`[Slack] Thread has ${thread.messages.length} messages from ${threadParticipants.join(', ')}`);
+
+        // Include the user's instruction at the top so AI knows what they want
+        if (userInstruction) {
+          messageText = `USER INSTRUCTION: ${userInstruction}\n\n---\n\nTHREAD CONTENT:\n${threadContent}`;
+        } else {
+          messageText = threadContent;
+        }
       } else {
         // Fallback to just the mention message
-        messageText = (event.text || '').replace(/<@[A-Z0-9]+>/g, '').trim();
+        messageText = userInstruction;
       }
     } else {
       // Not in a thread - extract text, including forwarded message content
@@ -646,7 +634,6 @@ function setupEventHandlers(client: SocketModeClient): void {
         originalSource,
         isThread: isInThread,
         threadParticipants: isInThread ? threadParticipants : undefined,
-        mentionText, // Pass the instruction text for AI analysis
       });
     } catch (error) {
       console.error('[Slack] Failed to save mention:', error);
