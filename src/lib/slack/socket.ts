@@ -139,6 +139,79 @@ async function getPermalink(channelId: string, messageTs: string): Promise<strin
 }
 
 /**
+ * Fetch all messages in a thread
+ */
+async function getThreadReplies(channelId: string, threadTs: string): Promise<{
+  messages: Array<{
+    user?: string;
+    userName?: string;
+    text: string;
+    ts: string;
+  }>;
+  participantNames: string[];
+} | null> {
+  try {
+    const web = getWebClient();
+    const result = await web.conversations.replies({
+      channel: channelId,
+      ts: threadTs,
+      limit: 100, // Get up to 100 messages in the thread
+    });
+
+    if (!result.ok || !result.messages?.length) {
+      return null;
+    }
+
+    // Get unique user IDs from the thread
+    const userIds = new Set<string>();
+    for (const msg of result.messages) {
+      if (msg.user) userIds.add(msg.user);
+    }
+
+    // Fetch user names
+    const userNames: Record<string, string> = {};
+    for (const userId of userIds) {
+      const userInfo = await getUserInfo(userId);
+      if (userInfo) {
+        userNames[userId] = userInfo.realName || userInfo.name;
+      }
+    }
+
+    const messages = result.messages.map((msg) => ({
+      user: msg.user,
+      userName: msg.user ? userNames[msg.user] || msg.user : 'Unknown',
+      text: msg.text || '',
+      ts: msg.ts || '',
+    }));
+
+    return {
+      messages,
+      participantNames: Object.values(userNames),
+    };
+  } catch (error) {
+    console.error('[Slack] Failed to fetch thread replies:', error);
+    return null;
+  }
+}
+
+/**
+ * Format a thread into readable text
+ */
+function formatThread(thread: {
+  messages: Array<{ userName?: string; text: string; ts: string }>;
+}): string {
+  return thread.messages
+    .map((msg) => {
+      const time = new Date(parseFloat(msg.ts) * 1000).toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+      return `[${time}] ${msg.userName}: ${msg.text}`;
+    })
+    .join('\n\n');
+}
+
+/**
  * Save a message to the triage inbox
  */
 async function saveToInbox(event: {
@@ -151,8 +224,13 @@ async function saveToInbox(event: {
   channel_type?: string;
   originalSender?: string;  // For forwarded messages
   originalSource?: string;  // e.g., "Direct Message | Today at 07:49"
+  isThread?: boolean;       // Whether this is a full thread capture
+  threadParticipants?: string[];  // Names of thread participants
 }): Promise<void> {
-  const { channel, user, text, ts, thread_ts, channel_type, originalSender, originalSource } = event;
+  const {
+    channel, user, text, ts, thread_ts, channel_type,
+    originalSender, originalSource, isThread, threadParticipants
+  } = event;
 
   // Skip if already exists
   if (await messageExists(channel, ts)) {
@@ -176,9 +254,14 @@ async function saveToInbox(event: {
   // Determine message type
   const messageType: SlackMessageType = isIm || isMpim ? 'direct_message' : 'direct_mention';
 
-  // Build subject - for forwarded messages, show who it's from
+  // Build subject based on type
   let subject: string;
-  if (isForwarded) {
+  if (isThread && threadParticipants?.length) {
+    // Thread capture - show participants
+    const participantList = threadParticipants.slice(0, 3).join(', ');
+    const more = threadParticipants.length > 3 ? ` +${threadParticipants.length - 3}` : '';
+    subject = `Thread: ${participantList}${more}`;
+  } else if (isForwarded) {
     subject = `Slack from ${senderName}`;
     if (originalSource) {
       // Extract channel/DM info from source like "Direct Message | Today at 07:49"
@@ -201,6 +284,8 @@ async function saveToInbox(event: {
     isForwarded?: boolean;
     forwardedBy?: string;
     originalSource?: string;
+    isThread?: boolean;
+    threadParticipants?: string[];
   } = {
     messageType,
     channelId: channel,
@@ -219,8 +304,17 @@ async function saveToInbox(event: {
     enrichment.originalSource = originalSource;
   }
 
+  // Add thread info if applicable
+  if (isThread) {
+    enrichment.isThread = true;
+    enrichment.threadParticipants = threadParticipants;
+  }
+
   // Build tags
   const tags: string[] = [];
+  if (isThread) {
+    tags.push('Thread');
+  }
   if (isForwarded) {
     tags.push('Forwarded');
   }
@@ -380,47 +474,60 @@ function setupEventHandlers(client: SocketModeClient): void {
     }
   });
 
-  // Handle @mentions (including forwarded messages)
+  // Handle @mentions (including forwarded messages and threads)
   client.on('app_mention', async ({ event, ack }) => {
     await ack();
-
-    // Log for debugging
-    console.log(`[Slack] Mention event:`, JSON.stringify({
-      user: event.user,
-      channel: event.channel,
-      text: event.text?.slice(0, 50),
-      hasAttachments: !!event.attachments?.length,
-      attachmentCount: event.attachments?.length,
-    }));
 
     // Skip bot's own messages
     if (event.bot_id) {
       return;
     }
 
-    // Extract text, including forwarded message content from attachments
-    let messageText = (event.text || '').replace(/<@[A-Z0-9]+>/g, '').trim(); // Remove the @mention
+    // Check if this is in a thread - if so, fetch the full thread
+    const threadTs = event.thread_ts || event.ts;
+    const isInThread = !!event.thread_ts;
+
+    let messageText = '';
     let originalSender: string | undefined;
     let originalSource: string | undefined;
+    let threadParticipants: string[] = [];
 
-    if (event.attachments?.length) {
-      // Extract forwarded message content
-      const forwardedParts: string[] = [];
-      for (const att of event.attachments) {
-        if (att.author_name) {
-          originalSender = att.author_name;
-        }
-        if (att.footer) {
-          originalSource = att.footer;
-        }
-        if (att.text) {
-          forwardedParts.push(att.text);
-        } else if (att.fallback) {
-          forwardedParts.push(att.fallback);
-        }
+    if (isInThread) {
+      // Fetch the entire thread
+      console.log(`[Slack] Mention in thread ${threadTs}, fetching full thread...`);
+      const thread = await getThreadReplies(event.channel, threadTs);
+
+      if (thread && thread.messages.length > 0) {
+        messageText = formatThread(thread);
+        threadParticipants = thread.participantNames;
+        console.log(`[Slack] Thread has ${thread.messages.length} messages from ${threadParticipants.join(', ')}`);
+      } else {
+        // Fallback to just the mention message
+        messageText = (event.text || '').replace(/<@[A-Z0-9]+>/g, '').trim();
       }
-      if (forwardedParts.length) {
-        messageText = forwardedParts.join('\n');
+    } else {
+      // Not in a thread - extract text, including forwarded message content
+      messageText = (event.text || '').replace(/<@[A-Z0-9]+>/g, '').trim();
+
+      if (event.attachments?.length) {
+        // Extract forwarded message content
+        const forwardedParts: string[] = [];
+        for (const att of event.attachments) {
+          if (att.author_name) {
+            originalSender = att.author_name;
+          }
+          if (att.footer) {
+            originalSource = att.footer;
+          }
+          if (att.text) {
+            forwardedParts.push(att.text);
+          } else if (att.fallback) {
+            forwardedParts.push(att.fallback);
+          }
+        }
+        if (forwardedParts.length) {
+          messageText = forwardedParts.join('\n');
+        }
       }
     }
 
@@ -430,7 +537,12 @@ function setupEventHandlers(client: SocketModeClient): void {
       return;
     }
 
-    console.log(`[Slack] Mention from ${event.user}${originalSender ? ` (forwarded from ${originalSender})` : ''}: ${messageText.slice(0, 50)}...`);
+    const contextInfo = isInThread
+      ? `thread with ${threadParticipants.length} participants`
+      : originalSender
+        ? `forwarded from ${originalSender}`
+        : 'direct mention';
+    console.log(`[Slack] Mention from ${event.user} (${contextInfo}): ${messageText.slice(0, 50)}...`);
 
     try {
       await saveToInbox({
@@ -442,6 +554,8 @@ function setupEventHandlers(client: SocketModeClient): void {
         thread_ts: event.thread_ts,
         originalSender,
         originalSource,
+        isThread: isInThread,
+        threadParticipants: isInThread ? threadParticipants : undefined,
       });
     } catch (error) {
       console.error('[Slack] Failed to save mention:', error);
