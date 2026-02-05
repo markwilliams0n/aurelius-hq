@@ -22,6 +22,8 @@ interface InsertWithTasksOptions {
     attendees?: string;
     transcript?: string;
   };
+  /** Default "unknown" assignee types to "self" (for Slack @mentions) */
+  defaultToSelf?: boolean;
 }
 
 /**
@@ -69,6 +71,7 @@ export async function insertInboxItemWithTasks(
         subject: item.subject,
         attendees: options.extractionContext?.attendees,
         transcript: options.extractionContext?.transcript,
+        defaultToSelf: options.defaultToSelf,
       });
     } catch (error) {
       // Don't fail the insert if task extraction fails
