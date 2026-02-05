@@ -4,6 +4,18 @@
 
 ## Just Completed (Last Session)
 
+**2026-02-05**
+
+Slack Connector:
+- Real-time integration via Socket Mode (WebSocket)
+- DMs, @mentions, triage channel auto-capture
+- Full thread capture when @mentioned in thread
+- AI summaries via Ollama (local LLM)
+- Task extraction defaulting to "For You"
+- User instructions: "@aurelius make a task to..." works
+- Code review fixes: TTLs on caches, rate limit batching
+- Full documentation in docs/connectors/slack.md
+
 **2026-02-03 (Continued)**
 
 Linear Connector:
