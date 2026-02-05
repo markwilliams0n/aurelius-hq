@@ -21,8 +21,13 @@ import type {
 const SLACK_API_URL = 'https://slack.com/api';
 const SYNC_STATE_PATH = path.join(process.cwd(), '.slack-sync-state.json');
 
-// Cache for user info to avoid repeated API calls
-const userCache = new Map<string, SlackUser>();
+// Cache for user info to avoid repeated API calls (with TTL)
+interface CachedUser {
+  user: SlackUser;
+  cachedAt: number;
+}
+const userCache = new Map<string, CachedUser>();
+const USER_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 /**
  * Check if Slack connector is configured
@@ -180,12 +185,13 @@ export async function searchMessages(
 }
 
 /**
- * Get user info by ID (with caching)
+ * Get user info by ID (with caching and TTL)
  */
 export async function getUserInfo(userId: string): Promise<SlackUser | null> {
-  // Check cache first
-  if (userCache.has(userId)) {
-    return userCache.get(userId)!;
+  // Check cache first (with TTL)
+  const cached = userCache.get(userId);
+  if (cached && Date.now() - cached.cachedAt < USER_CACHE_TTL) {
+    return cached.user;
   }
 
   try {
@@ -193,7 +199,7 @@ export async function getUserInfo(userId: string): Promise<SlackUser | null> {
       user: userId,
     });
 
-    userCache.set(userId, response.user);
+    userCache.set(userId, { user: response.user, cachedAt: Date.now() });
     return response.user;
   } catch (error) {
     console.warn(`[Slack] Failed to get user info for ${userId}:`, error);

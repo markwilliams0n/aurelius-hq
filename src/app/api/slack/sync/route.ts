@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { syncSlackMessages } from '@/lib/slack';
 
 export const runtime = 'nodejs';
-export const maxDuration = 120; // 2 minutes
 
 /**
  * POST /api/slack/sync

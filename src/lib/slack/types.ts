@@ -139,6 +139,7 @@ export interface SlackSyncResult {
   errors: number;
   channels?: string[];
   error?: string;
+  errorMessages?: string[];
 }
 
 // Sync state persisted

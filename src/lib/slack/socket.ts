@@ -170,12 +170,27 @@ async function getThreadReplies(channelId: string, threadTs: string): Promise<{
       if (msg.user) userIds.add(msg.user);
     }
 
-    // Fetch user names
+    // Fetch user names (batch with concurrency limit to avoid rate limits)
     const userNames: Record<string, string> = {};
-    for (const userId of userIds) {
-      const userInfo = await getUserInfo(userId);
-      if (userInfo) {
-        userNames[userId] = userInfo.realName || userInfo.name;
+    const userIdArray = Array.from(userIds);
+    const BATCH_SIZE = 5;
+
+    for (let i = 0; i < userIdArray.length; i += BATCH_SIZE) {
+      const batch = userIdArray.slice(i, i + BATCH_SIZE);
+      const results = await Promise.all(
+        batch.map(async (userId) => {
+          const userInfo = await getUserInfo(userId);
+          return { userId, userInfo };
+        })
+      );
+      for (const { userId, userInfo } of results) {
+        if (userInfo) {
+          userNames[userId] = userInfo.realName || userInfo.name;
+        }
+      }
+      // Small delay between batches to respect rate limits
+      if (i + BATCH_SIZE < userIdArray.length) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
     }
 
@@ -425,14 +440,17 @@ async function saveToInbox(event: {
   }
 }
 
-// Cache for triage channel ID (resolved from name)
+// Cache for triage channel ID (resolved from name) with TTL
 let triageChannelId: string | null = null;
+let triageChannelIdCachedAt: number = 0;
+const TRIAGE_CHANNEL_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 /**
  * Resolve triage channel name to ID
  */
 async function getTriageChannelId(): Promise<string | null> {
-  if (triageChannelId) {
+  // Return cached value if still valid
+  if (triageChannelId && Date.now() - triageChannelIdCachedAt < TRIAGE_CHANNEL_CACHE_TTL) {
     return triageChannelId;
   }
 
@@ -459,6 +477,7 @@ async function getTriageChannelId(): Promise<string | null> {
 
       if (channel?.id) {
         triageChannelId = channel.id;
+        triageChannelIdCachedAt = Date.now();
         console.log(`[Slack] Triage channel resolved: ${channelName} -> ${triageChannelId}`);
         return triageChannelId;
       }
