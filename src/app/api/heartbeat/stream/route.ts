@@ -73,20 +73,24 @@ export async function POST(request: NextRequest) {
         const duration = Date.now() - startTime;
         send({ done: true, error: String(error), duration });
 
-        await logActivity({
-          eventType: 'heartbeat_run',
-          actor: 'system',
-          description: `Heartbeat failed: ${String(error)}`,
-          metadata: {
-            trigger: 'manual',
-            success: false,
-            entitiesCreated: 0,
-            entitiesUpdated: 0,
-            reindexed: false,
-            duration,
-            error: String(error),
-          },
-        });
+        try {
+          await logActivity({
+            eventType: 'heartbeat_run',
+            actor: 'system',
+            description: `Heartbeat failed: ${String(error)}`,
+            metadata: {
+              trigger: 'manual',
+              success: false,
+              entitiesCreated: 0,
+              entitiesUpdated: 0,
+              reindexed: false,
+              duration,
+              error: String(error),
+            },
+          });
+        } catch (logError) {
+          console.error('[Heartbeat Stream] Failed to log heartbeat failure:', logError);
+        }
       } finally {
         controller.close();
       }

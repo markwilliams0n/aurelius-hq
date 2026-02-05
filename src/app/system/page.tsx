@@ -43,6 +43,9 @@ const STEP_LABELS: Record<string, string> = {
   slack: "Slack",
   qmd_update: "Search index",
   qmd_embed: "Embeddings",
+  // camelCase variants (used in HeartbeatResult.steps object keys)
+  qmdUpdate: "Search index",
+  qmdEmbed: "Embeddings",
 };
 
 type EntityDetail = {
@@ -606,7 +609,7 @@ function FeedItem({
           )}
           {entry.type === "synthesis" && <SynthesisDetails entry={entry as SynthesisEntry} />}
           {entry.type === "session" && <SessionDetails entry={entry as SessionEntry} />}
-          {entry.type === "triage" && <SystemDetails entry={entry as unknown as SystemEntry} />}
+          {entry.type === "triage" && <TriageDetails entry={entry as TriageEntry} />}
           {entry.type === "system" && <SystemDetails entry={entry as SystemEntry} />}
         </div>
       )}
@@ -913,6 +916,18 @@ function SessionDetails({ entry }: { entry: SessionEntry }) {
           Conversation: {entry.conversationId}
         </div>
       )}
+    </div>
+  );
+}
+
+function TriageDetails({ entry }: { entry: TriageEntry }) {
+  return (
+    <div className="text-sm">
+      <div className="flex items-center gap-1.5">
+        <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+        <span>{new Date(entry.timestamp).toLocaleString()}</span>
+      </div>
+      <div className="mt-2 text-muted-foreground">{entry.message}</div>
     </div>
   );
 }
