@@ -249,6 +249,7 @@ export async function syncGmailMessages(): Promise<GmailSyncResult> {
     synced: 0,
     skipped: 0,
     errors: 0,
+    archived: 0,
     emails: [],
   };
 
@@ -325,13 +326,41 @@ export async function syncGmailMessages(): Promise<GmailSyncResult> {
       }
     }
 
+    // Reconcile: auto-archive triage items whose threads are no longer in Gmail inbox
+    try {
+      const gmailThreadIds = new Set(threadMap.keys());
+      const activeTriageItems = await db
+        .select({ id: inboxItems.id, externalId: inboxItems.externalId, subject: inboxItems.subject })
+        .from(inboxItems)
+        .where(
+          and(
+            eq(inboxItems.connector, 'gmail'),
+            eq(inboxItems.status, 'new')
+          )
+        );
+
+      for (const item of activeTriageItems) {
+        if (item.externalId && !gmailThreadIds.has(item.externalId)) {
+          await db
+            .update(inboxItems)
+            .set({ status: 'archived' })
+            .where(eq(inboxItems.id, item.id));
+          result.archived++;
+          console.log(`[Gmail] Auto-archived (no longer in inbox): ${item.subject}`);
+        }
+      }
+    } catch (error) {
+      console.error('[Gmail] Reconciliation failed:', error);
+      // Non-fatal — don't fail the whole sync
+    }
+
     // Update sync state
     await saveSyncState({
       lastSyncedAt: new Date().toISOString(),
     });
 
     console.log(
-      `[Gmail] Sync complete: ${result.synced} synced, ${result.skipped} skipped, ${result.errors} errors`
+      `[Gmail] Sync complete: ${result.synced} synced, ${result.skipped} skipped, ${result.archived} archived, ${result.errors} errors`
     );
   } catch (error) {
     console.error('[Gmail] Sync failed:', error);

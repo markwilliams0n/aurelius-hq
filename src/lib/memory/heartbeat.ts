@@ -432,6 +432,10 @@ export interface EntityDetail {
   source: string;
 }
 
+export type HeartbeatStep = 'backup' | 'extraction' | 'granola' | 'gmail' | 'linear' | 'slack' | 'qmd_update' | 'qmd_embed';
+export type HeartbeatStepStatus = 'start' | 'done' | 'skip' | 'error';
+export type ProgressCallback = (step: HeartbeatStep, status: HeartbeatStepStatus, detail?: string) => void;
+
 export interface HeartbeatOptions {
   /** Skip daily backup (backup still runs once per day by default) */
   skipBackup?: boolean;
@@ -447,6 +451,8 @@ export interface HeartbeatOptions {
   skipSlack?: boolean;
   /** Skip entity extraction from daily notes */
   skipExtraction?: boolean;
+  /** Progress callback for streaming status updates */
+  onProgress?: ProgressCallback;
 }
 
 export interface StepResult {
@@ -507,16 +513,21 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
   const warnings: string[] = [];
   const steps: HeartbeatResult['steps'] = {};
 
+  const progress = options.onProgress;
+
   // Step 0: Daily backup (runs once per day, keeps last 7)
   let backupResult: BackupResult | undefined;
   if (!options.skipBackup) {
+    progress?.('backup', 'start');
     const backupStart = Date.now();
     try {
       backupResult = await createBackup();
       if (backupResult.skipped) {
         console.log(`[Heartbeat] Backup skipped (${backupResult.reason})`);
+        progress?.('backup', 'skip', backupResult.reason);
       } else if (backupResult.success) {
         console.log(`[Heartbeat] Backup created: ${backupResult.backupPath}`);
+        progress?.('backup', 'done');
       }
       steps.backup = {
         success: backupResult.success,
@@ -527,6 +538,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
       const errMsg = error instanceof Error ? error.message : String(error);
       console.error('[Heartbeat] Backup failed:', errMsg);
       warnings.push(`Backup failed: ${errMsg}`);
+      progress?.('backup', 'error', errMsg);
       steps.backup = {
         success: false,
         durationMs: Date.now() - backupStart,
@@ -544,6 +556,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
 
   // Step 1: Entity extraction from daily notes
   if (!options.skipExtraction) {
+    progress?.('extraction', 'start');
     const extractionStart = Date.now();
     try {
       // Load state to track which notes have been processed
@@ -732,10 +745,12 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
         success: true,
         durationMs: Date.now() - extractionStart,
       };
+      progress?.('extraction', 'done', `${entitiesCreated} created, ${entitiesUpdated} updated`);
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       console.error('[Heartbeat] Entity extraction failed:', errMsg);
       warnings.push(`Entity extraction failed: ${errMsg}`);
+      progress?.('extraction', 'error', errMsg);
       steps.extraction = {
         success: false,
         durationMs: Date.now() - extractionStart,
@@ -747,6 +762,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
   // Step 2: Sync Granola meetings to triage
   let granolaResult: GranolaSyncResult | undefined;
   if (!options.skipGranola) {
+    progress?.('granola', 'start');
     const granolaStart = Date.now();
     try {
       granolaResult = await syncGranolaMeetings();
@@ -757,10 +773,12 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
         success: true,
         durationMs: Date.now() - granolaStart,
       };
+      progress?.('granola', 'done', granolaResult.synced > 0 ? `${granolaResult.synced} meetings` : undefined);
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       console.error('[Heartbeat] Granola sync failed:', errMsg);
       warnings.push(`Granola sync failed: ${errMsg}`);
+      progress?.('granola', 'error', errMsg);
       steps.granola = {
         success: false,
         durationMs: Date.now() - granolaStart,
@@ -772,6 +790,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
   // Step 3: Sync Gmail messages to triage
   let gmailResult: GmailSyncResult | undefined;
   if (!options.skipGmail) {
+    progress?.('gmail', 'start');
     const gmailStart = Date.now();
     try {
       gmailResult = await syncGmailMessages();
@@ -782,10 +801,16 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
         success: true,
         durationMs: Date.now() - gmailStart,
       };
+      const gmailDetail = [
+        gmailResult.synced > 0 ? `${gmailResult.synced} synced` : null,
+        gmailResult.archived > 0 ? `${gmailResult.archived} archived` : null,
+      ].filter(Boolean).join(', ');
+      progress?.('gmail', 'done', gmailDetail || undefined);
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       console.error('[Heartbeat] Gmail sync failed:', errMsg);
       warnings.push(`Gmail sync failed: ${errMsg}`);
+      progress?.('gmail', 'error', errMsg);
       steps.gmail = {
         success: false,
         durationMs: Date.now() - gmailStart,
@@ -797,6 +822,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
   // Step 4: Sync Linear notifications to triage
   let linearResult: LinearSyncResult | undefined;
   if (!options.skipLinear) {
+    progress?.('linear', 'start');
     const linearStart = Date.now();
     try {
       linearResult = await syncLinearNotifications();
@@ -808,10 +834,12 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
         durationMs: Date.now() - linearStart,
         error: linearResult.error,
       };
+      progress?.('linear', linearResult.error ? 'error' : 'done', linearResult.synced > 0 ? `${linearResult.synced} notifications` : undefined);
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       console.error('[Heartbeat] Linear sync failed:', errMsg);
       warnings.push(`Linear sync failed: ${errMsg}`);
+      progress?.('linear', 'error', errMsg);
       steps.linear = {
         success: false,
         durationMs: Date.now() - linearStart,
@@ -823,6 +851,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
   // Step 5: Ensure Slack Socket Mode is connected (real-time listener for DMs and @mentions)
   let slackResult: SlackSyncResult | undefined;
   if (!options.skipSlack) {
+    progress?.('slack', 'start');
     const slackStart = Date.now();
     try {
       if (isSocketConfigured()) {
@@ -833,6 +862,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
           success: true,
           durationMs: Date.now() - slackStart,
         };
+        progress?.('slack', 'done', 'Socket Mode connected');
       } else {
         // Fallback: old sync approach if Socket Mode not configured
         slackResult = await syncSlackMessages();
@@ -844,11 +874,13 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
           durationMs: Date.now() - slackStart,
           error: slackResult.error,
         };
+        progress?.('slack', slackResult.error ? 'error' : 'done', slackResult.synced > 0 ? `${slackResult.synced} messages` : undefined);
       }
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       console.error('[Heartbeat] Slack setup failed:', errMsg);
       warnings.push(`Slack setup failed: ${errMsg}`);
+      progress?.('slack', 'error', errMsg);
       steps.slack = {
         success: false,
         durationMs: Date.now() - slackStart,
@@ -861,6 +893,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
   let reindexed = false;
   if (!options.skipReindex) {
     // QMD Update (fast - just document index)
+    progress?.('qmd_update', 'start');
     const updateStart = Date.now();
     try {
       execSync('qmd update', {
@@ -873,10 +906,12 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
         success: true,
         durationMs: Date.now() - updateStart,
       };
+      progress?.('qmd_update', 'done');
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       console.error('[Heartbeat] QMD update failed:', errMsg);
       warnings.push(`QMD update failed: ${errMsg}`);
+      progress?.('qmd_update', 'error', errMsg);
       steps.qmdUpdate = {
         success: false,
         durationMs: Date.now() - updateStart,
@@ -885,6 +920,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
     }
 
     // QMD Embed (slow - vector embeddings)
+    progress?.('qmd_embed', 'start');
     const embedStart = Date.now();
     try {
       execSync('qmd embed', {
@@ -898,10 +934,12 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
         success: true,
         durationMs: Date.now() - embedStart,
       };
+      progress?.('qmd_embed', 'done');
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       console.error('[Heartbeat] QMD embed failed:', errMsg);
       warnings.push(`QMD embed failed: ${errMsg}`);
+      progress?.('qmd_embed', 'error', errMsg);
       steps.qmdEmbed = {
         success: false,
         durationMs: Date.now() - embedStart,
