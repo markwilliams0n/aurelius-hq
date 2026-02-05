@@ -88,10 +88,10 @@ Central reference for all triage connectors, their capabilities, and status.
 ### slack
 | Property | Value |
 |----------|-------|
-| **Status** | Stub (fake data only) |
-| **Added** | 2026-02-01 |
-| **Description** | Channel messages from Slack |
-| **Documentation** | None yet |
+| **Status** | **Active** |
+| **Added** | 2026-02-05 |
+| **Description** | Real-time messages via Socket Mode |
+| **Documentation** | [slack.md](./slack.md) |
 
 **Capabilities:**
 | Feature | Supported | Notes |
@@ -101,13 +101,28 @@ Central reference for all triage connectors, their capabilities, and status.
 | Memory | Yes | Manual only |
 | Chat | Yes | |
 | Custom Actions | No | |
-| Task Extraction | Yes | AI extraction |
+| Task Extraction | Yes | AI + user instructions, defaults to self |
 
-**Custom Enrichment Fields:** None
+**Custom Enrichment Fields:**
+- `messageType` - DM or mention
+- `channelName` - Source channel
+- `threadParticipants` - Thread participant names
+- `isThread` - Whether full thread captured
+- `summary` - AI-generated summary (Ollama)
+- `slackUrl` - Permalink to message
 
-**Sync:** Not implemented (using fake data)
+**Sync:**
+- Primary: Socket Mode (real-time WebSocket)
+- Fallback: Search API sync
+- Deduplication: By `externalId` (channelId:messageTs)
 
-**Files:** None yet (uses fake data generator)
+**Files:**
+- `src/lib/slack/socket.ts` - Socket Mode listener
+- `src/lib/slack/client.ts` - Web API client
+- `src/lib/slack/sync.ts` - Fallback sync
+- `src/lib/slack/types.ts` - TypeScript types
+- `src/app/api/slack/socket/route.ts` - Socket control
+- `src/app/api/slack/sync/route.ts` - Manual sync
 
 ---
 
@@ -183,7 +198,7 @@ Central reference for all triage connectors, their capabilities, and status.
 |-----------|-------|-------------|-------------------|-------------|--------|
 | granola | No | Yes | Yes | Granola + AI | Active |
 | gmail | Yes | No | Yes | AI | **Active** |
-| slack | Yes | No | No | AI only | Stub |
+| slack | Yes | No | Yes | AI + instructions | **Active** |
 | linear | No | No | Yes | None (issues are tasks) | **Active** |
 | manual | No | No | No | AI only | Active |
 
@@ -204,9 +219,9 @@ When adding a new connector:
 ### Recently Completed
 - [x] **Gmail** - Full implementation with Service Account auth, phishing detection, bi-directional sync ([docs](./gmail.md))
 - [x] **Linear** - Notification sync with API key auth, enrichment, archive action ([docs](./linear.md))
+- [x] **Slack** - Real-time Socket Mode, thread capture, Ollama summaries, task extraction ([docs](./slack.md))
 
 ### Planned
-- [ ] **Slack** - Full implementation with OAuth
 - [ ] **Notion** - Database items and pages
 - [ ] **Calendar** - Google/Outlook calendar events
 
