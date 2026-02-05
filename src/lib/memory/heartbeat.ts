@@ -7,6 +7,7 @@ import { resolveEntities, type ResolvedEntity } from './entity-resolution';
 import { syncGranolaMeetings, type GranolaSyncResult } from '@/lib/granola';
 import { syncGmailMessages, type GmailSyncResult } from '@/lib/gmail';
 import { syncLinearNotifications, type LinearSyncResult } from '@/lib/linear';
+import { syncSlackMessages, type SlackSyncResult, startSocketMode, isSocketConfigured } from '@/lib/slack';
 import { createBackup, type BackupResult } from './backup';
 
 const LIFE_DIR = path.join(process.cwd(), 'life');
@@ -442,6 +443,8 @@ export interface HeartbeatOptions {
   skipGmail?: boolean;
   /** Skip Linear sync */
   skipLinear?: boolean;
+  /** Skip Slack sync */
+  skipSlack?: boolean;
   /** Skip entity extraction from daily notes */
   skipExtraction?: boolean;
 }
@@ -461,6 +464,7 @@ export interface HeartbeatResult {
   granola?: GranolaSyncResult;
   gmail?: GmailSyncResult;
   linear?: LinearSyncResult;
+  slack?: SlackSyncResult;
   backup?: BackupResult;
   /** Granular step results for debugging */
   steps: {
@@ -469,6 +473,7 @@ export interface HeartbeatResult {
     granola?: StepResult;
     gmail?: StepResult;
     linear?: StepResult;
+    slack?: StepResult;
     qmdUpdate?: StepResult;
     qmdEmbed?: StepResult;
   };
@@ -487,7 +492,8 @@ export interface HeartbeatResult {
  * 4. Sync Granola meetings
  * 5. Sync Gmail messages
  * 6. Sync Linear notifications
- * 7. Reindex QMD
+ * 7. Sync Slack messages
+ * 8. Reindex QMD
  *
  * Each step is isolated - failures in one step don't prevent others from running.
  */
@@ -814,7 +820,44 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
     }
   }
 
-  // Step 5: Reindex QMD (split into update + embed for better observability)
+  // Step 5: Ensure Slack Socket Mode is connected (real-time listener for DMs and @mentions)
+  let slackResult: SlackSyncResult | undefined;
+  if (!options.skipSlack) {
+    const slackStart = Date.now();
+    try {
+      if (isSocketConfigured()) {
+        // Socket Mode: ensure connection is active (real-time, no sync needed)
+        await startSocketMode();
+        console.log('[Heartbeat] Slack Socket Mode connected');
+        steps.slack = {
+          success: true,
+          durationMs: Date.now() - slackStart,
+        };
+      } else {
+        // Fallback: old sync approach if Socket Mode not configured
+        slackResult = await syncSlackMessages();
+        if (slackResult.synced > 0) {
+          console.log(`[Heartbeat] Slack: synced ${slackResult.synced} messages`);
+        }
+        steps.slack = {
+          success: !slackResult.error,
+          durationMs: Date.now() - slackStart,
+          error: slackResult.error,
+        };
+      }
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error('[Heartbeat] Slack setup failed:', errMsg);
+      warnings.push(`Slack setup failed: ${errMsg}`);
+      steps.slack = {
+        success: false,
+        durationMs: Date.now() - slackStart,
+        error: errMsg,
+      };
+    }
+  }
+
+  // Step 6: Reindex QMD (split into update + embed for better observability)
   let reindexed = false;
   if (!options.skipReindex) {
     // QMD Update (fast - just document index)
@@ -891,6 +934,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
     granola: granolaResult,
     gmail: gmailResult,
     linear: linearResult,
+    slack: slackResult,
     backup: backupResult,
     steps,
     allStepsSucceeded,

@@ -1,0 +1,53 @@
+display_information:
+  name: Aurelius
+  description: Personal AI assistant for triage and task management
+  background_color: "#1e1e1e"
+features:
+  app_home:
+    home_tab_enabled: false
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+  bot_user:
+    display_name: Aurelius
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      # Mentions & Messages
+      - app_mentions:read      # Receive @mentions
+      - chat:write             # Send messages
+
+      # Channel access
+      - channels:read          # List public channels
+      - channels:history       # Read public channel messages/threads
+      - channels:join          # Join public channels when invited
+      - groups:read            # List private channels bot is in
+      - groups:history         # Read private channel messages
+
+      # DMs
+      - im:read                # List DM conversations
+      - im:history             # Read DM messages
+      - im:write               # Send DMs
+      - mpim:history           # Read multi-person DM messages
+
+      # Reactions & Files
+      - reactions:read         # See reactions on messages
+      - reactions:write        # Add reactions
+      - files:read             # Access shared files
+
+      # Users
+      - users:read             # Basic user info
+      - users.profile:read     # Full user profiles
+settings:
+  event_subscriptions:
+    bot_events:
+      - app_mention
+      - message.channels       # <-- Messages in public channels
+      - message.groups         # <-- Messages in private channels
+      - message.im             # <-- Direct messages to the bot
+      - message.mpim           # <-- Multi-person DMs
+  interactivity:
+    is_enabled: false
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false
