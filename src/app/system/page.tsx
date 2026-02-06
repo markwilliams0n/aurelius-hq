@@ -4,20 +4,12 @@ import { useState, useEffect } from "react";
 import { AppShell } from "@/components/aurelius/app-shell";
 import { PendingChanges } from "@/components/aurelius/pending-changes";
 import {
-  HeartPulse,
-  Sparkles,
-  Play,
-  Copy,
-  Check,
+  RefreshCw,
   Loader2,
   AlertCircle,
   CheckCircle,
-  User,
-  Building,
-  FolderKanban,
   Clock,
   Trash2,
-  RefreshCw,
   ChevronRight,
   MessageSquare,
   Zap,
@@ -36,24 +28,10 @@ type StepProgress = {
 
 const STEP_LABELS: Record<string, string> = {
   backup: "Backup",
-  extraction: "Entity extraction",
   granola: "Granola sync",
   gmail: "Gmail sync",
   linear: "Linear sync",
   slack: "Slack",
-  qmd_update: "Search index",
-  qmd_embed: "Embeddings",
-  // camelCase variants (used in HeartbeatResult.steps object keys)
-  qmdUpdate: "Search index",
-  qmdEmbed: "Embeddings",
-};
-
-type EntityDetail = {
-  name: string;
-  type: "person" | "company" | "project";
-  facts: string[];
-  action: "created" | "updated";
-  source: string;
 };
 
 type StepDetail = {
@@ -75,30 +53,12 @@ type HeartbeatEntry = {
   type: "heartbeat";
   trigger: "manual" | "auto" | "scheduled";
   success: boolean;
-  entitiesCreated: number;
-  entitiesUpdated: number;
-  reindexed: boolean;
-  entities?: EntityDetail[];
-  extractionMethod?: "ollama" | "pattern";
   steps?: Record<string, StepDetail>;
   gmail?: ConnectorResult;
   granola?: ConnectorResult;
   linear?: ConnectorResult;
   slack?: ConnectorResult;
   warnings?: string[];
-  duration?: number;
-  timestamp: string;
-  error?: string;
-};
-
-type SynthesisEntry = {
-  id: string;
-  type: "synthesis";
-  trigger: "manual" | "auto" | "scheduled";
-  success: boolean;
-  entitiesProcessed: number;
-  factsArchived: number;
-  summariesRegenerated: number;
   duration?: number;
   timestamp: string;
   error?: string;
@@ -128,15 +88,13 @@ type TriageEntry = {
   timestamp: string;
 };
 
-type ActivityEntry = HeartbeatEntry | SynthesisEntry | SessionEntry | SystemEntry | TriageEntry;
+type ActivityEntry = HeartbeatEntry | SessionEntry | SystemEntry | TriageEntry;
 
 export default function SystemPage() {
   const [heartbeatRunning, setHeartbeatRunning] = useState(false);
-  const [synthesisRunning, setSynthesisRunning] = useState(false);
   const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showTriageActions, setShowTriageActions] = useState(false);
   const [heartbeatSteps, setHeartbeatSteps] = useState<StepProgress[]>([]);
 
@@ -157,31 +115,12 @@ export default function SystemPage() {
             type: 'heartbeat' as const,
             trigger: a.metadata?.trigger || 'manual',
             success: a.metadata?.success ?? true,
-            entitiesCreated: a.metadata?.entitiesCreated || 0,
-            entitiesUpdated: a.metadata?.entitiesUpdated || 0,
-            reindexed: a.metadata?.reindexed ?? false,
-            entities: a.metadata?.entities || [],
-            extractionMethod: a.metadata?.extractionMethod,
             steps: a.metadata?.steps,
             gmail: a.metadata?.gmail,
             granola: a.metadata?.granola,
             linear: a.metadata?.linear,
             slack: a.metadata?.slack,
             warnings: a.metadata?.warnings,
-            duration: a.metadata?.duration,
-            timestamp: a.createdAt,
-            error: a.metadata?.error,
-          };
-        }
-        if (a.eventType === 'synthesis_run') {
-          return {
-            id: a.id,
-            type: 'synthesis' as const,
-            trigger: a.metadata?.trigger || 'manual',
-            success: a.metadata?.success ?? true,
-            entitiesProcessed: a.metadata?.entitiesProcessed || 0,
-            factsArchived: a.metadata?.factsArchived || 0,
-            summariesRegenerated: a.metadata?.summariesRegenerated || 0,
             duration: a.metadata?.duration,
             timestamp: a.createdAt,
             error: a.metadata?.error,
@@ -245,11 +184,14 @@ export default function SystemPage() {
             if (event.done) {
               // Final event
               if (event.result) {
+                const w = event.result.warnings?.length || 0;
                 toast.success(
-                  `Heartbeat: ${event.result.entitiesCreated ?? 0} created, ${event.result.entitiesUpdated ?? 0} updated`
+                  w > 0
+                    ? `Sync complete with ${w} warning${w !== 1 ? "s" : ""}`
+                    : "Sync complete"
                 );
               } else if (event.error) {
-                toast.error("Heartbeat failed");
+                toast.error("Sync failed");
               }
             } else if (event.step) {
               // Progress event
@@ -272,25 +214,10 @@ export default function SystemPage() {
 
       await loadActivityLog();
     } catch {
-      toast.error("Heartbeat failed");
+      toast.error("Sync failed");
       await loadActivityLog();
     } finally {
       setHeartbeatRunning(false);
-    }
-  };
-
-  const runSynthesis = async () => {
-    setSynthesisRunning(true);
-    try {
-      const response = await fetch("/api/synthesis", { method: "POST" });
-      const data = await response.json();
-      toast.success(`Synthesis: ${data.factsArchived ?? 0} facts archived`);
-      await loadActivityLog();
-    } catch {
-      toast.error("Synthesis failed");
-      await loadActivityLog();
-    } finally {
-      setSynthesisRunning(false);
     }
   };
 
@@ -304,14 +231,6 @@ export default function SystemPage() {
     }
   };
 
-  const copyToClipboard = async (entry: HeartbeatEntry) => {
-    const output = formatHeartbeatForCopy(entry);
-    await navigator.clipboard.writeText(output);
-    setCopiedId(entry.id);
-    setTimeout(() => setCopiedId(null), 2000);
-    toast.success("Copied to clipboard");
-  };
-
   const toggleExpand = (id: string) => {
     setExpandedId(expandedId === id ? null : id);
   };
@@ -323,7 +242,7 @@ export default function SystemPage() {
         <div className="border-b border-border px-6 py-4">
           <h1 className="font-serif text-2xl text-gold">System</h1>
           <p className="text-sm text-muted-foreground">
-            Memory system control center
+            Connector syncs & activity
           </p>
         </div>
 
@@ -335,29 +254,16 @@ export default function SystemPage() {
           <div className="flex gap-3">
             <Button
               onClick={runHeartbeat}
-              disabled={heartbeatRunning || synthesisRunning}
+              disabled={heartbeatRunning}
               size="sm"
               className="bg-gold hover:bg-gold-bright text-primary-foreground"
             >
               {heartbeatRunning ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : (
-                <HeartPulse className="w-4 h-4 mr-2" />
+                <RefreshCw className="w-4 h-4 mr-2" />
               )}
-              Heartbeat
-            </Button>
-            <Button
-              onClick={runSynthesis}
-              disabled={synthesisRunning || heartbeatRunning}
-              size="sm"
-              variant="outline"
-            >
-              {synthesisRunning ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Sparkles className="w-4 h-4 mr-2" />
-              )}
-              Synthesis
+              Sync
             </Button>
             <div className="ml-auto flex gap-2">
               <Button variant="ghost" size="sm" onClick={loadActivityLog}>
@@ -371,12 +277,12 @@ export default function SystemPage() {
             </div>
           </div>
 
-          {/* Heartbeat Progress Ticker */}
+          {/* Sync Progress Ticker */}
           {heartbeatSteps.length > 0 && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium">
-                <HeartPulse className="w-4 h-4 text-gold" />
-                {heartbeatRunning ? "Heartbeat running..." : "Heartbeat complete"}
+                <RefreshCw className="w-4 h-4 text-gold" />
+                {heartbeatRunning ? "Sync running..." : "Sync complete"}
               </div>
               <div className="space-y-1">
                 {heartbeatSteps.map((s) => (
@@ -445,8 +351,6 @@ export default function SystemPage() {
                     entry={entry}
                     expanded={expandedId === entry.id}
                     onToggle={() => toggleExpand(entry.id)}
-                    onCopy={entry.type === "heartbeat" ? () => copyToClipboard(entry as HeartbeatEntry) : undefined}
-                    copied={copiedId === entry.id}
                   />
                 ))}
               </div>
@@ -462,21 +366,15 @@ function FeedItem({
   entry,
   expanded,
   onToggle,
-  onCopy,
-  copied,
 }: {
   entry: ActivityEntry;
   expanded: boolean;
   onToggle: () => void;
-  onCopy?: () => void;
-  copied?: boolean;
 }) {
   const getIcon = () => {
     switch (entry.type) {
       case "heartbeat":
-        return <HeartPulse className="w-4 h-4" />;
-      case "synthesis":
-        return <Sparkles className="w-4 h-4" />;
+        return <RefreshCw className="w-4 h-4" />;
       case "session":
         return <MessageSquare className="w-4 h-4" />;
       case "triage":
@@ -491,8 +389,6 @@ function FeedItem({
     switch (entry.type) {
       case "heartbeat":
         return "text-gold";
-      case "synthesis":
-        return "text-purple-400";
       case "session":
         return "text-blue-400";
       case "triage":
@@ -519,21 +415,21 @@ function FeedItem({
       case "heartbeat": {
         const e = entry as HeartbeatEntry;
         if (!e.success) return <span className="text-red-400">Failed</span>;
-        return (
-          <span>
-            <span className="text-gold">{e.entitiesCreated}</span> created,{" "}
-            <span className="text-gold">{e.entitiesUpdated}</span> updated
-          </span>
-        );
-      }
-      case "synthesis": {
-        const e = entry as SynthesisEntry;
-        if (!e.success) return <span className="text-red-400">Failed</span>;
-        return (
-          <span>
-            <span className="text-purple-400">{e.factsArchived}</span> archived
-          </span>
-        );
+
+        // Build connector summary from results
+        const parts: string[] = [];
+        if (e.gmail?.synced) parts.push(`Gmail: ${e.gmail.synced} synced`);
+        if (e.granola?.synced) parts.push(`Granola: ${e.granola.synced} synced`);
+        if (e.linear?.synced) parts.push(`Linear: ${e.linear.synced} synced`);
+        if (e.slack?.synced) parts.push(`Slack: ${e.slack.synced} synced`);
+
+        const warningCount = e.warnings?.length || 0;
+        if (warningCount > 0) {
+          parts.push(`${warningCount} warning${warningCount !== 1 ? "s" : ""}`);
+        }
+
+        if (parts.length === 0) return <span>All syncs OK</span>;
+        return <span>{parts.join(", ")}</span>;
       }
       case "session": {
         const e = entry as SessionEntry;
@@ -575,17 +471,10 @@ function FeedItem({
         <div className={`${getIconColor()}`}>{getIcon()}</div>
 
         <div className="flex-1 min-w-0 flex items-center gap-2">
-          <span className="font-medium text-sm capitalize">{entry.type}</span>
+          <span className="font-medium text-sm capitalize">
+            {entry.type === "heartbeat" ? "Sync" : entry.type}
+          </span>
           {getTriggerIcon()}
-          {"extractionMethod" in entry && entry.extractionMethod && (
-            <span className={`text-[10px] px-1 py-0.5 rounded ${
-              entry.extractionMethod === "ollama"
-                ? "bg-purple-500/20 text-purple-400"
-                : "bg-gray-500/20 text-gray-400"
-            }`}>
-              {entry.extractionMethod === "ollama" ? "LLM" : "Pattern"}
-            </span>
-          )}
           <span className="text-muted-foreground text-sm">—</span>
           <span className="text-sm text-muted-foreground truncate">{getSummary()}</span>
         </div>
@@ -605,9 +494,8 @@ function FeedItem({
       {expanded && (
         <div className="px-3 pb-3 pt-1 border-t border-border/50 bg-background/50">
           {entry.type === "heartbeat" && (
-            <HeartbeatDetails entry={entry as HeartbeatEntry} onCopy={onCopy} copied={copied} />
+            <HeartbeatDetails entry={entry as HeartbeatEntry} />
           )}
-          {entry.type === "synthesis" && <SynthesisDetails entry={entry as SynthesisEntry} />}
           {entry.type === "session" && <SessionDetails entry={entry as SessionEntry} />}
           {entry.type === "triage" && <TriageDetails entry={entry as TriageEntry} />}
           {entry.type === "system" && <SystemDetails entry={entry as SystemEntry} />}
@@ -619,15 +507,9 @@ function FeedItem({
 
 function HeartbeatDetails({
   entry,
-  onCopy,
-  copied,
 }: {
   entry: HeartbeatEntry;
-  onCopy?: () => void;
-  copied?: boolean;
 }) {
-  const [expandedEntities, setExpandedEntities] = useState(false);
-
   const formatMs = (ms: number) => {
     if (ms >= 60000) return `${(ms / 1000).toFixed(0)}s`;
     if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`;
@@ -654,15 +536,6 @@ function HeartbeatDetails({
         }`}>
           {entry.trigger}
         </span>
-        {onCopy && (
-          <button onClick={onCopy} className="ml-auto p-1 hover:bg-secondary rounded">
-            {copied ? (
-              <Check className="w-4 h-4 text-green-500" />
-            ) : (
-              <Copy className="w-4 h-4 text-muted-foreground" />
-            )}
-          </button>
-        )}
       </div>
 
       {/* Steps breakdown */}
@@ -755,33 +628,6 @@ function HeartbeatDetails({
           <span>{entry.error}</span>
         </div>
       )}
-
-      {/* Entities */}
-      {entry.entities && entry.entities.length > 0 && (
-        <div className="space-y-1.5">
-          <button
-            onClick={() => setExpandedEntities(!expandedEntities)}
-            className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ChevronRight className={`w-3 h-3 transition-transform ${expandedEntities ? "rotate-90" : ""}`} />
-            {entry.entities.length} entities ({entry.entitiesCreated} created, {entry.entitiesUpdated} updated)
-          </button>
-          {expandedEntities && (
-            <div className="max-h-64 overflow-y-auto space-y-1.5">
-              {entry.entities.map((entity, i) => (
-                <EntityCard key={i} entity={entity} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* No entities message */}
-      {(!entry.entities || entry.entities.length === 0) && entry.entitiesCreated === 0 && entry.entitiesUpdated === 0 && (
-        <div className="text-xs text-muted-foreground/50 italic">
-          No new entities or facts extracted
-        </div>
-      )}
     </div>
   );
 }
@@ -816,89 +662,6 @@ function ConnectorStat({
         <div className="text-red-400 truncate" title={error}>{error}</div>
       ) : (
         <div className="text-muted-foreground/50">No changes</div>
-      )}
-    </div>
-  );
-}
-
-function EntityCard({ entity }: { entity: EntityDetail }) {
-  const [showFacts, setShowFacts] = useState(false);
-  const TypeIcon =
-    entity.type === "person" ? User : entity.type === "company" ? Building : FolderKanban;
-
-  return (
-    <div className="p-2 rounded bg-secondary/30 border border-border/30">
-      <div className="flex items-center gap-2">
-        <TypeIcon className="w-3.5 h-3.5 text-muted-foreground" />
-        <span className="text-sm text-gold font-medium">{entity.name}</span>
-        <span className={`text-[10px] px-1 py-0.5 rounded ${
-          entity.action === "created"
-            ? "bg-green-500/20 text-green-400"
-            : "bg-blue-500/20 text-blue-400"
-        }`}>
-          {entity.action}
-        </span>
-        {entity.facts.length > 0 && (
-          <button
-            onClick={() => setShowFacts(!showFacts)}
-            className="ml-auto text-xs text-muted-foreground hover:text-foreground flex items-center gap-0.5"
-          >
-            <ChevronRight className={`w-3 h-3 transition-transform ${showFacts ? "rotate-90" : ""}`} />
-            {entity.facts.length} fact{entity.facts.length !== 1 ? "s" : ""}
-          </button>
-        )}
-      </div>
-      {showFacts && entity.facts.length > 0 && (
-        <div className="mt-1.5 pl-6 space-y-0.5">
-          {entity.facts.map((fact, i) => (
-            <div key={i} className="text-xs text-muted-foreground">
-              • {fact}
-            </div>
-          ))}
-          {entity.source && (
-            <div className="text-[10px] text-muted-foreground/50 mt-1">
-              Source: {entity.source}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SynthesisDetails({ entry }: { entry: SynthesisEntry }) {
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-4 text-sm">
-        <div className="flex items-center gap-1.5">
-          <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-          <span>{new Date(entry.timestamp).toLocaleString()}</span>
-        </div>
-        {entry.duration && (
-          <span className="text-muted-foreground">{entry.duration}ms</span>
-        )}
-      </div>
-
-      <div className="grid grid-cols-3 gap-3">
-        <div className="p-2 rounded bg-secondary/50 text-center">
-          <div className="text-lg font-bold text-purple-400">{entry.entitiesProcessed}</div>
-          <div className="text-xs text-muted-foreground">Processed</div>
-        </div>
-        <div className="p-2 rounded bg-secondary/50 text-center">
-          <div className="text-lg font-bold text-purple-400">{entry.factsArchived}</div>
-          <div className="text-xs text-muted-foreground">Archived</div>
-        </div>
-        <div className="p-2 rounded bg-secondary/50 text-center">
-          <div className="text-lg font-bold text-purple-400">{entry.summariesRegenerated}</div>
-          <div className="text-xs text-muted-foreground">Regenerated</div>
-        </div>
-      </div>
-
-      {entry.error && (
-        <div className="p-2 rounded bg-red-500/10 text-red-400 text-sm flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span>{entry.error}</span>
-        </div>
       )}
     </div>
   );
@@ -942,43 +705,4 @@ function SystemDetails({ entry }: { entry: SystemEntry }) {
       <div className="mt-2 text-muted-foreground">{entry.message}</div>
     </div>
   );
-}
-
-function formatHeartbeatForCopy(entry: HeartbeatEntry): string {
-  const lines: string[] = [
-    "# Heartbeat Report",
-    "",
-    `**Timestamp:** ${entry.timestamp}`,
-    `**Trigger:** ${entry.trigger}`,
-    `**Status:** ${entry.success ? "Success" : "Failed"}`,
-    `**Extraction Method:** ${entry.extractionMethod || "unknown"}`,
-    `**Duration:** ${entry.duration ? `${entry.duration}ms` : "unknown"}`,
-    "",
-    "## Summary",
-    `- Entities Created: ${entry.entitiesCreated}`,
-    `- Entities Updated: ${entry.entitiesUpdated}`,
-    `- Reindexed: ${entry.reindexed ? "Yes" : "No"}`,
-    "",
-  ];
-
-  if (entry.error) {
-    lines.push("## Error", entry.error, "");
-  }
-
-  if (entry.entities && entry.entities.length > 0) {
-    lines.push("## Entities Extracted", "");
-    for (const entity of entry.entities) {
-      lines.push(`### ${entity.name} (${entity.type}) - ${entity.action}`);
-      lines.push(`Source: ${entity.source}`);
-      if (entity.facts.length > 0) {
-        lines.push("Facts:");
-        for (const fact of entity.facts) {
-          lines.push(`- ${fact}`);
-        }
-      }
-      lines.push("");
-    }
-  }
-
-  return lines.join("\n");
 }
