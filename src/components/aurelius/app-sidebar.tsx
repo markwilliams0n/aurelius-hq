@@ -9,7 +9,6 @@ import {
   MessageSquare,
   Brain,
   Activity,
-  Settings,
   Inbox,
   CheckSquare,
   Sun,
@@ -25,7 +24,6 @@ const navItems = [
   { href: "/tasks", icon: CheckSquare, label: "Tasks" },
   { href: "/memory", icon: Brain, label: "Memory" },
   { href: "/system", icon: Activity, label: "System" },
-  { href: "/settings", icon: Settings, label: "Settings", disabled: true },
 ];
 
 export function AppSidebar() {
@@ -72,19 +70,6 @@ export function AppSidebar() {
           const isActive = pathname === item.href ||
             (item.href !== "/" && pathname.startsWith(item.href));
           const Icon = item.icon;
-
-          if (item.disabled) {
-            return (
-              <div
-                key={item.href}
-                className="flex flex-col items-center gap-1 py-2 rounded-lg opacity-30 cursor-not-allowed"
-                title={`${item.label} (coming soon)`}
-              >
-                <Icon className="w-5 h-5" />
-                <span className="text-[10px]">{item.label}</span>
-              </div>
-            );
-          }
 
           return (
             <Link
