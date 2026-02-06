@@ -26,7 +26,7 @@ export interface AgentContext {
   systemPrompt: string;
   /** Raw recent notes (if you need them separately) */
   recentNotes: string | null;
-  /** Raw QMD search results (if you need them separately) */
+  /** Supermemory profile/search results (if you need them separately) */
   memoryContext: string | null;
   /** Soul configuration content */
   soulConfig: string | null;
@@ -40,7 +40,7 @@ export interface AgentContext {
  * This is the single entry point for all agents to get their context.
  * Handles:
  * - Recent daily notes (last 24h)
- * - QMD semantic search for relevant memories
+ * - Supermemory profile search for relevant memories
  * - Soul configuration
  * - System prompt assembly
  *

@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { recordSearchAccess } from './access-tracking';
 import { emitMemoryEvent } from './events';
+import { getMemoryContext } from './supermemory';
 
 /**
  * Clean QMD file path by removing qmd:// prefix
@@ -260,71 +261,87 @@ export interface BuildContextOptions {
 }
 
 /**
- * Build memory context string for AI prompts
- * Searches specified collection and formats results
- * Also tracks access to returned entities
+ * Build memory context string for AI prompts.
+ * Queries Supermemory for profile facts and relevant memories,
+ * then formats them into a markdown string.
  *
  * Note: For recent daily notes (last 24h), use getRecentNotes() instead.
- * This function is better for searching older/indexed content.
+ * This function provides long-term memory via Supermemory.
  */
 export async function buildMemoryContext(
   query: string,
   options: BuildContextOptions = {}
 ): Promise<string | null> {
   const startTime = Date.now();
-  const { limit = 5, collection = 'life' } = options;
 
-  const results = searchMemory(query, { limit, collection, _skipEvent: true });
-  const durationMs = Date.now() - startTime;
+  try {
+    const profile = await getMemoryContext(query);
+    const durationMs = Date.now() - startTime;
 
-  if (results.length === 0) {
+    const hasStatic = profile.profile.static && profile.profile.static.length > 0;
+    const hasDynamic = profile.profile.dynamic && profile.profile.dynamic.length > 0;
+
+    if (!hasStatic && !hasDynamic) {
+      emitMemoryEvent({
+        eventType: 'search',
+        trigger: 'chat',
+        summary: `Supermemory: no results for "${query.slice(0, 60)}"`,
+        payload: { query, resultCount: 0 },
+        durationMs,
+        metadata: { searchType: 'supermemory-profile' },
+      }).catch(() => {});
+      return null;
+    }
+
+    const staticCount = profile.profile.static?.length ?? 0;
+    const dynamicCount = profile.profile.dynamic?.length ?? 0;
+
     emitMemoryEvent({
       eventType: 'search',
       trigger: 'chat',
-      summary: `Memory search: no results for "${query.slice(0, 60)}"`,
-      payload: { query, collection, limit, resultCount: 0 },
+      summary: `Supermemory: ${staticCount} profile facts, ${dynamicCount} relevant memories for "${query.slice(0, 60)}"`,
+      payload: {
+        query,
+        resultCount: staticCount + dynamicCount,
+        staticCount,
+        dynamicCount,
+      },
       durationMs,
-      metadata: { collection, searchType: 'hybrid' },
+      metadata: { searchType: 'supermemory-profile' },
     }).catch(() => {});
+
+    const lines: string[] = [];
+
+    if (hasStatic) {
+      lines.push('**[Profile]**');
+      for (const fact of profile.profile.static) {
+        lines.push(`- ${fact}`);
+      }
+      lines.push('');
+    }
+
+    if (hasDynamic) {
+      lines.push('**[Relevant Memories]**');
+      for (const memory of profile.profile.dynamic) {
+        lines.push(`- ${memory}`);
+      }
+      lines.push('');
+    }
+
+    return lines.length > 0 ? lines.join('\n').trim() : null;
+  } catch (error) {
+    const durationMs = Date.now() - startTime;
+    emitMemoryEvent({
+      eventType: 'search',
+      trigger: 'chat',
+      summary: `Supermemory: error for "${query.slice(0, 60)}"`,
+      payload: { query, resultCount: 0, error: String(error) },
+      durationMs,
+      metadata: { searchType: 'supermemory-profile' },
+    }).catch(() => {});
+    console.error('Supermemory context error:', error);
     return null;
   }
-
-  // Track access to entities that were retrieved
-  try {
-    await recordSearchAccess(results.map(r => r.path));
-  } catch (error) {
-    console.error('Failed to record search access:', error);
-  }
-
-  emitMemoryEvent({
-    eventType: 'search',
-    trigger: 'chat',
-    summary: `Memory search: ${results.length} results for "${query.slice(0, 60)}"`,
-    payload: {
-      query,
-      collection,
-      limit,
-      resultCount: results.length,
-      results: results.map(r => ({ path: r.path, score: r.score, contentPreview: r.content.slice(0, 200) })),
-    },
-    durationMs,
-    metadata: { collection, searchType: 'hybrid' },
-  }).catch(() => {});
-
-  const lines: string[] = [];
-
-  for (const result of results) {
-    // Extract filename from path for better readability
-    const pathParts = result.path.split('/');
-    const filename = pathParts[pathParts.length - 1] || result.path;
-    const context = pathParts.slice(0, -1).join('/');
-
-    lines.push(`**[${filename}]** (${context})`);
-    lines.push(result.content.trim());
-    lines.push('');
-  }
-
-  return lines.length > 0 ? lines.join('\n').trim() : null;
 }
 
 /**
