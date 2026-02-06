@@ -363,7 +363,7 @@ export async function createDraft(options: {
 }): Promise<string> {
   const gmail = await getGmailClient();
 
-  const message = [
+  const headers = [
     `To: ${sanitizeHeader(options.to)}`,
     options.cc ? `Cc: ${sanitizeHeader(options.cc)}` : '',
     options.bcc ? `Bcc: ${sanitizeHeader(options.bcc)}` : '',
@@ -371,10 +371,9 @@ export async function createDraft(options: {
     options.inReplyTo ? `In-Reply-To: ${sanitizeHeader(options.inReplyTo)}` : '',
     options.inReplyTo ? `References: ${sanitizeHeader(options.inReplyTo)}` : '',
     'Content-Type: text/plain; charset=utf-8',
-    '',
-    options.body,
   ].filter(Boolean).join('\r\n');
 
+  const message = headers + '\r\n\r\n' + options.body;
   const encodedMessage = Buffer.from(message).toString('base64url');
 
   const response = await gmail.users.drafts.create({
@@ -410,7 +409,7 @@ export async function sendEmail(options: {
 
   const gmail = await getGmailClient();
 
-  const message = [
+  const headers = [
     `To: ${sanitizeHeader(options.to)}`,
     options.cc ? `Cc: ${sanitizeHeader(options.cc)}` : '',
     options.bcc ? `Bcc: ${sanitizeHeader(options.bcc)}` : '',
@@ -418,10 +417,9 @@ export async function sendEmail(options: {
     options.inReplyTo ? `In-Reply-To: ${sanitizeHeader(options.inReplyTo)}` : '',
     options.inReplyTo ? `References: ${sanitizeHeader(options.inReplyTo)}` : '',
     'Content-Type: text/plain; charset=utf-8',
-    '',
-    options.body,
   ].filter(Boolean).join('\r\n');
 
+  const message = headers + '\r\n\r\n' + options.body;
   const encodedMessage = Buffer.from(message).toString('base64url');
 
   const response = await gmail.users.messages.send({
