@@ -6,6 +6,7 @@ import {
   fetchWorkflowStates,
   createIssue,
   updateIssue,
+  getOwnerUserId,
 } from "@/lib/linear/issues";
 import { db } from "@/lib/db";
 import { suggestedTasks } from "@/lib/db/schema/tasks";
@@ -284,6 +285,14 @@ export async function handleTaskTool(
             };
           }
           assigneeId = member.id;
+        }
+
+        // Default to owner if no explicit assignee
+        if (!assigneeId) {
+          const ownerUserId = getOwnerUserId();
+          if (ownerUserId) {
+            assigneeId = ownerUserId;
+          }
         }
 
         const result = await createIssue({

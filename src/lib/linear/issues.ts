@@ -8,6 +8,28 @@
 import type { LinearIssue } from './types';
 import { graphql } from './client';
 
+/**
+ * Get the Linear user ID of the task owner.
+ * When the API key belongs to an agent account (e.g. "Mark's Agent"),
+ * LINEAR_OWNER_USER_ID identifies the human owner whose tasks we manage.
+ * Falls back to "isMe" (the API key holder) if not set.
+ */
+function getOwnerFilter(): Record<string, unknown> {
+  const ownerUserId = process.env.LINEAR_OWNER_USER_ID;
+  if (ownerUserId) {
+    return { assignee: { id: { eq: ownerUserId } } };
+  }
+  return { assignee: { isMe: { eq: true } } };
+}
+
+/**
+ * Get the owner's Linear user ID, if configured.
+ * Used by task tools to auto-assign to the human owner.
+ */
+export function getOwnerUserId(): string | undefined {
+  return process.env.LINEAR_OWNER_USER_ID || undefined;
+}
+
 const ISSUE_FRAGMENT = `
   id
   identifier
@@ -80,7 +102,7 @@ export async function fetchMyIssues(opts?: {
   cursor?: string;
 }): Promise<{ issues: LinearIssueWithMeta[]; hasMore: boolean; endCursor?: string }> {
   const filter: Record<string, unknown> = {
-    assignee: { isMe: { eq: true } },
+    ...getOwnerFilter(),
   };
 
   if (!opts?.includeCompleted) {
