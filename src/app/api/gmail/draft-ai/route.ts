@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { inboxItems } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 import { chat } from '@/lib/ai/client';
+
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUUID(str: string) { return uuidRegex.test(str); }
 
 export const runtime = 'nodejs';
 
@@ -31,7 +34,11 @@ export async function POST(request: NextRequest) {
     const [item] = await db
       .select()
       .from(inboxItems)
-      .where(eq(inboxItems.id, itemId))
+      .where(
+        isUUID(itemId)
+          ? or(eq(inboxItems.id, itemId), eq(inboxItems.externalId, itemId))
+          : eq(inboxItems.externalId, itemId)
+      )
       .limit(1);
 
     if (!item) {
@@ -59,8 +66,9 @@ Write ONLY the reply body text. No subject line, no preamble like "Here's a draf
     return NextResponse.json({ draft: draft.trim() });
   } catch (error) {
     console.error('[Gmail AI Draft] Failed:', error);
+    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { error: 'Failed to generate draft' },
+      { error: `Failed to generate draft: ${message}` },
       { status: 500 }
     );
   }

@@ -6,7 +6,7 @@
 
 import { db } from '@/lib/db';
 import { inboxItems } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 import {
   archiveEmail,
   markAsSpam,
@@ -14,16 +14,27 @@ import {
   sendEmail,
 } from './client';
 
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Find item by UUID id or externalId (same pattern as triage API) */
+async function findItem(itemId: string) {
+  const [item] = await db
+    .select()
+    .from(inboxItems)
+    .where(
+      uuidRegex.test(itemId)
+        ? or(eq(inboxItems.id, itemId), eq(inboxItems.externalId, itemId))
+        : eq(inboxItems.externalId, itemId)
+    )
+    .limit(1);
+  return item;
+}
+
 /**
  * Archive in Gmail when archived in triage
  */
 export async function syncArchiveToGmail(itemId: string): Promise<void> {
-  // Get the item to find the message ID
-  const [item] = await db
-    .select()
-    .from(inboxItems)
-    .where(eq(inboxItems.id, itemId))
-    .limit(1);
+  const item = await findItem(itemId);
 
   if (!item || item.connector !== 'gmail') {
     return;
@@ -48,11 +59,7 @@ export async function syncArchiveToGmail(itemId: string): Promise<void> {
  * Mark as spam in Gmail
  */
 export async function syncSpamToGmail(itemId: string): Promise<void> {
-  const [item] = await db
-    .select()
-    .from(inboxItems)
-    .where(eq(inboxItems.id, itemId))
-    .limit(1);
+  const item = await findItem(itemId);
 
   if (!item || item.connector !== 'gmail') {
     return;
@@ -87,11 +94,7 @@ export async function replyToEmail(
     bcc?: string;
   }
 ): Promise<{ draftId?: string; messageId?: string; wasDraft: boolean }> {
-  const [item] = await db
-    .select()
-    .from(inboxItems)
-    .where(eq(inboxItems.id, itemId))
-    .limit(1);
+  const item = await findItem(itemId);
 
   if (!item || item.connector !== 'gmail') {
     throw new Error('Item not found or not a Gmail item');
@@ -141,11 +144,7 @@ export async function replyToEmail(
  * Get unsubscribe URL for an item
  */
 export async function getUnsubscribeUrl(itemId: string): Promise<string | null> {
-  const [item] = await db
-    .select()
-    .from(inboxItems)
-    .where(eq(inboxItems.id, itemId))
-    .limit(1);
+  const item = await findItem(itemId);
 
   if (!item || item.connector !== 'gmail') {
     return null;
