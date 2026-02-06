@@ -1,7 +1,10 @@
 /**
  * Linear API Client
  *
- * GraphQL client for Linear API with API key auth.
+ * Supports two auth modes:
+ * 1. OAuth client credentials (LINEAR_CLIENT_ID + LINEAR_CLIENT_SECRET)
+ *    → Acts as "Aurelius" agent in Linear, auto-refreshes 30-day tokens
+ * 2. Personal API key (LINEAR_API_KEY) — fallback for backwards compat
  */
 
 import { promises as fs } from 'fs';
@@ -13,13 +16,95 @@ import type {
 } from './types';
 
 const LINEAR_API_URL = 'https://api.linear.app/graphql';
+const LINEAR_TOKEN_URL = 'https://api.linear.app/oauth/token';
 const SYNC_STATE_PATH = path.join(process.cwd(), '.linear-sync-state.json');
+
+// In-memory OAuth token cache
+let cachedToken: { accessToken: string; expiresAt: number } | null = null;
 
 /**
  * Check if Linear connector is configured
  */
 export function isConfigured(): boolean {
-  return !!process.env.LINEAR_API_KEY;
+  return !!(
+    (process.env.LINEAR_CLIENT_ID && process.env.LINEAR_CLIENT_SECRET) ||
+    process.env.LINEAR_API_KEY
+  );
+}
+
+/**
+ * Get an OAuth access token using client credentials grant.
+ * Caches the token in memory and refreshes when expired or on 401.
+ */
+async function getOAuthToken(forceRefresh = false): Promise<string> {
+  const clientId = process.env.LINEAR_CLIENT_ID;
+  const clientSecret = process.env.LINEAR_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error('LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET not configured');
+  }
+
+  // Return cached token if still valid (with 5 min buffer)
+  if (!forceRefresh && cachedToken && Date.now() < cachedToken.expiresAt - 300_000) {
+    return cachedToken.accessToken;
+  }
+
+  console.log('[Linear] Requesting new OAuth token via client credentials...');
+
+  // Use HTTP Basic auth as recommended by Linear docs
+  const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+
+  const response = await fetch(LINEAR_TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Authorization: `Basic ${basicAuth}`,
+    },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      scope: 'read,write',
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    // Provide helpful error for common setup issue
+    if (text.includes('client_credentials')) {
+      throw new Error(
+        'Linear OAuth app does not have client credentials enabled. ' +
+        'Go to Linear Settings > API > OAuth Applications, edit the app, ' +
+        'and toggle on "Client credentials". ' +
+        `Original error: ${text}`
+      );
+    }
+    throw new Error(`Linear OAuth token error: ${response.status} ${text}`);
+  }
+
+  const data = await response.json();
+  cachedToken = {
+    accessToken: data.access_token,
+    expiresAt: Date.now() + (data.expires_in * 1000),
+  };
+
+  console.log('[Linear] OAuth token obtained, expires in', Math.round(data.expires_in / 86400), 'days');
+  return cachedToken.accessToken;
+}
+
+/**
+ * Get the authorization header value.
+ * Uses OAuth if client credentials are configured, otherwise falls back to API key.
+ */
+async function getAuthHeader(forceRefresh = false): Promise<string> {
+  if (process.env.LINEAR_CLIENT_ID && process.env.LINEAR_CLIENT_SECRET) {
+    const token = await getOAuthToken(forceRefresh);
+    return `Bearer ${token}`;
+  }
+
+  const apiKey = process.env.LINEAR_API_KEY;
+  if (!apiKey) {
+    throw new Error('No Linear credentials configured. Set LINEAR_CLIENT_ID + LINEAR_CLIENT_SECRET, or LINEAR_API_KEY.');
+  }
+  return apiKey;
 }
 
 /**
@@ -29,20 +114,41 @@ export async function graphql<T>(
   query: string,
   variables?: Record<string, unknown>
 ): Promise<T> {
-  const apiKey = process.env.LINEAR_API_KEY;
-
-  if (!apiKey) {
-    throw new Error('LINEAR_API_KEY not configured');
-  }
+  const auth = await getAuthHeader();
 
   const response = await fetch(LINEAR_API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: apiKey,
+      Authorization: auth,
     },
     body: JSON.stringify({ query, variables }),
   });
+
+  // On 401, try refreshing the OAuth token and retry once
+  if (response.status === 401 && process.env.LINEAR_CLIENT_ID) {
+    console.log('[Linear] Got 401, refreshing OAuth token...');
+    const freshAuth = await getAuthHeader(true);
+    const retryResponse = await fetch(LINEAR_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: freshAuth,
+      },
+      body: JSON.stringify({ query, variables }),
+    });
+
+    if (!retryResponse.ok) {
+      const text = await retryResponse.text();
+      throw new Error(`Linear API error: ${retryResponse.status} ${text}`);
+    }
+
+    const retryJson = await retryResponse.json();
+    if (retryJson.errors?.length > 0) {
+      throw new Error(`Linear GraphQL error: ${retryJson.errors[0].message}`);
+    }
+    return retryJson.data;
+  }
 
   if (!response.ok) {
     const text = await response.text();
