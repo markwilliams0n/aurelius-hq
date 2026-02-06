@@ -10,11 +10,11 @@
 import type { Capability, ToolDefinition, ToolResult } from './types';
 
 // Import capabilities — add new ones here as they're created
-// import { configCapability } from './config';
+import { configCapability } from './config';
 // import { tasksCapability } from './tasks';
 
 const ALL_CAPABILITIES: Capability[] = [
-  // configCapability,
+  configCapability,
   // tasksCapability,
 ];
 
