@@ -51,7 +51,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('[Tasks API] Failed to create task:', error);
     return NextResponse.json(
-      { error: 'Failed to create task', details: String(error) },
+      { error: 'Failed to create task' },
       { status: 500 }
     );
   }

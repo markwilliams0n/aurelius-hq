@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isConfigured } from '@/lib/linear/client';
 import { updateIssue } from '@/lib/linear/issues';
 
 export const runtime = 'nodejs';
@@ -12,6 +13,10 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!isConfigured()) {
+    return NextResponse.json({ error: 'Linear not configured' }, { status: 400 });
+  }
+
   const { id } = await params;
 
   try {
@@ -46,7 +51,7 @@ export async function PATCH(
   } catch (error) {
     console.error('[Tasks API] Failed to update task:', error);
     return NextResponse.json(
-      { error: 'Failed to update task', details: String(error) },
+      { error: 'Failed to update task' },
       { status: 500 }
     );
   }

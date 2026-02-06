@@ -150,6 +150,19 @@ export function TasksClient() {
   const [groupBy, setGroupBy] = useState<GroupBy>("status");
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
+  const projectDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close project dropdown on outside click
+  useEffect(() => {
+    if (!showProjectDropdown) return;
+    const handler = (e: MouseEvent) => {
+      if (!projectDropdownRef.current?.contains(e.target as Node)) {
+        setShowProjectDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showProjectDropdown]);
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -177,13 +190,7 @@ export function TasksClient() {
       const response = await fetch(`/api/tasks?${params}`);
       if (!response.ok) throw new Error("Failed to fetch tasks");
       const data = await response.json();
-      const seen = new Set<string>();
-      const uniqueTasks = (data.tasks || []).filter((t: Task) => {
-        if (seen.has(t.id)) return false;
-        seen.add(t.id);
-        return true;
-      });
-      setTasks(uniqueTasks);
+      setTasks(data.tasks || []);
       setContext(data.context || null);
     } catch (error) {
       console.error("Failed to fetch tasks:", error);
@@ -203,18 +210,22 @@ export function TasksClient() {
       const data = await response.json();
       setWorkflowStates(data.states || []);
       setTeamMembers(data.members || []);
-      // Merge projects from metadata if context doesn't have them yet
-      if (data.projects && context) {
-        setContext((prev) =>
-          prev ? { ...prev, projects: data.projects, teams: data.teams } : prev
-        );
+      // Always merge projects/teams from metadata using functional setter
+      // (avoids stale closure over context which may be null on mount)
+      if (data.projects) {
+        setContext((prev) => ({
+          ...prev,
+          projects: data.projects,
+          teams: data.teams,
+          viewer: prev?.viewer ?? data.viewer,
+        }));
       }
       setMetadataLoaded(true);
     } catch (error) {
       console.error("Failed to fetch metadata:", error);
       toast.error("Failed to load options");
     }
-  }, [metadataLoaded, context]);
+  }, [metadataLoaded]);
 
   useEffect(() => {
     fetchTasks();
@@ -237,18 +248,20 @@ export function TasksClient() {
 
   // Group tasks
   const groupedTasks = useMemo(() => {
-    const groups = new Map<string, { label: string; color?: string; tasks: Task[] }>();
+    const groups = new Map<string, { label: string; color?: string; stateType?: string; tasks: Task[] }>();
 
     for (const task of filteredTasks) {
       let key: string;
       let label: string;
       let color: string | undefined;
+      let stateType: string | undefined;
 
       switch (groupBy) {
         case "status":
-          key = task.state.type;
+          key = task.state.name;
           label = task.state.name;
           color = task.state.color;
+          stateType = task.state.type;
           break;
         case "project":
           key = task.project?.id ?? "no-project";
@@ -262,14 +275,14 @@ export function TasksClient() {
       }
 
       if (!groups.has(key)) {
-        groups.set(key, { label, color, tasks: [] });
+        groups.set(key, { label, color, stateType, tasks: [] });
       }
       groups.get(key)!.tasks.push(task);
     }
 
-    const sortedEntries = Array.from(groups.entries()).sort(([a], [b]) => {
+    const sortedEntries = Array.from(groups.entries()).sort(([a, aGroup], [b, bGroup]) => {
       if (groupBy === "status") {
-        return (STATE_TYPE_ORDER[a] ?? 99) - (STATE_TYPE_ORDER[b] ?? 99);
+        return (STATE_TYPE_ORDER[aGroup.stateType ?? ""] ?? 99) - (STATE_TYPE_ORDER[bGroup.stateType ?? ""] ?? 99);
       }
       if (groupBy === "priority") {
         return (parseInt(a) || 99) - (parseInt(b) || 99);
@@ -829,7 +842,7 @@ export function TasksClient() {
             {context?.projects && context.projects.length > 0 && (
               <>
                 <div className="w-px h-5 bg-border" />
-                <div className="relative">
+                <div className="relative" ref={projectDropdownRef}>
                   <button
                     onClick={() =>
                       setShowProjectDropdown(!showProjectDropdown)
@@ -2505,12 +2518,22 @@ function StateIcon({
   stateType: string;
   color?: string;
 }) {
-  const colorClass = STATE_TYPE_COLORS[stateType] ?? "text-muted-foreground";
+  const fallback = STATE_TYPE_COLORS[stateType] ?? "text-muted-foreground";
   switch (stateType) {
     case "completed":
-      return <CheckCircle2 className={cn("w-4 h-4 shrink-0", colorClass)} />;
+      return (
+        <CheckCircle2
+          className={cn("w-4 h-4 shrink-0", !color && fallback)}
+          style={color ? { color } : undefined}
+        />
+      );
     case "canceled":
-      return <XCircle className={cn("w-4 h-4 shrink-0", colorClass)} />;
+      return (
+        <XCircle
+          className={cn("w-4 h-4 shrink-0", !color && fallback)}
+          style={color ? { color } : undefined}
+        />
+      );
     case "started":
       return (
         <div
@@ -2524,7 +2547,12 @@ function StateIcon({
         </div>
       );
     case "triage":
-      return <Inbox className="w-4 h-4 shrink-0 text-purple-400" />;
+      return (
+        <Inbox
+          className={cn("w-4 h-4 shrink-0", !color && fallback)}
+          style={color ? { color } : undefined}
+        />
+      );
     default:
       return (
         <div

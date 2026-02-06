@@ -6,44 +6,7 @@
  */
 
 import type { LinearIssue } from './types';
-
-const LINEAR_API_URL = 'https://api.linear.app/graphql';
-
-/**
- * Execute a GraphQL query against Linear API
- */
-async function graphql<T>(
-  query: string,
-  variables?: Record<string, unknown>
-): Promise<T> {
-  const apiKey = process.env.LINEAR_API_KEY;
-
-  if (!apiKey) {
-    throw new Error('LINEAR_API_KEY not configured');
-  }
-
-  const response = await fetch(LINEAR_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: apiKey,
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Linear API error: ${response.status} ${text}`);
-  }
-
-  const json = await response.json();
-
-  if (json.errors && json.errors.length > 0) {
-    throw new Error(`Linear GraphQL error: ${json.errors[0].message}`);
-  }
-
-  return json.data;
-}
+import { graphql } from './client';
 
 const ISSUE_FRAGMENT = `
   id
@@ -560,17 +523,29 @@ export async function fetchAllMyTasks(projectIds?: string[]): Promise<{
   issues: LinearIssueWithMeta[];
   context: Awaited<ReturnType<typeof fetchViewerContext>>;
 }> {
-  // Fetch viewer context and my issues in parallel
-  const [context, myIssuesResult] = await Promise.all([
+  // Fetch viewer context and first page of my issues in parallel
+  const [context, firstPage] = await Promise.all([
     fetchViewerContext(),
     fetchMyIssues(),
   ]);
 
   const allIssues = new Map<string, LinearIssueWithMeta>();
 
-  // Add my assigned issues
-  for (const issue of myIssuesResult.issues) {
+  // Add first page of assigned issues
+  for (const issue of firstPage.issues) {
     allIssues.set(issue.id, issue);
+  }
+
+  // Paginate through remaining assigned issues
+  let hasMore = firstPage.hasMore;
+  let cursor = firstPage.endCursor;
+  while (hasMore && cursor) {
+    const page = await fetchMyIssues({ cursor });
+    for (const issue of page.issues) {
+      allIssues.set(issue.id, issue);
+    }
+    hasMore = page.hasMore;
+    cursor = page.endCursor;
   }
 
   // Fetch project issues if project IDs provided

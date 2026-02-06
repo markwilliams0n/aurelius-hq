@@ -32,7 +32,7 @@ export async function GET() {
   } catch (error) {
     console.error('[Tasks API] Failed to fetch metadata:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch metadata', details: String(error) },
+      { error: 'Failed to fetch metadata' },
       { status: 500 }
     );
   }
