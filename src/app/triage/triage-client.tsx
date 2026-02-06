@@ -558,6 +558,20 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
             stats={stats}
             isExpanded={isSidebarExpanded}
             onToggleExpand={() => setIsSidebarExpanded(!isSidebarExpanded)}
+            onUndo={async (_activityId, _action, itemId) => {
+              try {
+                await fetch(`/api/triage/${itemId}`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ action: "restore" }),
+                });
+                await fetchItems({ skipCache: true });
+                toast.success("Restored");
+              } catch (error) {
+                console.error("Failed to undo:", error);
+                toast.error("Failed to undo");
+              }
+            }}
           />
         ) : undefined
       }
