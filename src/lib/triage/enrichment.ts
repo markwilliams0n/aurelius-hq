@@ -1,6 +1,6 @@
 import type { NewInboxItem } from "@/lib/db/schema";
 import { isOllamaAvailable, generate } from '@/lib/memory/ollama';
-import { searchMemory } from '@/lib/memory/search';
+import { searchMemories } from '@/lib/memory/supermemory';
 
 // Enrichment result type
 export type EnrichmentResult = {
@@ -283,9 +283,9 @@ function suggestActions(
 async function getContextFromMemory(item: NewInboxItem): Promise<string | undefined> {
   try {
     const query = `${item.senderName || item.sender} ${item.subject}`;
-    const results = searchMemory(query, { limit: 3, _skipEvent: true });
-    if (results.length === 0) return undefined;
-    return results.map(r => r.content).join('\n');
+    const results = await searchMemories(query, 3);
+    if (!results || results.length === 0) return undefined;
+    return results.map((r: any) => r.content || JSON.stringify(r)).join('\n');
   } catch {
     return undefined;
   }
