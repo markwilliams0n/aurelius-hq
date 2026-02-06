@@ -1,217 +1,98 @@
-import { execSync } from 'child_process';
-import { promises as fs } from 'fs';
-import path from 'path';
-import { recordSearchAccess } from './access-tracking';
-
-/**
- * Clean QMD file path by removing qmd:// prefix
- */
-function cleanQmdPath(filePath: string): string {
-  return filePath.replace(/^qmd:\/\//, '');
-}
-
-/**
- * Clean QMD snippet by removing diff markers like "@@ -1,3 @@ (0 before, 6 after)"
- * and returning clean content
- */
-function cleanQmdSnippet(snippet: string, title?: string): string {
-  if (!snippet) return title || '';
-
-  // Remove diff markers: "@@ -1,3 @@ (0 before, 6 after)\n"
-  let cleaned = snippet.replace(/^@@[^@]+@@\s*\([^)]+\)\n?/gm, '');
-
-  // If we stripped everything, use the title
-  if (!cleaned.trim() && title) {
-    return title;
-  }
-
-  return cleaned.trim();
-}
-
-export interface SearchResult {
-  path: string;
-  content: string;
-  score: number;
-  collection: string;
-}
-
-export interface SearchOptions {
-  collection?: 'life' | 'memory' | 'me' | 'all';
-  limit?: number;
-}
-
-/**
- * Search memory using QMD's combined query (BM25 + vector + reranking)
- */
-export function searchMemory(
-  query: string,
-  options: SearchOptions = {}
-): SearchResult[] {
-  const {
-    collection = 'all',
-    limit = 10,
-  } = options;
-
-  try {
-    const collectionFlag = collection === 'all' ? '' : `-c ${collection}`;
-    const escapedQuery = query.replace(/"/g, '\\"');
-    const cmd = `qmd query "${escapedQuery}" ${collectionFlag} -n ${limit} --json`;
-
-    const result = execSync(cmd, {
-      encoding: 'utf-8',
-      cwd: process.cwd(),
-      timeout: 30000 // 30 second timeout
-    });
-
-    try {
-      const parsed = JSON.parse(result);
-      return parsed.map((item: { docid?: string; path?: string; file?: string; title?: string; content?: string; snippet?: string; score?: number }) => ({
-        path: cleanQmdPath(item.file || item.path || item.docid || ''),
-        content: cleanQmdSnippet(item.content || item.snippet || '', item.title),
-        score: item.score || 0,
-        collection: collection
-      }));
-    } catch {
-      return [];
-    }
-  } catch (error) {
-    console.error('QMD search error:', error);
-    return [];
-  }
-}
-
-/**
- * Keyword-only search using QMD's BM25
- */
-export function keywordSearch(
-  query: string,
-  options: SearchOptions = {}
-): SearchResult[] {
-  const { collection = 'all', limit = 10 } = options;
-
-  try {
-    const collectionFlag = collection === 'all' ? '' : `-c ${collection}`;
-    const escapedQuery = query.replace(/"/g, '\\"');
-    const cmd = `qmd search "${escapedQuery}" ${collectionFlag} -n ${limit} --json`;
-
-    const result = execSync(cmd, {
-      encoding: 'utf-8',
-      cwd: process.cwd(),
-      timeout: 10000
-    });
-
-    try {
-      const parsed = JSON.parse(result);
-      return parsed.map((item: { docid?: string; path?: string; file?: string; title?: string; content?: string; snippet?: string; score?: number }) => ({
-        path: cleanQmdPath(item.file || item.path || item.docid || ''),
-        content: cleanQmdSnippet(item.content || item.snippet || '', item.title),
-        score: item.score || 0,
-        collection: collection
-      }));
-    } catch {
-      return [];
-    }
-  } catch (error) {
-    console.error('QMD keyword search error:', error);
-    return [];
-  }
-}
-
-/**
- * Vector-only semantic search using QMD embeddings
- */
-export function semanticSearch(
-  query: string,
-  options: SearchOptions = {}
-): SearchResult[] {
-  const { collection = 'all', limit = 10 } = options;
-
-  try {
-    const collectionFlag = collection === 'all' ? '' : `-c ${collection}`;
-    const escapedQuery = query.replace(/"/g, '\\"');
-    const cmd = `qmd vsearch "${escapedQuery}" ${collectionFlag} -n ${limit} --json`;
-
-    const result = execSync(cmd, {
-      encoding: 'utf-8',
-      cwd: process.cwd(),
-      timeout: 30000
-    });
-
-    try {
-      const parsed = JSON.parse(result);
-      return parsed.map((item: { docid?: string; path?: string; file?: string; title?: string; content?: string; snippet?: string; score?: number }) => ({
-        path: cleanQmdPath(item.file || item.path || item.docid || ''),
-        content: cleanQmdSnippet(item.content || item.snippet || '', item.title),
-        score: item.score || 0,
-        collection: collection
-      }));
-    } catch {
-      return [];
-    }
-  } catch (error) {
-    console.error('QMD semantic search error:', error);
-    return [];
-  }
-}
+import { emitMemoryEvent } from './events';
+import { getMemoryContext, searchMemories } from './supermemory';
 
 export interface BuildContextOptions {
   /** Maximum number of results */
   limit?: number;
-  /**
-   * Collection to search. Defaults to 'life'.
-   * Use 'life' for entity-based memory (people, companies, projects).
-   * Use 'memory' for daily notes (but prefer getRecentNotes() for recent content).
-   * Use 'all' to search everything.
-   */
-  collection?: 'life' | 'memory' | 'me' | 'all';
 }
 
 /**
- * Build memory context string for AI prompts
- * Searches specified collection and formats results
- * Also tracks access to returned entities
+ * Build memory context string for AI prompts.
+ * Queries Supermemory for profile facts and relevant memories,
+ * then formats them into a markdown string.
  *
  * Note: For recent daily notes (last 24h), use getRecentNotes() instead.
- * This function is better for searching older/indexed content.
+ * This function provides long-term memory via Supermemory.
  */
 export async function buildMemoryContext(
   query: string,
   options: BuildContextOptions = {}
 ): Promise<string | null> {
-  const { limit = 5, collection = 'life' } = options;
+  const startTime = Date.now();
 
-  const results = searchMemory(query, { limit, collection });
+  try {
+    const profile = await getMemoryContext(query);
+    const durationMs = Date.now() - startTime;
 
-  if (results.length === 0) {
+    const hasStatic = profile.profile.static && profile.profile.static.length > 0;
+    const hasDynamic = profile.profile.dynamic && profile.profile.dynamic.length > 0;
+
+    if (!hasStatic && !hasDynamic) {
+      emitMemoryEvent({
+        eventType: 'search',
+        trigger: 'chat',
+        summary: `Supermemory: no results for "${query.slice(0, 60)}"`,
+        payload: { query, resultCount: 0 },
+        durationMs,
+        metadata: { searchType: 'supermemory-profile' },
+      }).catch(() => {});
+      return null;
+    }
+
+    const staticCount = profile.profile.static?.length ?? 0;
+    const dynamicCount = profile.profile.dynamic?.length ?? 0;
+
+    emitMemoryEvent({
+      eventType: 'search',
+      trigger: 'chat',
+      summary: `Supermemory: ${staticCount} profile facts, ${dynamicCount} relevant memories for "${query.slice(0, 60)}"`,
+      payload: {
+        query,
+        resultCount: staticCount + dynamicCount,
+        staticCount,
+        dynamicCount,
+      },
+      durationMs,
+      metadata: { searchType: 'supermemory-profile' },
+    }).catch(() => {});
+
+    const lines: string[] = [];
+
+    if (hasStatic) {
+      lines.push('**[Profile]**');
+      for (const fact of profile.profile.static) {
+        lines.push(`- ${fact}`);
+      }
+      lines.push('');
+    }
+
+    if (hasDynamic) {
+      lines.push('**[Relevant Memories]**');
+      for (const memory of profile.profile.dynamic) {
+        lines.push(`- ${memory}`);
+      }
+      lines.push('');
+    }
+
+    return lines.length > 0 ? lines.join('\n').trim() : null;
+  } catch (error) {
+    const durationMs = Date.now() - startTime;
+    emitMemoryEvent({
+      eventType: 'search',
+      trigger: 'chat',
+      summary: `Supermemory: error for "${query.slice(0, 60)}"`,
+      payload: { query, resultCount: 0, error: String(error) },
+      durationMs,
+      metadata: { searchType: 'supermemory-profile' },
+    }).catch(() => {});
+    console.error('Supermemory context error:', error);
     return null;
   }
-
-  // Track access to entities that were retrieved
-  try {
-    await recordSearchAccess(results.map(r => r.path));
-  } catch (error) {
-    console.error('Failed to record search access:', error);
-  }
-
-  const lines: string[] = [];
-
-  for (const result of results) {
-    // Extract filename from path for better readability
-    const pathParts = result.path.split('/');
-    const filename = pathParts[pathParts.length - 1] || result.path;
-    const context = pathParts.slice(0, -1).join('/');
-
-    lines.push(`**[${filename}]** (${context})`);
-    lines.push(result.content.trim());
-    lines.push('');
-  }
-
-  return lines.length > 0 ? lines.join('\n').trim() : null;
 }
 
 /**
- * Get all memory for display in memory browser
- * Reads from file-based memory (life/ directory)
+ * Get all memory for display in memory browser.
+ * Fetches recent memories from Supermemory.
  */
 export async function getAllMemory(): Promise<
   Array<{
@@ -229,95 +110,27 @@ export async function getAllMemory(): Promise<
     }>;
   }>
 > {
-  const LIFE_DIR = path.join(process.cwd(), 'life');
-  const result: Array<{
-    entity: {
-      id: string;
-      name: string;
-      type: string;
-      summary: string | null;
-    };
-    facts: Array<{
-      id: string;
-      content: string;
-      category: string | null;
-      createdAt: Date;
-    }>;
-  }> = [];
+  try {
+    const results = await searchMemories('*', 50);
 
-  // Scan entity directories
-  const entityDirs = [
-    { path: 'areas/people', type: 'person' },
-    { path: 'areas/companies', type: 'company' },
-    { path: 'projects', type: 'project' },
-    { path: 'resources', type: 'resource' },
-  ];
-
-  for (const { path: entityPath, type } of entityDirs) {
-    const dirPath = path.join(LIFE_DIR, entityPath);
-
-    try {
-      const items = await fs.readdir(dirPath, { withFileTypes: true });
-
-      for (const item of items) {
-        if (item.isDirectory() && !item.name.startsWith('_')) {
-          const entityDir = path.join(dirPath, item.name);
-
-          // Try to read summary.md
-          let summary: string | null = null;
-          try {
-            const summaryContent = await fs.readFile(
-              path.join(entityDir, 'summary.md'),
-              'utf-8'
-            );
-            // Extract summary from markdown
-            const match = summaryContent.match(/## Summary\n\n([\s\S]*?)(?=\n##|$)/);
-            summary = match ? match[1].trim() : summaryContent.slice(0, 200);
-          } catch {
-            // No summary file
-          }
-
-          // Try to read items.json for facts
-          const facts: Array<{
-            id: string;
-            content: string;
-            category: string | null;
-            createdAt: Date;
-          }> = [];
-
-          try {
-            const itemsContent = await fs.readFile(
-              path.join(entityDir, 'items.json'),
-              'utf-8'
-            );
-            const items = JSON.parse(itemsContent);
-            for (const item of items) {
-              facts.push({
-                id: item.id || `${item.name}-${facts.length}`,
-                content: item.fact || item.content || '',
-                category: item.category || null,
-                createdAt: item.timestamp ? new Date(item.timestamp) : new Date(),
-              });
-            }
-          } catch {
-            // No items file
-          }
-
-          result.push({
-            entity: {
-              id: `${entityPath}/${item.name}`,
-              name: item.name.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-              type,
-              summary,
-            },
-            facts,
-          });
-        }
-      }
-    } catch {
-      // Directory doesn't exist
-    }
+    return results.map((doc, i) => ({
+      entity: {
+        id: doc.documentId || `memory-${i}`,
+        name: (doc.metadata as Record<string, string>)?.subject
+          || doc.content?.slice(0, 60).replace(/\n/g, ' ')
+          || `Memory ${i + 1}`,
+        type: (doc.metadata as Record<string, string>)?.source || 'memory',
+        summary: doc.content?.slice(0, 200) || null,
+      },
+      facts: [{
+        id: `${doc.documentId || i}-content`,
+        content: doc.content || '',
+        category: (doc.metadata as Record<string, string>)?.source || null,
+        createdAt: doc.createdAt ? new Date(doc.createdAt) : new Date(),
+      }],
+    }));
+  } catch (error) {
+    console.error('Failed to fetch memories from Supermemory:', error);
+    return [];
   }
-
-  return result;
 }

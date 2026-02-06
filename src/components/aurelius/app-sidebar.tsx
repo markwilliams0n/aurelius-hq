@@ -17,6 +17,7 @@ import {
   Monitor,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useMemoryDebug } from "./memory-debug-provider";
 
 const navItems = [
   { href: "/chat", icon: MessageSquare, label: "Chat" },
@@ -30,6 +31,7 @@ const navItems = [
 export function AppSidebar() {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
+  const { debugMode } = useMemoryDebug();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -89,7 +91,7 @@ export function AppSidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex flex-col items-center gap-1 py-2 rounded-lg transition-colors",
+                "relative flex flex-col items-center gap-1 py-2 rounded-lg transition-colors",
                 isActive
                   ? "bg-gold/20 text-gold"
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary"
@@ -97,6 +99,9 @@ export function AppSidebar() {
             >
               <Icon className="w-5 h-5" />
               <span className="text-[10px]">{item.label}</span>
+              {item.href === "/memory" && debugMode && (
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-gold animate-pulse" />
+              )}
             </Link>
           );
         })}

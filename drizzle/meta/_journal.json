@@ -43,6 +43,13 @@
       "when": 1770069469506,
       "tag": "0005_red_lady_bullseye",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1770331213095,
+      "tag": "0006_sharp_grim_reaper",
+      "breakpoints": true
     }
   ]
 }

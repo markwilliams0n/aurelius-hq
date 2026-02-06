@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { chat } from "@/lib/ai/client";
 import { buildAgentContext } from "@/lib/ai/context";
+import { emitMemoryEvent } from "@/lib/memory/events";
 import { upsertEntity } from "@/lib/memory/entities";
 import { createFact } from "@/lib/memory/facts";
 
@@ -84,6 +85,22 @@ Current triage item:
         // Invalid JSON, ignore
       }
     }
+
+    // Emit chat response event for debug analysis
+    emitMemoryEvent({
+      eventType: 'recall',
+      trigger: 'chat',
+      summary: `Triage chat response for: "${message.slice(0, 60)}"`,
+      payload: {
+        userMessage: message.slice(0, 1000),
+        assistantResponse: response.slice(0, 2000),
+        responseLength: response.length,
+        itemId,
+        connector: item?.connector,
+        action,
+      },
+      metadata: { phase: 'response', source: 'triage-chat' },
+    }).catch(() => {});
 
     return NextResponse.json({
       response,

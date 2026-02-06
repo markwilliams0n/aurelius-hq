@@ -48,63 +48,53 @@ src/
 
 > **Detailed docs:** [docs/systems/memory.md](docs/systems/memory.md) | [Daily Notes](docs/systems/daily-notes.md)
 
-**Three storage layers:**
+**Two storage layers:**
 
 | Layer | Location | Purpose |
 |-------|----------|---------|
-| Database | PostgreSQL + pgvector | Entities, facts, documents with embeddings |
-| Files | `memory/*.md` | Daily notes, conversation logs |
-| Search | QMD CLI | Hybrid BM25 + vector search |
+| Short-term | `memory/*.md` | Daily notes — last 24h, direct file read |
+| Long-term | Supermemory (cloud API) | Knowledge graph, profile facts, semantic search |
 
 **Chat context sources:**
 - **Recent Activity** (last 24h): Direct file read from daily notes
-- **Relevant Memory**: QMD search on `life/` collection
+- **Relevant Memory**: Supermemory profile API (static facts + dynamic context)
 
 **Key files:**
-- `lib/memory/facts.ts` - Fact CRUD operations
-- `lib/memory/entities.ts` - Entity management (person, project, topic, etc.)
-- `lib/memory/documents.ts` - Document ingestion + chunking
-- `lib/memory/search.ts` - QMD-based hybrid search
+- `lib/memory/supermemory.ts` - Supermemory client (`addMemory`, `getMemoryContext`, `searchMemories`)
+- `lib/memory/search.ts` - `buildMemoryContext()` — formats Supermemory results for AI prompts
 - `lib/memory/daily-notes.ts` - Append-only daily logs + recent notes retrieval
-- `lib/memory/extraction.ts` - Extract memories from conversations
+- `lib/memory/extraction.ts` - Saves conversations to daily notes + Supermemory
+- `lib/memory/ollama.ts` - Local LLM for triage summarization + enrichment
 
 ### 3. Heartbeat System
 
 > **Detailed docs:** [docs/systems/heartbeat.md](docs/systems/heartbeat.md)
 
-Heartbeat is the **central memory processing system** that converts raw inputs into searchable knowledge:
+Heartbeat is the **connector sync system** that pulls data from external sources:
 
 ```
-Raw Inputs                         Searchable Knowledge
-──────────                         ────────────────────
-Daily notes (memory/*.md)    ┐
-                             ├──→  HEARTBEAT  ──→  Entity files (life/)
-Granola meetings             │     (every 15m)     QMD search index
-Gmail emails                 ┘                     Triage inbox
+External Sources                   Triage Inbox
+────────────────                   ────────────
+Granola meetings             ┐
+Gmail emails                 ├──→  HEARTBEAT  ──→  inbox_items table
+Linear issues                │     (every 15m)
+Slack messages               ┘
 ```
 
 **What it does:**
-1. Extracts entities from daily notes (people, companies, projects) using Ollama
-2. Syncs Granola meetings → triage inbox + database
-3. Syncs Gmail → triage inbox
-4. Reindexes QMD search (BM25 + vector embeddings)
+1. Syncs Granola meetings → triage inbox
+2. Syncs Gmail → triage inbox
+3. Syncs Linear issues → triage inbox
+4. Syncs Slack messages → triage inbox
 
-**Memory architecture principle:** All memory processing flows through heartbeat.
-- Triage "save to memory" → saves rich content to daily notes
-- Heartbeat processes daily notes → creates entities in `life/`
-- QMD indexes `life/` → searchable via memory UI
-
-This centralizes LLM-based extraction in one place for consistency.
-
-**Without heartbeat:** Information enters daily notes but isn't searchable. Run heartbeat to process new content.
+**Memory extraction** is handled separately: chat conversations and triage saves send content to Supermemory directly (no heartbeat needed).
 
 **Scheduling:**
 - Runs automatically every 15 minutes via `node-cron` (configurable)
 - Manual trigger via System page or `POST /api/heartbeat`
 
 **Key files:**
-- `lib/memory/heartbeat.ts` - Main heartbeat logic
-- `lib/memory/ollama.ts` - LLM entity extraction
+- `lib/memory/heartbeat.ts` - Connector sync orchestration
 - `app/api/heartbeat/route.ts` - API endpoint
 - `instrumentation.ts` - Scheduler setup
 
@@ -129,7 +119,7 @@ User message
     ↓
 Load conversation history
     ↓
-Build memory context (QMD search)
+Build memory context (Supermemory)
     ↓
 Get soul config (personality)
     ↓
@@ -242,7 +232,7 @@ api/connectors/granola/
 - PM2 or similar process managers
 
 **Implications for scheduling:**
-- Heartbeat and synthesis must be triggered via local scheduler
+- Heartbeat must be triggered via local scheduler
 - No `maxDuration` limits apply (those are Vercel-specific, can be removed)
 - Long-running operations are fine
 
@@ -251,6 +241,7 @@ api/connectors/granola/
 ```bash
 DATABASE_URL          # PostgreSQL connection (Neon)
 OPENROUTER_API_KEY    # AI provider
+SUPERMEMORY_API_KEY   # Long-term memory (Supermemory)
 TELEGRAM_BOT_TOKEN    # Telegram bot
 WORKOS_*              # Authentication
 ```
@@ -282,7 +273,7 @@ Follow the Telegram pattern:
 
 - **Streaming**: All AI responses stream via SSE
 - **Tool loops**: Max 5 iterations to prevent runaway
-- **Memory extraction**: Heuristic-based, saves to daily notes
+- **Memory extraction**: Chat → daily notes + Supermemory. Triage → summary or full mode
 - **Config approval**: AI proposes, human approves
 - **Shared state**: Web + Telegram use same conversation
 - **Polling sync**: Web polls for external messages (3s interval)

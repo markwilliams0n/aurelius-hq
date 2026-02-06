@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import { emitMemoryEvent } from './events';
 
 const MEMORY_DIR = path.join(process.cwd(), 'memory');
 
@@ -63,6 +64,8 @@ export async function appendToDailyNote(content: string): Promise<void> {
 
   const entry = `\n## ${timestamp}\n\n${content}\n`;
 
+  let isNewFile = false;
+
   // Check if file exists
   try {
     await fs.access(filepath);
@@ -70,6 +73,7 @@ export async function appendToDailyNote(content: string): Promise<void> {
     await fs.appendFile(filepath, entry);
   } catch {
     // Create new file with header
+    isNewFile = true;
     const header = `# ${new Date().toLocaleDateString('en-US', {
       timeZone: USER_TIMEZONE,
       weekday: 'long',
@@ -79,6 +83,18 @@ export async function appendToDailyNote(content: string): Promise<void> {
     })}\n`;
     await fs.writeFile(filepath, header + entry);
   }
+
+  emitMemoryEvent({
+    eventType: 'save',
+    trigger: 'chat',
+    summary: `Saved to daily note: ${content.slice(0, 80)}...`,
+    payload: {
+      content: content.slice(0, 2000),
+      filePath: filepath,
+      isNewFile,
+    },
+    metadata: { file: filepath },
+  }).catch(() => {});
 }
 
 export async function readDailyNote(date?: string): Promise<string | null> {

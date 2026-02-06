@@ -32,7 +32,6 @@ vi.mock('@/lib/memory/search', () => ({
 // Mock memory extraction
 vi.mock('@/lib/memory/extraction', () => ({
   extractAndSaveMemories: vi.fn().mockResolvedValue(undefined),
-  containsMemorableContent: vi.fn().mockReturnValue(false),
 }));
 
 // Mock config

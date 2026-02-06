@@ -473,7 +473,7 @@ export function generateFakeLinearIssues(count: number = 6): NewInboxItem[] {
 }
 
 // Generate a mixed batch of fake inbox items with AI enrichment
-export function generateFakeInboxItems(): NewInboxItem[] {
+export async function generateFakeInboxItems(): Promise<NewInboxItem[]> {
   const items = [
     ...generateFakeEmails(12),
     ...generateFakeSlackMessages(8),
@@ -481,10 +481,12 @@ export function generateFakeInboxItems(): NewInboxItem[] {
   ];
 
   // Apply enrichment to all items
-  const enrichedItems = items.map((item) => ({
-    ...item,
-    enrichment: enrichTriageItem(item),
-  }));
+  const enrichedItems = await Promise.all(
+    items.map(async (item) => ({
+      ...item,
+      enrichment: await enrichTriageItem(item),
+    }))
+  );
 
   // Sort by priority then date
   const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };

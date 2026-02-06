@@ -13,6 +13,17 @@ vi.stubGlobal('crypto', {
   randomUUID: () => 'test-uuid-' + Math.random().toString(36).substring(7),
 });
 
+// Mock Ollama as unavailable so enrichment uses regex fallback
+vi.mock('@/lib/memory/ollama', () => ({
+  isOllamaAvailable: vi.fn().mockResolvedValue(false),
+  generate: vi.fn(),
+}));
+
+// Mock Supermemory search to return empty results
+vi.mock('@/lib/memory/supermemory', () => ({
+  searchMemories: vi.fn().mockResolvedValue([]),
+}));
+
 describe('fake-data', () => {
   describe('generateFakeEmails', () => {
     it('generates the specified number of emails', () => {
@@ -141,8 +152,8 @@ describe('fake-data', () => {
   });
 
   describe('generateFakeInboxItems', () => {
-    it('generates a mix of all connector types', () => {
-      const items = generateFakeInboxItems();
+    it('generates a mix of all connector types', async () => {
+      const items = await generateFakeInboxItems();
 
       const gmailCount = items.filter(i => i.connector === 'gmail').length;
       const slackCount = items.filter(i => i.connector === 'slack').length;
@@ -153,8 +164,8 @@ describe('fake-data', () => {
       expect(linearCount).toBeGreaterThan(0);
     });
 
-    it('returns items sorted by priority then date', () => {
-      const items = generateFakeInboxItems();
+    it('returns items sorted by priority then date', async () => {
+      const items = await generateFakeInboxItems();
       const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
 
       for (let i = 0; i < items.length - 1; i++) {
@@ -179,8 +190,8 @@ describe('fake-data', () => {
       }
     });
 
-    it('applies enrichment to all items', () => {
-      const items = generateFakeInboxItems();
+    it('applies enrichment to all items', async () => {
+      const items = await generateFakeInboxItems();
 
       for (const item of items) {
         expect(item.enrichment).toBeDefined();

@@ -1,4 +1,6 @@
 import type { NewInboxItem } from "@/lib/db/schema";
+import { isOllamaAvailable, generate } from '@/lib/memory/ollama';
+import { searchMemories } from '@/lib/memory/supermemory';
 
 // Enrichment result type
 export type EnrichmentResult = {
@@ -277,32 +279,97 @@ function suggestActions(
   return actions.slice(0, 3); // Max 3 suggestions
 }
 
-// Simulate context from memory (would use vector search in production)
-function getContextFromMemory(item: NewInboxItem): string | undefined {
-  // In production, this would search the memory system for related facts
-  // For now, return simulated context based on sender
+// Search memory for context about the sender/subject
+async function getContextFromMemory(item: NewInboxItem): Promise<string | undefined> {
+  try {
+    const query = `${item.senderName || item.sender} ${item.subject}`;
+    const results = await searchMemories(query, 3);
+    if (!results || results.length === 0) return undefined;
+    return results.map((r: any) => r.content || JSON.stringify(r)).join('\n');
+  } catch {
+    return undefined;
+  }
+}
 
-  const senderContexts: Record<string, string> = {
-    "sarah.chen@acme.io":
-      "Sarah is the CTO at Acme Corp. Previous conversations about Q3 planning and API migration.",
-    "james@startup.co":
-      "James is founder of Startup Co. Discussed partnership opportunities last month.",
-    "m.park@venture.vc":
-      "Michael is a VC partner. Met at conference, interested in seed round.",
-  };
+// Enrich a triage item using Ollama LLM
+async function enrichWithOllama(
+  item: NewInboxItem,
+  memoryContext: string | undefined,
+  linkedEntities: EnrichmentResult["linkedEntities"]
+): Promise<EnrichmentResult> {
+  const prompt = `Analyze this triage item and provide enrichment.
 
-  if (item.sender && senderContexts[item.sender]) {
-    return senderContexts[item.sender];
+Item:
+- Connector: ${item.connector}
+- From: ${item.senderName || ''} <${item.sender}>
+- Subject: ${item.subject}
+- Content: ${(item.content || '').slice(0, 2000)}
+
+Memory context about sender:
+${memoryContext || "No previous context"}
+
+Classify priority as one of: urgent, high, normal, low
+Suggest 1-5 relevant tags (short labels like: meeting, bug, feature, finance, legal, feedback, deploy, hiring, security, partnership)
+Write a 1-2 sentence summary
+Suggest 1-3 actions
+
+Respond with ONLY valid JSON:
+{
+  "priority": "urgent|high|normal|low",
+  "tags": ["tag1", "tag2"],
+  "summary": "1-2 sentence summary",
+  "actions": [{"type": "reply|task|snooze|archive|delegate", "label": "short label", "reason": "brief reason"}]
+}`;
+
+  const response = await generate(prompt, { temperature: 0.1, maxTokens: 500 });
+
+  // Extract JSON from response
+  const jsonMatch = response.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error('No JSON found in Ollama response');
   }
 
-  // Random context for demo
-  const genericContexts = [
-    "First interaction with this sender",
-    "Frequent collaborator - typically responds within 24h",
-    "Key stakeholder for ongoing project",
-  ];
+  // Clean up common LLM JSON issues
+  const jsonStr = jsonMatch[0]
+    .replace(/,\s*\]/g, ']')           // Remove trailing commas in arrays
+    .replace(/,\s*\}/g, '}')           // Remove trailing commas in objects
+    .replace(/[\x00-\x1F\x7F]/g, ' ')  // Remove control characters
+    .replace(/\n/g, ' ');              // Normalize newlines
 
-  return genericContexts[Math.floor(Math.random() * genericContexts.length)];
+  const parsed = JSON.parse(jsonStr);
+
+  // Validate and normalize priority
+  const validPriorities = ['urgent', 'high', 'normal', 'low'] as const;
+  const priority = validPriorities.includes(parsed.priority) ? parsed.priority : 'normal';
+
+  // Validate and normalize tags
+  const tags = Array.isArray(parsed.tags)
+    ? parsed.tags.filter((t: unknown) => typeof t === 'string').slice(0, 5)
+    : [];
+
+  // Validate and normalize actions
+  const validActionTypes = ['reply', 'task', 'snooze', 'archive', 'delegate'] as const;
+  const actions = Array.isArray(parsed.actions)
+    ? parsed.actions
+        .filter((a: { type?: string; label?: string; reason?: string }) =>
+          a && typeof a.type === 'string' && typeof a.label === 'string' && typeof a.reason === 'string'
+        )
+        .map((a: { type: string; label: string; reason: string }) => ({
+          type: (validActionTypes.includes(a.type as typeof validActionTypes[number]) ? a.type : 'reply') as EnrichmentResult["suggestedActions"][number]["type"],
+          label: String(a.label),
+          reason: String(a.reason),
+        }))
+        .slice(0, 3)
+    : [];
+
+  return {
+    summary: typeof parsed.summary === 'string' ? parsed.summary : 'New message for review',
+    suggestedPriority: priority,
+    suggestedTags: tags,
+    linkedEntities,
+    suggestedActions: actions.length > 0 ? actions : [{ type: 'reply' as const, label: 'Review and respond', reason: 'Standard message requiring attention' }],
+    contextFromMemory: memoryContext,
+  };
 }
 
 // Helper functions
@@ -330,25 +397,44 @@ function domainToCompanyName(domain: string): string {
 }
 
 // Main enrichment function
-export function enrichTriageItem(item: NewInboxItem): EnrichmentResult {
-  const priority = classifyPriority(item);
+export async function enrichTriageItem(item: NewInboxItem): Promise<EnrichmentResult> {
+  const ollamaAvailable = await isOllamaAvailable();
 
+  // Entity extraction (works with both paths)
+  const linkedEntities = extractEntities(item);
+
+  // Memory context (real search, not hardcoded)
+  const contextFromMemory = await getContextFromMemory(item);
+
+  if (ollamaAvailable) {
+    try {
+      return await enrichWithOllama(item, contextFromMemory, linkedEntities);
+    } catch (error) {
+      console.error('[Enrichment] Ollama failed, using regex fallback:', error);
+    }
+  }
+
+  // Existing regex fallback
+  const priority = classifyPriority(item);
   return {
     summary: generateSummary(item),
     suggestedPriority: priority,
     suggestedTags: suggestTags(item),
-    linkedEntities: extractEntities(item),
+    linkedEntities,
     suggestedActions: suggestActions(item, priority),
-    contextFromMemory: getContextFromMemory(item),
+    contextFromMemory,
   };
 }
 
 // Batch enrichment for multiple items
-export function enrichTriageItems(
+export async function enrichTriageItems(
   items: NewInboxItem[]
-): Array<NewInboxItem & { enrichment: EnrichmentResult }> {
-  return items.map((item) => ({
-    ...item,
-    enrichment: enrichTriageItem(item),
-  }));
+): Promise<Array<NewInboxItem & { enrichment: EnrichmentResult }>> {
+  const results = await Promise.all(
+    items.map(async (item) => ({
+      ...item,
+      enrichment: await enrichTriageItem(item),
+    }))
+  );
+  return results;
 }

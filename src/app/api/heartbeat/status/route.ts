@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { readActivityLog } from '@/lib/memory/activity-log';
-import { isHeartbeatScheduled, isSynthesisScheduled } from '@/lib/scheduler';
+import { isHeartbeatScheduled } from '@/lib/scheduler';
 
 export const runtime = 'nodejs';
 
@@ -48,25 +48,13 @@ export async function GET() {
 
   // Check if schedulers are running
   let heartbeatSchedulerRunning = false;
-  let synthesisSchedulerRunning = false;
   try {
     heartbeatSchedulerRunning = isHeartbeatScheduled();
-    synthesisSchedulerRunning = isSynthesisScheduled();
   } catch {
     // Scheduler module may not be loaded in some contexts
   }
 
-  // Get synthesis status
-  const synthesisEntries = activityLog.entries.filter(e => e.type === 'synthesis');
-  const lastSynthesis = synthesisEntries[0] || null;
-  let lastSynthesisAge: string | null = null;
-  if (lastSynthesis) {
-    const timeSince = Date.now() - new Date(lastSynthesis.timestamp).getTime();
-    lastSynthesisAge = formatDuration(timeSince);
-  }
-
   return NextResponse.json({
-    // Heartbeat status
     heartbeat: {
       health,
       schedulerRunning: heartbeatSchedulerRunning,
@@ -90,38 +78,9 @@ export async function GET() {
         success: e.success,
         trigger: e.trigger,
         duration: e.duration,
-        entitiesCreated: e.entitiesCreated,
-        entitiesUpdated: e.entitiesUpdated,
-        reindexed: e.reindexed,
         error: e.error,
       })),
     },
-    // Synthesis status
-    synthesis: {
-      schedulerRunning: synthesisSchedulerRunning,
-      lastRun: lastSynthesis ? {
-        timestamp: lastSynthesis.timestamp,
-        age: lastSynthesisAge,
-        success: lastSynthesis.success,
-        trigger: lastSynthesis.trigger,
-        duration: lastSynthesis.duration,
-        entitiesProcessed: lastSynthesis.entitiesProcessed,
-        factsArchived: lastSynthesis.factsArchived,
-        summariesRegenerated: lastSynthesis.summariesRegenerated,
-        error: lastSynthesis.error,
-      } : null,
-      recentRuns: synthesisEntries.slice(0, 3).map(e => ({
-        timestamp: e.timestamp,
-        success: e.success,
-        trigger: e.trigger,
-        duration: e.duration,
-        entitiesProcessed: e.entitiesProcessed,
-        factsArchived: e.factsArchived,
-        summariesRegenerated: e.summariesRegenerated,
-        error: e.error,
-      })),
-    },
-    // Legacy fields for backward compatibility
     health,
     schedulerRunning: heartbeatSchedulerRunning,
     lastHeartbeat: lastHeartbeat ? {

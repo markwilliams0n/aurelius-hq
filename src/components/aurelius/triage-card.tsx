@@ -327,7 +327,7 @@ export const TriageCard = forwardRef<HTMLDivElement, TriageCardProps>(
           <div className="px-4 py-2 border-t border-border bg-background/50 flex items-center justify-between">
             <div className="flex items-center gap-4 text-xs text-muted-foreground">
               <KeyHint keyName="←" label="Archive" />
-              <KeyHint keyName="↑" label="Memory" />
+              <KeyHint keyName="↑" label="Summary" />
               <KeyHint keyName="s" label="Snooze" />
               {item.connector === "gmail" && (
                 <KeyHint keyName="x" label="Spam" />

@@ -10,6 +10,7 @@ import { DEFAULT_MODEL } from './client';
 import { buildMemoryContext } from '@/lib/memory/search';
 import { getRecentNotes } from '@/lib/memory/daily-notes';
 import { getConfig } from '@/lib/config';
+import { emitMemoryEvent } from '@/lib/memory/events';
 
 export interface AgentContextOptions {
   /** The user's message - used for semantic search */
@@ -25,7 +26,7 @@ export interface AgentContext {
   systemPrompt: string;
   /** Raw recent notes (if you need them separately) */
   recentNotes: string | null;
-  /** Raw QMD search results (if you need them separately) */
+  /** Supermemory profile/search results (if you need them separately) */
   memoryContext: string | null;
   /** Soul configuration content */
   soulConfig: string | null;
@@ -39,7 +40,7 @@ export interface AgentContext {
  * This is the single entry point for all agents to get their context.
  * Handles:
  * - Recent daily notes (last 24h)
- * - QMD semantic search for relevant memories
+ * - Supermemory profile search for relevant memories
  * - Soul configuration
  * - System prompt assembly
  *
@@ -55,9 +56,10 @@ export async function buildAgentContext(
   const { query, modelId = DEFAULT_MODEL, additionalContext } = options;
 
   // Gather all context pieces in parallel
+  const startTime = Date.now();
   const [recentNotes, memoryContext, soulConfigResult] = await Promise.all([
     getRecentNotes(),
-    buildMemoryContext(query, { collection: 'life' }),
+    buildMemoryContext(query),
     getConfig('soul'),
   ]);
 
@@ -75,6 +77,24 @@ export async function buildAgentContext(
   if (additionalContext) {
     systemPrompt += `\n\n${additionalContext}`;
   }
+
+  // Emit memory recall event (fire-and-forget)
+  const durationMs = Date.now() - startTime;
+  emitMemoryEvent({
+    eventType: 'recall',
+    trigger: 'chat',
+    summary: `Recalled memory for: "${query.slice(0, 80)}${query.length > 80 ? '...' : ''}"`,
+    payload: {
+      query,
+      recentNotes: recentNotes ? recentNotes.slice(0, 2000) : null,
+      memoryContext,
+      hasRecentNotes: !!recentNotes,
+      hasMemoryContext: !!memoryContext,
+      systemPromptLength: systemPrompt.length,
+    },
+    durationMs,
+    metadata: { modelId, collection: 'life' },
+  }).catch(() => {}); // fire-and-forget
 
   return {
     systemPrompt,

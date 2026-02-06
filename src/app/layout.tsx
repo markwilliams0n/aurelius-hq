@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { inter, playfair, jetbrains } from "@/lib/fonts";
 import { Toaster } from "@/components/ui/sonner";
 import { ChatProvider } from "@/components/aurelius/chat-provider";
+import { MemoryDebugProvider } from "@/components/aurelius/memory-debug-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
@@ -33,7 +34,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <ChatProvider>
-            {children}
+            <MemoryDebugProvider>
+              {children}
+            </MemoryDebugProvider>
           </ChatProvider>
           <Toaster />
         </ThemeProvider>

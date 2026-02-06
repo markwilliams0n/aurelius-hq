@@ -57,12 +57,28 @@ Gmail Connector + Memory System Fixes:
 - **UI fixes**:
   - Triage cards scroll properly when tasks overflow
 
+## Just Completed
+
+**2026-02-05 (Evening)**
+
+Memory Debug Mode:
+- Full memory event instrumentation across all memory operations (recall, extract, save, search, reindex)
+- CMD+D overlay panel with live SSE streaming of events
+- Expandable event cards with payload, reasoning, evaluation details
+- Debug mode toggle with pulsing sidebar indicator
+- Debug feed tab on Memory page (filters, search, day grouping)
+- Ollama extraction prompts now include reasoning fields
+- Debug evaluator module (standalone, not yet wired into flow)
+- Bug fixes: event ID consistency, SSE listener leak, duplicate events, reconnection, buffer fallback to DB
+
 ## In Progress
 
 Nothing active - ready for next task.
 
 ## Up Next
 
+- [ ] **Linear triage reconciliation** — sync state back from Linear, auto-archive triage items whose notifications are read/archived in Linear (same pattern as Gmail reconciliation)
+- [ ] **Connector-aware memory extraction** — `extractEmailMemory` is used for ALL connectors but the prompt is email-specific. Granola transcripts get treated as emails (wrong summary framing, extracts random metrics, misses meeting decisions/commitments). Need either separate prompts per connector type or a connector-aware prompt that adjusts for meetings vs emails vs slack. Key file: `src/lib/memory/ollama.ts:extractEmailMemory`
 - [ ] Test Gmail sync with real inbox
 - [ ] Add UI components for Gmail-specific features (thread expand/collapse)
 - [ ] Linear PM view (dedicated issue management)

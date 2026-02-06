@@ -2,7 +2,8 @@ import { NextRequest } from "next/server";
 import { getSession } from "@/lib/auth";
 import { chatStreamWithTools, DEFAULT_MODEL, type Message } from "@/lib/ai/client";
 import { buildAgentContext } from "@/lib/ai/context";
-import { extractAndSaveMemories, containsMemorableContent } from "@/lib/memory/extraction";
+import { extractAndSaveMemories } from "@/lib/memory/extraction";
+import { emitMemoryEvent } from "@/lib/memory/events";
 import { db } from "@/lib/db";
 import { conversations } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -145,14 +146,26 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        // Save to daily notes if message contains memorable content
-        if (containsMemorableContent(message)) {
-          try {
-            await extractAndSaveMemories(message, fullResponse);
-          } catch (error) {
-            console.error("Failed to save to daily notes:", error);
-            // Don't fail the request if memory saving fails
-          }
+        // Emit chat response event for debug analysis
+        emitMemoryEvent({
+          eventType: 'recall',
+          trigger: 'chat',
+          summary: `Chat response for: "${message.slice(0, 60)}"`,
+          payload: {
+            userMessage: message.slice(0, 1000),
+            assistantResponse: fullResponse.slice(0, 2000),
+            responseLength: fullResponse.length,
+            conversationId: conversationId || null,
+          },
+          metadata: { phase: 'response' },
+        }).catch(() => {});
+
+        // Save to daily notes — let extraction decide what's notable
+        try {
+          await extractAndSaveMemories(message, fullResponse);
+        } catch (error) {
+          console.error("Failed to save to daily notes:", error);
+          // Don't fail the request if memory saving fails
         }
 
         // Estimate token count (rough approximation: ~4 chars per token)

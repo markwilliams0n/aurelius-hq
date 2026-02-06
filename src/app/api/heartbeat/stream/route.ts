@@ -19,10 +19,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json().catch(() => ({}));
-    if (body.quick) options.skipReindex = true;
-    if (body.skipReindex !== undefined) options.skipReindex = body.skipReindex;
     if (body.skipGranola !== undefined) options.skipGranola = body.skipGranola;
-    if (body.skipExtraction !== undefined) options.skipExtraction = body.skipExtraction;
   } catch {
     // No body, use defaults
   }
@@ -48,15 +45,10 @@ export async function POST(request: NextRequest) {
         await logActivity({
           eventType: 'heartbeat_run',
           actor: 'system',
-          description: `Heartbeat: ${result.entitiesCreated} created, ${result.entitiesUpdated} updated`,
+          description: `Heartbeat: connector sync complete`,
           metadata: {
             trigger: 'manual',
             success: result.allStepsSucceeded,
-            entitiesCreated: result.entitiesCreated,
-            entitiesUpdated: result.entitiesUpdated,
-            reindexed: result.reindexed,
-            entities: result.entities,
-            extractionMethod: result.extractionMethod,
             steps: result.steps,
             gmail: result.gmail,
             granola: result.granola,
@@ -81,9 +73,6 @@ export async function POST(request: NextRequest) {
             metadata: {
               trigger: 'manual',
               success: false,
-              entitiesCreated: 0,
-              entitiesUpdated: 0,
-              reindexed: false,
               duration,
               error: String(error),
             },

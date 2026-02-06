@@ -155,56 +155,38 @@ export function TriageClient() {
     });
   }, [currentItem]);
 
-  // Memory action (↑) - fires in background, don't wait
+  // Memory summary action (↑) - Ollama summarizes before Supermemory
   const handleMemory = useCallback(async () => {
     if (!currentItem) return;
 
-    // Fire and forget - processing happens in background
     fetch(`/api/triage/${currentItem.id}/memory`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "summary" }),
     }).catch((error) => {
       console.error("Failed to queue memory save:", error);
     });
 
-    toast.success("Saving to memory...", {
-      description: "Check Activity tab for results",
+    toast.success("Summarizing to memory...", {
+      description: "Ollama summary → Supermemory",
     });
   }, [currentItem]);
 
-  // Memory + Archive action (Shift+↑) - swipe animation + optimistic
-  const handleMemoryAndArchive = useCallback(() => {
+  // Memory full action (Shift+↑) - send raw content to Supermemory
+  const handleMemoryFull = useCallback(async () => {
     if (!currentItem) return;
 
-    const itemToProcess = currentItem;
-    setAnimatingOut("up");
-    setLastAction({ type: "memory-archive", itemId: itemToProcess.id, item: itemToProcess });
-
-    // Fire all API calls in background immediately
-    fetch(`/api/triage/${itemToProcess.id}/memory`, {
+    fetch(`/api/triage/${currentItem.id}/memory`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-    }).catch(() => {});
-
-    fetch(`/api/triage/${itemToProcess.id}/tasks`, { method: "DELETE" }).catch(() => {});
-
-    fetch(`/api/triage/${itemToProcess.id}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "archive" }),
+      body: JSON.stringify({ mode: "full" }),
     }).catch((error) => {
-      console.error("Failed to archive:", error);
-      toast.error("Failed to archive - item restored");
-      setItems((prev) => [itemToProcess, ...prev]);
+      console.error("Failed to queue memory save:", error);
     });
 
-    // Remove from list after brief animation
-    setTimeout(() => {
-      setItems((prev) => prev.filter((i) => i.id !== itemToProcess.id));
-      setAnimatingOut(null);
-    }, 150);
-
-    toast.success("Archived + memory saving in background");
+    toast.success("Saving full to memory...", {
+      description: "Full content → Supermemory",
+    });
   }, [currentItem]);
 
   // Open action menu (→)
@@ -413,7 +395,7 @@ export function TriageClient() {
         case "ArrowUp":
           e.preventDefault();
           if (e.shiftKey) {
-            handleMemoryAndArchive();
+            handleMemoryFull();
           } else {
             handleMemory();
           }
@@ -475,7 +457,7 @@ export function TriageClient() {
     currentItem,
     handleArchive,
     handleMemory,
-    handleMemoryAndArchive,
+    handleMemoryFull,
     handleOpenActions,
     handleOpenReply,
     handleOpenDetail,
@@ -636,14 +618,14 @@ export function TriageClient() {
                 />
                 <ActionButton
                   keyName="↑"
-                  label="Memory"
+                  label="Summary"
                   onClick={handleMemory}
                   color="text-gold"
                 />
                 <ActionButton
                   keyName="⇧↑"
-                  label="Mem+Archive"
-                  onClick={handleMemoryAndArchive}
+                  label="Full"
+                  onClick={handleMemoryFull}
                   color="text-gold"
                 />
                 <ActionButton

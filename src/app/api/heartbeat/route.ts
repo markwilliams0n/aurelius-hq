@@ -3,19 +3,16 @@ import { runHeartbeat, type HeartbeatOptions } from '@/lib/memory/heartbeat';
 import { logActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
-export const maxDuration = 300; // 5 minutes - heartbeat can be slow with QMD embed
+export const maxDuration = 300;
 
 /**
  * POST /api/heartbeat
  *
- * Run the heartbeat process to sync memory.
+ * Run the heartbeat process to sync connectors.
  *
  * Body options:
  * - trigger: 'manual' | 'auto' | 'scheduled' (for logging)
- * - skipReindex: boolean - skip QMD reindex (faster, but new content not searchable)
  * - skipGranola: boolean - skip Granola meeting sync
- * - skipExtraction: boolean - skip entity extraction from daily notes
- * - quick: boolean - shorthand for skipReindex (for fast partial heartbeats)
  */
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
@@ -31,13 +28,7 @@ export async function POST(request: NextRequest) {
       trigger = body.trigger;
     }
 
-    // Support both explicit options and 'quick' shorthand
-    if (body.quick) {
-      options.skipReindex = true;
-    }
-    if (body.skipReindex !== undefined) options.skipReindex = body.skipReindex;
     if (body.skipGranola !== undefined) options.skipGranola = body.skipGranola;
-    if (body.skipExtraction !== undefined) options.skipExtraction = body.skipExtraction;
   } catch {
     // No body, use defaults
   }
@@ -50,15 +41,10 @@ export async function POST(request: NextRequest) {
     await logActivity({
       eventType: 'heartbeat_run',
       actor: 'system',
-      description: `Heartbeat: ${result.entitiesCreated} created, ${result.entitiesUpdated} updated`,
+      description: `Heartbeat: connector sync complete`,
       metadata: {
         trigger,
         success: result.allStepsSucceeded,
-        entitiesCreated: result.entitiesCreated,
-        entitiesUpdated: result.entitiesUpdated,
-        reindexed: result.reindexed,
-        entities: result.entities,
-        extractionMethod: result.extractionMethod,
         steps: result.steps,
         gmail: result.gmail,
         granola: result.granola,
@@ -87,9 +73,6 @@ export async function POST(request: NextRequest) {
       metadata: {
         trigger,
         success: false,
-        entitiesCreated: 0,
-        entitiesUpdated: 0,
-        reindexed: false,
         duration,
         error: String(error),
       },
@@ -105,17 +88,12 @@ export async function POST(request: NextRequest) {
 /**
  * GET /api/heartbeat
  *
- * Run heartbeat with default options. Supports query params:
- * - quick=true - skip QMD reindex for faster execution
+ * Run heartbeat with default options.
  */
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const quick = searchParams.get('quick') === 'true';
-
-  // Convert to POST with appropriate body
   const syntheticRequest = new NextRequest(request.url, {
     method: 'POST',
-    body: JSON.stringify({ quick }),
+    body: JSON.stringify({}),
     headers: { 'Content-Type': 'application/json' },
   });
 
