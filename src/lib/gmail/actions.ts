@@ -79,7 +79,13 @@ export async function syncSpamToGmail(itemId: string): Promise<void> {
 export async function replyToEmail(
   itemId: string,
   body: string,
-  options?: { replyAll?: boolean; forceDraft?: boolean }
+  options?: {
+    replyAll?: boolean;
+    forceDraft?: boolean;
+    to?: string;
+    cc?: string;
+    bcc?: string;
+  }
 ): Promise<{ draftId?: string; messageId?: string; wasDraft: boolean }> {
   const [item] = await db
     .select()
@@ -94,7 +100,9 @@ export async function replyToEmail(
   const rawPayload = item.rawPayload as Record<string, unknown>;
   const threadId = rawPayload?.threadId as string | undefined;
   const messageId = rawPayload?.messageId as string | undefined;
-  const to = item.sender; // Reply to sender
+  const to = options?.to || item.sender;
+  const cc = options?.cc || undefined;
+  const bcc = options?.bcc || undefined;
   const subject = item.subject.startsWith('Re:') ? item.subject : `Re: ${item.subject}`;
 
   if (!threadId) {
@@ -111,6 +119,8 @@ export async function replyToEmail(
       subject,
       body,
       inReplyTo: messageId,
+      cc,
+      bcc,
     });
     return { draftId, wasDraft: true };
   } else {
@@ -120,6 +130,8 @@ export async function replyToEmail(
       subject,
       body,
       inReplyTo: messageId,
+      cc,
+      bcc,
     });
     return { messageId: sentMessageId, wasDraft: false };
   }
