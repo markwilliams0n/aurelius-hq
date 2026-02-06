@@ -732,6 +732,7 @@ export function TriageClient() {
           item={currentItem}
           onClose={handleCloseOverlay}
           onCreated={() => {
+            triageCache = { data: null, timestamp: 0 };
             handleActionComplete("actioned");
           }}
         />

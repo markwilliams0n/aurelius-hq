@@ -202,12 +202,14 @@ export async function POST(
         const context = await fetchViewerContext();
         const defaultTeamId = context.teams[0]?.id;
 
+        // When inlineTasks are provided, they are the source of truth for issue titles
+        // (the user may have edited them in the UI). Otherwise fall back to DB descriptions.
+        const issueTitles: string[] = inlineTasks && inlineTasks.length > 0
+          ? inlineTasks.map((t) => t.description).filter(Boolean)
+          : tasksToUpdate.map((t) => t.description);
+
         if (defaultTeamId) {
-          for (let i = 0; i < tasksToUpdate.length; i++) {
-            const task = tasksToUpdate[i];
-            // Use inline edited data if provided, otherwise use DB data
-            const taskData = inlineTasks?.[i];
-            const title = taskData?.description || task.description;
+          for (const title of issueTitles) {
 
             try {
               const result = await createIssue({
@@ -224,7 +226,7 @@ export async function POST(
                 });
               }
             } catch (issueError) {
-              console.error(`[Tasks API] Failed to create Linear issue for task ${task.id}:`, issueError);
+              console.error(`[Tasks API] Failed to create Linear issue "${title}":`, issueError);
             }
           }
         }

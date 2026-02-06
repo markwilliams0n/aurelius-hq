@@ -243,7 +243,10 @@ async function reconcileReadNotifications(): Promise<number> {
     cursor = result.endCursor;
 
     // Safety: cap at 500 unread notifications
-    if (unreadNotifIds.size > 500) break;
+    if (unreadNotifIds.size > 500) {
+      console.warn('[Linear] Reconciliation hit 500 notification limit - some items may not be reconciled');
+      break;
+    }
   }
 
   // Find triage items whose notification is no longer unread in Linear
