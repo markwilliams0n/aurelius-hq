@@ -39,6 +39,7 @@ import { TriageItem } from "./triage-card";
 interface TriageDetailModalProps {
   item: TriageItem;
   onClose: () => void;
+  onReply?: () => void;
 }
 
 // Priority badge colors and icons
@@ -74,7 +75,10 @@ const CONNECTOR_CONFIG = {
   manual: { icon: Mail, label: "Manual", color: "text-muted-foreground" },
 };
 
-export function TriageDetailModal({ item, onClose }: TriageDetailModalProps) {
+// Connectors that support reply
+const REPLY_CONNECTORS = new Set(["gmail", "slack"]);
+
+export function TriageDetailModal({ item, onClose, onReply }: TriageDetailModalProps) {
   const priority = PRIORITY_CONFIG[item.priority];
   const connector = CONNECTOR_CONFIG[item.connector];
   const PriorityIcon = priority.icon;
@@ -111,11 +115,18 @@ export function TriageDetailModal({ item, onClose }: TriageDetailModalProps) {
           window.open(linearUrl, "_blank", "noopener,noreferrer");
         }
       }
+      // R to reply
+      if ((e.key === "r" || e.key === "R") && !e.metaKey && !e.ctrlKey) {
+        if (onReply && REPLY_CONNECTORS.has(item.connector)) {
+          e.preventDefault();
+          onReply();
+        }
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, linearUrl]);
+  }, [onClose, linearUrl, onReply, item.connector]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
@@ -413,6 +424,19 @@ export function TriageDetailModal({ item, onClose }: TriageDetailModalProps) {
                 </kbd>
                 Close
               </span>
+
+              {/* Reply shortcut */}
+              {onReply && REPLY_CONNECTORS.has(item.connector) && (
+                <button
+                  onClick={onReply}
+                  className="flex items-center gap-1.5 hover:text-gold transition-colors"
+                >
+                  <kbd className="px-1.5 py-0.5 rounded bg-secondary border border-border font-mono text-[10px]">
+                    R
+                  </kbd>
+                  Reply
+                </button>
+              )}
 
               {/* Open in Linear shortcut */}
               {linearUrl && (

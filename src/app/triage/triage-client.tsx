@@ -709,7 +709,11 @@ export function TriageClient() {
 
       {/* Detail modal */}
       {viewMode === "detail" && currentItem && (
-        <TriageDetailModal item={currentItem} onClose={handleCloseOverlay} />
+        <TriageDetailModal
+          item={currentItem}
+          onClose={handleCloseOverlay}
+          onReply={() => setViewMode("reply")}
+        />
       )}
 
       {/* Chat overlay */}
