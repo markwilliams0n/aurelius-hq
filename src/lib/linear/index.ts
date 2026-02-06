@@ -18,6 +18,10 @@ export {
   fetchProjectIssues,
   fetchViewerContext,
   fetchAllMyTasks,
+  fetchWorkflowStates,
+  fetchTeamMembers,
+  updateIssue,
+  createIssue,
 } from './issues';
 export type {
   LinearNotification,

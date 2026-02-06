@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { AppShell } from "@/components/aurelius/app-shell";
 import { toast } from "sonner";
 import {
@@ -10,28 +10,33 @@ import {
   ExternalLink,
   Filter,
   ChevronDown,
+  ChevronRight,
   Circle,
   AlertCircle,
   ArrowUp,
   Minus,
   ArrowDown,
   Inbox,
-  Tag,
   FolderKanban,
   Clock,
   CheckCircle2,
   XCircle,
   Loader2,
+  Plus,
+  X,
+  Search,
+  MessageSquare,
+  User,
+  Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // -- Types --
 
 type ViewMode = "list" | "kanban";
-
 type SourceFilter = "all" | "linear" | "triage";
-
 type GroupBy = "status" | "project" | "priority";
+type ActionMenu = "status" | "assign" | "project" | "priority" | "create" | null;
 
 interface TaskState {
   name: string;
@@ -87,6 +92,22 @@ interface TasksContext {
   }>;
 }
 
+interface WorkflowState {
+  id: string;
+  name: string;
+  type: string;
+  color: string;
+  position: number;
+  team: { id: string; name: string };
+}
+
+interface TeamMember {
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl?: string;
+}
+
 // -- Constants --
 
 const STATE_TYPE_ORDER: Record<string, number> = {
@@ -129,6 +150,21 @@ export function TasksClient() {
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
 
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+
+  // Detail panel
+  const [detailTask, setDetailTask] = useState<Task | null>(null);
+
+  // Action menu state
+  const [actionMenu, setActionMenu] = useState<ActionMenu>(null);
+
+  // Metadata for action menus
+  const [workflowStates, setWorkflowStates] = useState<WorkflowState[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [metadataLoaded, setMetadataLoaded] = useState(false);
+
   // Fetch tasks
   const fetchTasks = useCallback(async (showRefreshState = false) => {
     if (showRefreshState) setIsRefreshing(true);
@@ -140,7 +176,6 @@ export function TasksClient() {
       const response = await fetch(`/api/tasks?${params}`);
       if (!response.ok) throw new Error("Failed to fetch tasks");
       const data = await response.json();
-      // Deduplicate by ID (same issue can appear in multiple Linear queries)
       const seen = new Set<string>();
       const uniqueTasks = (data.tasks || []).filter((t: Task) => {
         if (seen.has(t.id)) return false;
@@ -157,6 +192,28 @@ export function TasksClient() {
       setIsRefreshing(false);
     }
   }, [selectedProject]);
+
+  // Fetch metadata (states, members) on first action menu open
+  const fetchMetadata = useCallback(async () => {
+    if (metadataLoaded) return;
+    try {
+      const response = await fetch("/api/tasks/metadata");
+      if (!response.ok) throw new Error("Failed to fetch metadata");
+      const data = await response.json();
+      setWorkflowStates(data.states || []);
+      setTeamMembers(data.members || []);
+      // Merge projects from metadata if context doesn't have them yet
+      if (data.projects && context) {
+        setContext((prev) =>
+          prev ? { ...prev, projects: data.projects, teams: data.teams } : prev
+        );
+      }
+      setMetadataLoaded(true);
+    } catch (error) {
+      console.error("Failed to fetch metadata:", error);
+      toast.error("Failed to load options");
+    }
+  }, [metadataLoaded, context]);
 
   useEffect(() => {
     fetchTasks();
@@ -203,20 +260,16 @@ export function TasksClient() {
       groups.get(key)!.tasks.push(task);
     }
 
-    // Sort groups
     const sortedEntries = Array.from(groups.entries()).sort(([a], [b]) => {
       if (groupBy === "status") {
         return (STATE_TYPE_ORDER[a] ?? 99) - (STATE_TYPE_ORDER[b] ?? 99);
       }
       if (groupBy === "priority") {
-        const pa = parseInt(a) || 99;
-        const pb = parseInt(b) || 99;
-        return pa - pb;
+        return (parseInt(a) || 99) - (parseInt(b) || 99);
       }
       return a.localeCompare(b);
     });
 
-    // Sort tasks within groups by priority then updated
     for (const [, group] of sortedEntries) {
       group.tasks.sort((a, b) => {
         if (a.priority !== b.priority) return a.priority - b.priority;
@@ -227,12 +280,319 @@ export function TasksClient() {
     return sortedEntries;
   }, [filteredTasks, groupBy]);
 
+  // Flat list of task IDs for keyboard nav
+  const flatTaskIds = useMemo(
+    () => groupedTasks.flatMap(([, g]) => g.tasks.map((t) => t.id)),
+    [groupedTasks]
+  );
+
   // Counts
-  const counts = useMemo(() => ({
-    all: tasks.length,
-    linear: tasks.filter((t) => t.source === "linear").length,
-    triage: tasks.filter((t) => t.source === "triage").length,
-  }), [tasks]);
+  const counts = useMemo(
+    () => ({
+      all: tasks.length,
+      linear: tasks.filter((t) => t.source === "linear").length,
+      triage: tasks.filter((t) => t.source === "triage").length,
+    }),
+    [tasks]
+  );
+
+  // Get effective targets: selected tasks, or focused task
+  const getTargetIds = useCallback((): string[] => {
+    if (selectedIds.size > 0) return Array.from(selectedIds);
+    if (focusedId) return [focusedId];
+    return [];
+  }, [selectedIds, focusedId]);
+
+  const getTargetTasks = useCallback((): Task[] => {
+    const ids = getTargetIds();
+    return tasks.filter((t) => ids.includes(t.id));
+  }, [getTargetIds, tasks]);
+
+  // Toggle selection
+  const toggleSelect = useCallback(
+    (id: string, additive = false) => {
+      setSelectedIds((prev) => {
+        const next = new Set(additive ? prev : []);
+        if (prev.has(id) && additive) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+        return next;
+      });
+      setFocusedId(id);
+    },
+    []
+  );
+
+  // Clear selection
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  // Open action menu (with metadata prefetch)
+  const openActionMenu = useCallback(
+    (menu: ActionMenu) => {
+      if (getTargetIds().length === 0 && menu !== "create") {
+        toast.info("Select a task first");
+        return;
+      }
+      fetchMetadata();
+      setActionMenu(menu);
+    },
+    [getTargetIds, fetchMetadata]
+  );
+
+  // Apply update to selected tasks
+  const applyUpdate = useCallback(
+    async (update: Record<string, unknown>, label: string) => {
+      const targetIds = getTargetIds().filter((id) => {
+        const task = tasks.find((t) => t.id === id);
+        return task?.source === "linear";
+      });
+
+      if (targetIds.length === 0) {
+        toast.info("No Linear tasks selected");
+        setActionMenu(null);
+        return;
+      }
+
+      setActionMenu(null);
+
+      // Optimistic: apply locally
+      setTasks((prev) =>
+        prev.map((t) => {
+          if (!targetIds.includes(t.id)) return t;
+          const updated = { ...t };
+          if (update.stateId && workflowStates.length > 0) {
+            const ws = workflowStates.find((s) => s.id === update.stateId);
+            if (ws) updated.state = { name: ws.name, type: ws.type, color: ws.color };
+          }
+          if (update.assigneeId !== undefined) {
+            if (update.assigneeId === null) {
+              updated.assignee = null;
+            } else {
+              const member = teamMembers.find((m) => m.id === update.assigneeId);
+              if (member)
+                updated.assignee = {
+                  id: member.id,
+                  name: member.name,
+                  avatarUrl: member.avatarUrl,
+                };
+            }
+          }
+          if (update.projectId !== undefined) {
+            if (update.projectId === null) {
+              updated.project = null;
+            } else {
+              const proj = context?.projects?.find(
+                (p) => p.id === update.projectId
+              );
+              if (proj)
+                updated.project = {
+                  id: proj.id,
+                  name: proj.name,
+                  color: proj.color,
+                  icon: proj.icon,
+                };
+            }
+          }
+          if (update.priority !== undefined) {
+            updated.priority = update.priority as number;
+          }
+          return updated;
+        })
+      );
+
+      // Fire API calls
+      const results = await Promise.allSettled(
+        targetIds.map((id) =>
+          fetch(`/api/tasks/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(update),
+          })
+        )
+      );
+
+      const failures = results.filter((r) => r.status === "rejected").length;
+      if (failures > 0) {
+        toast.error(`${failures} update(s) failed`);
+        fetchTasks();
+      } else {
+        toast.success(
+          targetIds.length === 1
+            ? label
+            : `${label} (${targetIds.length} tasks)`
+        );
+      }
+
+      clearSelection();
+    },
+    [
+      getTargetIds,
+      tasks,
+      workflowStates,
+      teamMembers,
+      context,
+      clearSelection,
+      fetchTasks,
+    ]
+  );
+
+  // Create task
+  const handleCreateTask = useCallback(
+    async (data: {
+      title: string;
+      description?: string;
+      teamId: string;
+      stateId?: string;
+      assigneeId?: string;
+      projectId?: string;
+      priority?: number;
+    }) => {
+      setActionMenu(null);
+      try {
+        const response = await fetch("/api/tasks/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        if (!response.ok) throw new Error("Failed to create task");
+        toast.success("Task created");
+        fetchTasks(true);
+      } catch (error) {
+        console.error("Failed to create task:", error);
+        toast.error("Failed to create task");
+      }
+    },
+    [fetchTasks]
+  );
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if in input/textarea
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      )
+        return;
+
+      // Ignore if action menu is open (let the menu handle its own keys)
+      if (actionMenu) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setActionMenu(null);
+        }
+        return;
+      }
+
+      // Close detail panel
+      if (e.key === "Escape") {
+        if (detailTask) {
+          e.preventDefault();
+          setDetailTask(null);
+          return;
+        }
+        if (selectedIds.size > 0) {
+          e.preventDefault();
+          clearSelection();
+          return;
+        }
+      }
+
+      switch (e.key) {
+        case "s":
+        case "S":
+          e.preventDefault();
+          openActionMenu("status");
+          break;
+        case "a":
+        case "A":
+          e.preventDefault();
+          openActionMenu("assign");
+          break;
+        case "m":
+        case "M":
+          e.preventDefault();
+          openActionMenu("project");
+          break;
+        case "p":
+        case "P":
+          e.preventDefault();
+          openActionMenu("priority");
+          break;
+        case "c":
+        case "C":
+          e.preventDefault();
+          fetchMetadata();
+          setActionMenu("create");
+          break;
+        case "Enter": {
+          e.preventDefault();
+          const target = focusedId
+            ? tasks.find((t) => t.id === focusedId)
+            : null;
+          if (target) setDetailTask(target);
+          break;
+        }
+        case "ArrowDown":
+        case "j": {
+          e.preventDefault();
+          const idx = focusedId ? flatTaskIds.indexOf(focusedId) : -1;
+          const nextIdx = Math.min(idx + 1, flatTaskIds.length - 1);
+          if (flatTaskIds[nextIdx]) {
+            setFocusedId(flatTaskIds[nextIdx]);
+            if (e.shiftKey) toggleSelect(flatTaskIds[nextIdx], true);
+          }
+          break;
+        }
+        case "ArrowUp":
+        case "k": {
+          e.preventDefault();
+          const idx = focusedId ? flatTaskIds.indexOf(focusedId) : flatTaskIds.length;
+          const prevIdx = Math.max(idx - 1, 0);
+          if (flatTaskIds[prevIdx]) {
+            setFocusedId(flatTaskIds[prevIdx]);
+            if (e.shiftKey) toggleSelect(flatTaskIds[prevIdx], true);
+          }
+          break;
+        }
+        case "x": {
+          e.preventDefault();
+          if (focusedId) toggleSelect(focusedId, true);
+          break;
+        }
+        case "l":
+        case "L": {
+          // Open in Linear
+          const target = focusedId
+            ? tasks.find((t) => t.id === focusedId)
+            : null;
+          if (target?.url) {
+            e.preventDefault();
+            window.open(target.url, "_blank", "noopener,noreferrer");
+          }
+          break;
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    actionMenu,
+    detailTask,
+    selectedIds,
+    focusedId,
+    flatTaskIds,
+    tasks,
+    clearSelection,
+    openActionMenu,
+    fetchMetadata,
+    toggleSelect,
+  ]);
 
   // Loading state
   if (isLoading) {
@@ -248,8 +608,18 @@ export function TasksClient() {
     );
   }
 
+  const hasSelection = selectedIds.size > 0;
+
   return (
-    <AppShell>
+    <AppShell
+      rightSidebar={
+        detailTask ? (
+          <DetailPanel task={detailTask} onClose={() => setDetailTask(null)} />
+        ) : undefined
+      }
+      wideSidebar={!!detailTask}
+      sidebarWidth={detailTask ? 420 : undefined}
+    >
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* Header */}
         <header className="px-6 py-4 border-b border-border shrink-0">
@@ -259,8 +629,25 @@ export function TasksClient() {
               <span className="text-sm text-muted-foreground font-mono">
                 {filteredTasks.length} tasks
               </span>
+              {hasSelection && (
+                <span className="text-xs bg-gold/20 text-gold px-2 py-0.5 rounded-full">
+                  {selectedIds.size} selected
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2">
+              {/* Create task */}
+              <button
+                onClick={() => {
+                  fetchMetadata();
+                  setActionMenu("create");
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-gold/20 text-gold hover:bg-gold/30 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                New
+              </button>
+
               {/* View mode toggle */}
               <div className="flex items-center border border-border rounded-lg overflow-hidden">
                 <button
@@ -295,7 +682,9 @@ export function TasksClient() {
                 disabled={isRefreshing}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
               >
-                <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin")} />
+                <RefreshCw
+                  className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin")}
+                />
                 Sync
               </button>
             </div>
@@ -341,7 +730,6 @@ export function TasksClient() {
               })}
             </div>
 
-            {/* Divider */}
             <div className="w-px h-5 bg-border" />
 
             {/* Group by */}
@@ -380,7 +768,9 @@ export function TasksClient() {
                 <div className="w-px h-5 bg-border" />
                 <div className="relative">
                   <button
-                    onClick={() => setShowProjectDropdown(!showProjectDropdown)}
+                    onClick={() =>
+                      setShowProjectDropdown(!showProjectDropdown)
+                    }
                     className={cn(
                       "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
                       selectedProject
@@ -390,7 +780,9 @@ export function TasksClient() {
                   >
                     <FolderKanban className="w-3.5 h-3.5" />
                     {selectedProject
-                      ? context.projects.find((p) => p.id === selectedProject)?.name ?? "Project"
+                      ? context.projects.find(
+                          (p) => p.id === selectedProject
+                        )?.name ?? "Project"
                       : "All Projects"}
                     <ChevronDown className="w-3 h-3" />
                   </button>
@@ -410,7 +802,10 @@ export function TasksClient() {
                         All Projects
                       </button>
                       {context.projects
-                        .filter((p) => p.state === "started" || p.state === "planned")
+                        .filter(
+                          (p) =>
+                            p.state === "started" || p.state === "planned"
+                        )
                         .map((project) => (
                           <button
                             key={project.id}
@@ -440,6 +835,43 @@ export function TasksClient() {
           </div>
         </header>
 
+        {/* Selection action bar */}
+        {hasSelection && (
+          <div className="px-6 py-2 bg-gold/10 border-b border-gold/20 flex items-center gap-3 shrink-0">
+            <button
+              onClick={clearSelection}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+            <span className="text-xs font-medium">
+              {selectedIds.size} selected
+            </span>
+            <div className="flex items-center gap-1 ml-2">
+              <ActionBarButton
+                label="Status"
+                shortcut="S"
+                onClick={() => openActionMenu("status")}
+              />
+              <ActionBarButton
+                label="Assign"
+                shortcut="A"
+                onClick={() => openActionMenu("assign")}
+              />
+              <ActionBarButton
+                label="Move"
+                shortcut="M"
+                onClick={() => openActionMenu("project")}
+              />
+              <ActionBarButton
+                label="Priority"
+                shortcut="P"
+                onClick={() => openActionMenu("priority")}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Content */}
         {filteredTasks.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-4">
@@ -452,12 +884,767 @@ export function TasksClient() {
             </p>
           </div>
         ) : viewMode === "list" ? (
-          <ListView groups={groupedTasks} groupBy={groupBy} />
+          <ListView
+            groups={groupedTasks}
+            selectedIds={selectedIds}
+            focusedId={focusedId}
+            onToggleSelect={toggleSelect}
+            onFocus={setFocusedId}
+            onOpenDetail={setDetailTask}
+            onOpenChat={(task) => {
+              window.open(`/chat?context=task&taskId=${task.id}&taskTitle=${encodeURIComponent(task.identifier ? `${task.identifier}: ${task.title}` : task.title)}`, "_blank");
+            }}
+          />
         ) : (
-          <KanbanView groups={groupedTasks} groupBy={groupBy} />
+          <KanbanView
+            groups={groupedTasks}
+            selectedIds={selectedIds}
+            focusedId={focusedId}
+            onToggleSelect={toggleSelect}
+            onFocus={setFocusedId}
+            onOpenDetail={setDetailTask}
+          />
+        )}
+
+        {/* Bottom keyboard hints */}
+        {!hasSelection && (
+          <div className="px-6 py-2 border-t border-border bg-background shrink-0">
+            <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
+              <span>
+                <kbd className="px-1.5 py-0.5 rounded bg-secondary border border-border font-mono text-[10px]">
+                  j/k
+                </kbd>{" "}
+                navigate
+              </span>
+              <span>
+                <kbd className="px-1.5 py-0.5 rounded bg-secondary border border-border font-mono text-[10px]">
+                  x
+                </kbd>{" "}
+                select
+              </span>
+              <span>
+                <kbd className="px-1.5 py-0.5 rounded bg-secondary border border-border font-mono text-[10px]">
+                  Enter
+                </kbd>{" "}
+                detail
+              </span>
+              <span>
+                <kbd className="px-1.5 py-0.5 rounded bg-secondary border border-border font-mono text-[10px]">
+                  S
+                </kbd>{" "}
+                status
+              </span>
+              <span>
+                <kbd className="px-1.5 py-0.5 rounded bg-secondary border border-border font-mono text-[10px]">
+                  A
+                </kbd>{" "}
+                assign
+              </span>
+              <span>
+                <kbd className="px-1.5 py-0.5 rounded bg-secondary border border-border font-mono text-[10px]">
+                  M
+                </kbd>{" "}
+                move
+              </span>
+              <span>
+                <kbd className="px-1.5 py-0.5 rounded bg-secondary border border-border font-mono text-[10px]">
+                  P
+                </kbd>{" "}
+                priority
+              </span>
+              <span>
+                <kbd className="px-1.5 py-0.5 rounded bg-secondary border border-border font-mono text-[10px]">
+                  C
+                </kbd>{" "}
+                create
+              </span>
+              <span>
+                <kbd className="px-1.5 py-0.5 rounded bg-secondary border border-border font-mono text-[10px]">
+                  L
+                </kbd>{" "}
+                open
+              </span>
+            </div>
+          </div>
         )}
       </div>
+
+      {/* Action menu overlays */}
+      {actionMenu === "status" && (
+        <CommandPalette
+          title="Change Status"
+          items={workflowStates.map((s) => ({
+            id: s.id,
+            label: s.name,
+            color: s.color,
+            meta: s.team.name,
+          }))}
+          onSelect={(id) => applyUpdate({ stateId: id }, "Status updated")}
+          onClose={() => setActionMenu(null)}
+        />
+      )}
+
+      {actionMenu === "assign" && (
+        <CommandPalette
+          title="Assign To"
+          items={[
+            { id: "__unassign", label: "Unassigned", meta: "Remove assignee" },
+            ...teamMembers.map((m) => ({
+              id: m.id,
+              label: m.name,
+              meta: m.email,
+              avatarUrl: m.avatarUrl,
+            })),
+          ]}
+          onSelect={(id) =>
+            applyUpdate(
+              { assigneeId: id === "__unassign" ? null : id },
+              "Assignee updated"
+            )
+          }
+          onClose={() => setActionMenu(null)}
+        />
+      )}
+
+      {actionMenu === "project" && (
+        <CommandPalette
+          title="Move to Project"
+          items={[
+            { id: "__none", label: "No Project", meta: "Remove from project" },
+            ...(context?.projects ?? [])
+              .filter((p) => p.state === "started" || p.state === "planned")
+              .map((p) => ({
+                id: p.id,
+                label: p.name,
+                color: p.color,
+              })),
+          ]}
+          onSelect={(id) =>
+            applyUpdate(
+              { projectId: id === "__none" ? null : id },
+              "Project updated"
+            )
+          }
+          onClose={() => setActionMenu(null)}
+        />
+      )}
+
+      {actionMenu === "priority" && (
+        <CommandPalette
+          title="Set Priority"
+          items={[
+            { id: "0", label: "No priority" },
+            { id: "1", label: "Urgent", color: "hsl(0, 72%, 51%)" },
+            { id: "2", label: "High", color: "hsl(30, 80%, 50%)" },
+            { id: "3", label: "Normal", color: "hsl(195, 50%, 40%)" },
+            { id: "4", label: "Low", color: "hsl(240, 5%, 55%)" },
+          ]}
+          onSelect={(id) =>
+            applyUpdate({ priority: parseInt(id) }, "Priority updated")
+          }
+          onClose={() => setActionMenu(null)}
+        />
+      )}
+
+      {actionMenu === "create" && (
+        <CreateTaskDialog
+          teams={context?.teams ?? []}
+          projects={context?.projects ?? []}
+          members={teamMembers}
+          states={workflowStates}
+          onSubmit={handleCreateTask}
+          onClose={() => setActionMenu(null)}
+        />
+      )}
     </AppShell>
+  );
+}
+
+// -- Action Bar Button --
+
+function ActionBarButton({
+  label,
+  shortcut,
+  onClick,
+}: {
+  label: string;
+  shortcut: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs hover:bg-secondary transition-colors"
+    >
+      <kbd className="px-1 py-0.5 rounded bg-secondary border border-border font-mono text-[10px]">
+        {shortcut}
+      </kbd>
+      <span>{label}</span>
+    </button>
+  );
+}
+
+// -- Command Palette --
+
+function CommandPalette({
+  title,
+  items,
+  onSelect,
+  onClose,
+}: {
+  title: string;
+  items: Array<{
+    id: string;
+    label: string;
+    color?: string;
+    meta?: string;
+    avatarUrl?: string;
+  }>;
+  onSelect: (id: string) => void;
+  onClose: () => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [highlightIdx, setHighlightIdx] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const filtered = items.filter(
+    (item) =>
+      item.label.toLowerCase().includes(search.toLowerCase()) ||
+      item.meta?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  useEffect(() => {
+    setHighlightIdx(0);
+  }, [search]);
+
+  // Scroll highlighted item into view
+  useEffect(() => {
+    const el = listRef.current?.children[highlightIdx] as HTMLElement | undefined;
+    el?.scrollIntoView({ block: "nearest" });
+  }, [highlightIdx]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightIdx((prev) => Math.min(prev + 1, filtered.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightIdx((prev) => Math.max(prev - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (filtered[highlightIdx]) {
+        onSelect(filtered[highlightIdx].id);
+      }
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      onClose();
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]"
+      onClick={onClose}
+    >
+      {/* Backdrop */}
+      <div className="fixed inset-0 bg-background/60 backdrop-blur-sm" />
+
+      {/* Palette */}
+      <div
+        className="relative w-[420px] max-h-[60vh] bg-popover border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="px-4 py-3 border-b border-border flex items-center gap-3">
+          <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={title}
+            className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          />
+          <kbd className="px-1.5 py-0.5 rounded bg-secondary border border-border font-mono text-[10px] text-muted-foreground">
+            esc
+          </kbd>
+        </div>
+
+        {/* Items */}
+        <div ref={listRef} className="overflow-y-auto py-1">
+          {filtered.length === 0 ? (
+            <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+              No matches
+            </div>
+          ) : (
+            filtered.map((item, idx) => (
+              <button
+                key={item.id}
+                onClick={() => onSelect(item.id)}
+                onMouseEnter={() => setHighlightIdx(idx)}
+                className={cn(
+                  "w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors",
+                  idx === highlightIdx
+                    ? "bg-gold/10 text-foreground"
+                    : "text-foreground hover:bg-secondary"
+                )}
+              >
+                {item.avatarUrl ? (
+                  <img
+                    src={item.avatarUrl}
+                    alt={item.label}
+                    className="w-5 h-5 rounded-full shrink-0"
+                  />
+                ) : item.color ? (
+                  <span
+                    className="w-3 h-3 rounded-full shrink-0"
+                    style={{ backgroundColor: item.color }}
+                  />
+                ) : (
+                  <span className="w-3 h-3 shrink-0" />
+                )}
+                <span className="flex-1 truncate">{item.label}</span>
+                {item.meta && (
+                  <span className="text-xs text-muted-foreground truncate">
+                    {item.meta}
+                  </span>
+                )}
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// -- Create Task Dialog --
+
+function CreateTaskDialog({
+  teams,
+  projects,
+  members,
+  states,
+  onSubmit,
+  onClose,
+}: {
+  teams: Array<{ id: string; name: string; key: string }>;
+  projects: Array<{
+    id: string;
+    name: string;
+    state: string;
+    color?: string;
+  }>;
+  members: TeamMember[];
+  states: WorkflowState[];
+  onSubmit: (data: {
+    title: string;
+    description?: string;
+    teamId: string;
+    stateId?: string;
+    assigneeId?: string;
+    projectId?: string;
+    priority?: number;
+  }) => void;
+  onClose: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [teamId, setTeamId] = useState(teams[0]?.id ?? "");
+  const [stateId, setStateId] = useState("");
+  const [assigneeId, setAssigneeId] = useState("");
+  const [projectId, setProjectId] = useState("");
+  const [priority, setPriority] = useState(0);
+  const titleRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    titleRef.current?.focus();
+  }, []);
+
+  const teamStates = states.filter((s) => s.team.id === teamId);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim() || !teamId) return;
+    onSubmit({
+      title: title.trim(),
+      description: description.trim() || undefined,
+      teamId,
+      stateId: stateId || undefined,
+      assigneeId: assigneeId || undefined,
+      projectId: projectId || undefined,
+      priority: priority || undefined,
+    });
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
+      onClick={onClose}
+    >
+      <div className="fixed inset-0 bg-background/60 backdrop-blur-sm" />
+      <div
+        className="relative w-[520px] bg-popover border border-border rounded-xl shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <form onSubmit={handleSubmit}>
+          {/* Header */}
+          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+            <h2 className="text-sm font-medium">Create Task</h2>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Body */}
+          <div className="p-5 space-y-4">
+            {/* Title */}
+            <input
+              ref={titleRef}
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Task title"
+              className="w-full bg-transparent text-base outline-none placeholder:text-muted-foreground"
+            />
+
+            {/* Description */}
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Add description..."
+              rows={3}
+              className="w-full bg-secondary/50 rounded-lg px-3 py-2 text-sm outline-none resize-none placeholder:text-muted-foreground border border-border focus:border-gold/50"
+            />
+
+            {/* Fields grid */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Team */}
+              <div>
+                <label className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1 block">
+                  Team
+                </label>
+                <select
+                  value={teamId}
+                  onChange={(e) => {
+                    setTeamId(e.target.value);
+                    setStateId("");
+                  }}
+                  className="w-full bg-secondary rounded-lg px-3 py-2 text-xs border border-border outline-none"
+                >
+                  {teams.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1 block">
+                  Status
+                </label>
+                <select
+                  value={stateId}
+                  onChange={(e) => setStateId(e.target.value)}
+                  className="w-full bg-secondary rounded-lg px-3 py-2 text-xs border border-border outline-none"
+                >
+                  <option value="">Default</option>
+                  {teamStates.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Assignee */}
+              <div>
+                <label className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1 block">
+                  Assignee
+                </label>
+                <select
+                  value={assigneeId}
+                  onChange={(e) => setAssigneeId(e.target.value)}
+                  className="w-full bg-secondary rounded-lg px-3 py-2 text-xs border border-border outline-none"
+                >
+                  <option value="">Unassigned</option>
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Project */}
+              <div>
+                <label className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1 block">
+                  Project
+                </label>
+                <select
+                  value={projectId}
+                  onChange={(e) => setProjectId(e.target.value)}
+                  className="w-full bg-secondary rounded-lg px-3 py-2 text-xs border border-border outline-none"
+                >
+                  <option value="">No project</option>
+                  {projects
+                    .filter(
+                      (p) => p.state === "started" || p.state === "planned"
+                    )
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              {/* Priority */}
+              <div className="col-span-2">
+                <label className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1 block">
+                  Priority
+                </label>
+                <div className="flex gap-2">
+                  {[
+                    { value: 0, label: "None" },
+                    { value: 1, label: "Urgent" },
+                    { value: 2, label: "High" },
+                    { value: 3, label: "Normal" },
+                    { value: 4, label: "Low" },
+                  ].map((p) => (
+                    <button
+                      key={p.value}
+                      type="button"
+                      onClick={() => setPriority(p.value)}
+                      className={cn(
+                        "px-3 py-1.5 rounded-lg text-xs border transition-colors",
+                        priority === p.value
+                          ? "bg-gold/20 text-gold border-gold/30"
+                          : "border-border text-muted-foreground hover:text-foreground hover:bg-secondary"
+                      )}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="px-5 py-3 border-t border-border flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!title.trim() || !teamId}
+              className="px-4 py-2 rounded-lg text-xs font-medium bg-gold text-background hover:bg-gold/90 transition-colors disabled:opacity-50"
+            >
+              Create Task
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// -- Detail Panel (right sidebar) --
+
+function DetailPanel({
+  task,
+  onClose,
+}: {
+  task: Task;
+  onClose: () => void;
+}) {
+  return (
+    <div className="h-full border-l border-border bg-background flex flex-col">
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-border flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          {task.identifier && (
+            <span className="text-xs text-muted-foreground font-mono shrink-0">
+              {task.identifier}
+            </span>
+          )}
+          <StateIcon stateType={task.state.type} color={task.state.color} />
+        </div>
+        <div className="flex items-center gap-1.5">
+          {task.url && (
+            <button
+              onClick={() =>
+                window.open(task.url!, "_blank", "noopener,noreferrer")
+              }
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              title="Open in Linear"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <button
+            onClick={() =>
+              window.open(
+                `/chat?context=task&taskId=${task.id}&taskTitle=${encodeURIComponent(task.identifier ? `${task.identifier}: ${task.title}` : task.title)}`,
+                "_blank"
+              )
+            }
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            title="Open in Chat"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Title */}
+        <h2 className="text-base font-medium leading-snug">{task.title}</h2>
+
+        {/* Metadata */}
+        <div className="space-y-3">
+          <DetailField label="Status">
+            <div className="flex items-center gap-2">
+              <StateIcon
+                stateType={task.state.type}
+                color={task.state.color}
+              />
+              <span className="text-sm">{task.state.name}</span>
+            </div>
+          </DetailField>
+
+          <DetailField label="Priority">
+            <div className="flex items-center gap-2">
+              <PriorityIcon priority={task.priority} />
+              <span className="text-sm">
+                {PRIORITY_LABELS[task.priority]?.label ?? "None"}
+              </span>
+            </div>
+          </DetailField>
+
+          {task.assignee && (
+            <DetailField label="Assignee">
+              <div className="flex items-center gap-2">
+                {task.assignee.avatarUrl ? (
+                  <img
+                    src={task.assignee.avatarUrl}
+                    alt={task.assignee.name}
+                    className="w-5 h-5 rounded-full"
+                  />
+                ) : (
+                  <User className="w-4 h-4 text-muted-foreground" />
+                )}
+                <span className="text-sm">{task.assignee.name}</span>
+              </div>
+            </DetailField>
+          )}
+
+          {task.project && (
+            <DetailField label="Project">
+              <div className="flex items-center gap-2">
+                {task.project.color && (
+                  <span
+                    className="w-2.5 h-2.5 rounded-full"
+                    style={{ backgroundColor: task.project.color }}
+                  />
+                )}
+                <span className="text-sm">{task.project.name}</span>
+              </div>
+            </DetailField>
+          )}
+
+          {task.labels.length > 0 && (
+            <DetailField label="Labels">
+              <div className="flex flex-wrap gap-1">
+                {task.labels.map((label) => (
+                  <span
+                    key={label.id}
+                    className="text-xs px-2 py-0.5 rounded-full border"
+                    style={{
+                      backgroundColor: label.color
+                        ? `${label.color}20`
+                        : undefined,
+                      color: label.color || undefined,
+                      borderColor: label.color
+                        ? `${label.color}40`
+                        : undefined,
+                    }}
+                  >
+                    {label.name}
+                  </span>
+                ))}
+              </div>
+            </DetailField>
+          )}
+
+          {task.dueDate && (
+            <DetailField label="Due Date">
+              <DueDateBadge dueDate={task.dueDate} />
+            </DetailField>
+          )}
+
+          <DetailField label="Created">
+            <span className="text-sm text-muted-foreground">
+              {new Date(task.createdAt).toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </span>
+          </DetailField>
+        </div>
+
+        {/* Description */}
+        {task.description && (
+          <div className="pt-2 border-t border-border">
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+              {task.description}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DetailField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="text-xs text-muted-foreground w-16 shrink-0 pt-0.5">
+        {label}
+      </span>
+      <div className="flex-1">{children}</div>
+    </div>
   );
 }
 
@@ -465,21 +1652,30 @@ export function TasksClient() {
 
 function ListView({
   groups,
-  groupBy,
+  selectedIds,
+  focusedId,
+  onToggleSelect,
+  onFocus,
+  onOpenDetail,
+  onOpenChat,
 }: {
   groups: Array<[string, { label: string; color?: string; tasks: Task[] }]>;
-  groupBy: GroupBy;
+  selectedIds: Set<string>;
+  focusedId: string | null;
+  onToggleSelect: (id: string, additive?: boolean) => void;
+  onFocus: (id: string) => void;
+  onOpenDetail: (task: Task) => void;
+  onOpenChat: (task: Task) => void;
 }) {
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
+    new Set()
+  );
 
   const toggleGroup = (key: string) => {
     setCollapsedGroups((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -488,10 +1684,8 @@ function ListView({
     <div className="flex-1 overflow-y-auto">
       {groups.map(([key, group]) => {
         const isCollapsed = collapsedGroups.has(key);
-
         return (
           <div key={key}>
-            {/* Group header */}
             <button
               onClick={() => toggleGroup(key)}
               className="w-full flex items-center gap-2 px-6 py-2.5 bg-secondary/50 border-b border-border hover:bg-secondary transition-colors sticky top-0 z-10"
@@ -513,12 +1707,19 @@ function ListView({
                 {group.tasks.length}
               </span>
             </button>
-
-            {/* Tasks */}
             {!isCollapsed && (
               <div>
                 {group.tasks.map((task) => (
-                  <TaskRow key={task.id} task={task} />
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    isSelected={selectedIds.has(task.id)}
+                    isFocused={focusedId === task.id}
+                    onToggleSelect={onToggleSelect}
+                    onFocus={onFocus}
+                    onOpenDetail={onOpenDetail}
+                    onOpenChat={onOpenChat}
+                  />
                 ))}
               </div>
             )}
@@ -533,10 +1734,18 @@ function ListView({
 
 function KanbanView({
   groups,
-  groupBy,
+  selectedIds,
+  focusedId,
+  onToggleSelect,
+  onFocus,
+  onOpenDetail,
 }: {
   groups: Array<[string, { label: string; color?: string; tasks: Task[] }]>;
-  groupBy: GroupBy;
+  selectedIds: Set<string>;
+  focusedId: string | null;
+  onToggleSelect: (id: string, additive?: boolean) => void;
+  onFocus: (id: string) => void;
+  onOpenDetail: (task: Task) => void;
 }) {
   return (
     <div className="flex-1 overflow-x-auto p-4">
@@ -546,7 +1755,6 @@ function KanbanView({
             key={key}
             className="flex-shrink-0 w-72 flex flex-col bg-secondary/30 rounded-xl border border-border"
           >
-            {/* Column header */}
             <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
               {group.color && (
                 <span
@@ -554,16 +1762,24 @@ function KanbanView({
                   style={{ backgroundColor: group.color }}
                 />
               )}
-              <span className="text-sm font-medium truncate">{group.label}</span>
+              <span className="text-sm font-medium truncate">
+                {group.label}
+              </span>
               <span className="text-xs text-muted-foreground ml-auto">
                 {group.tasks.length}
               </span>
             </div>
-
-            {/* Cards */}
             <div className="flex-1 overflow-y-auto p-2 space-y-2">
               {group.tasks.map((task) => (
-                <KanbanCard key={task.id} task={task} />
+                <KanbanCard
+                  key={task.id}
+                  task={task}
+                  isSelected={selectedIds.has(task.id)}
+                  isFocused={focusedId === task.id}
+                  onToggleSelect={onToggleSelect}
+                  onFocus={onFocus}
+                  onOpenDetail={onOpenDetail}
+                />
               ))}
             </div>
           </div>
@@ -575,28 +1791,58 @@ function KanbanView({
 
 // -- Task Row (List View) --
 
-function TaskRow({ task }: { task: Task }) {
-  const handleClick = () => {
-    if (task.url) {
-      window.open(task.url, "_blank", "noopener,noreferrer");
-    }
-  };
-
+function TaskRow({
+  task,
+  isSelected,
+  isFocused,
+  onToggleSelect,
+  onFocus,
+  onOpenDetail,
+  onOpenChat,
+}: {
+  task: Task;
+  isSelected: boolean;
+  isFocused: boolean;
+  onToggleSelect: (id: string, additive?: boolean) => void;
+  onFocus: (id: string) => void;
+  onOpenDetail: (task: Task) => void;
+  onOpenChat: (task: Task) => void;
+}) {
   return (
     <div
-      onClick={handleClick}
+      onClick={(e) => {
+        onFocus(task.id);
+        if (e.metaKey || e.ctrlKey) {
+          onToggleSelect(task.id, true);
+        } else {
+          onOpenDetail(task);
+        }
+      }}
       className={cn(
-        "flex items-center gap-3 px-6 py-3 border-b border-border hover:bg-secondary/50 transition-colors group",
-        task.url && "cursor-pointer"
+        "flex items-center gap-3 px-6 py-3 border-b border-border hover:bg-secondary/50 transition-colors cursor-pointer group",
+        isSelected && "bg-gold/5 border-l-2 border-l-gold",
+        isFocused && !isSelected && "bg-secondary/30"
       )}
     >
-      {/* Priority indicator */}
-      <PriorityIcon priority={task.priority} />
+      {/* Checkbox */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleSelect(task.id, true);
+        }}
+        className={cn(
+          "w-4 h-4 rounded border shrink-0 flex items-center justify-center transition-colors",
+          isSelected
+            ? "bg-gold border-gold text-background"
+            : "border-border group-hover:border-muted-foreground"
+        )}
+      >
+        {isSelected && <Check className="w-3 h-3" />}
+      </button>
 
-      {/* State icon */}
+      <PriorityIcon priority={task.priority} />
       <StateIcon stateType={task.state.type} color={task.state.color} />
 
-      {/* Identifier */}
       {task.identifier && (
         <span className="text-xs text-muted-foreground font-mono shrink-0 w-16">
           {task.identifier}
@@ -608,10 +1854,8 @@ function TaskRow({ task }: { task: Task }) {
         </span>
       )}
 
-      {/* Title */}
       <span className="text-sm flex-1 truncate">{task.title}</span>
 
-      {/* Labels */}
       {task.labels.length > 0 && (
         <div className="flex items-center gap-1 shrink-0">
           {task.labels.slice(0, 3).map((label) => (
@@ -630,7 +1874,6 @@ function TaskRow({ task }: { task: Task }) {
         </div>
       )}
 
-      {/* Project */}
       {task.project && (
         <span className="text-xs text-muted-foreground shrink-0 flex items-center gap-1">
           {task.project.color && (
@@ -643,12 +1886,8 @@ function TaskRow({ task }: { task: Task }) {
         </span>
       )}
 
-      {/* Due date */}
-      {task.dueDate && (
-        <DueDateBadge dueDate={task.dueDate} />
-      )}
+      {task.dueDate && <DueDateBadge dueDate={task.dueDate} />}
 
-      {/* Assignee avatar */}
       {task.assignee?.avatarUrl && (
         <img
           src={task.assignee.avatarUrl}
@@ -657,9 +1896,29 @@ function TaskRow({ task }: { task: Task }) {
         />
       )}
 
-      {/* External link icon */}
+      {/* Chat button */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenChat(task);
+        }}
+        className="p-1 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground hover:bg-secondary transition-all shrink-0"
+        title="Open in Chat"
+      >
+        <MessageSquare className="w-3.5 h-3.5" />
+      </button>
+
       {task.url && (
-        <ExternalLink className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            window.open(task.url!, "_blank", "noopener,noreferrer");
+          }}
+          className="p-1 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground hover:bg-secondary transition-all shrink-0"
+          title="Open in Linear"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+        </button>
       )}
     </div>
   );
@@ -667,24 +1926,52 @@ function TaskRow({ task }: { task: Task }) {
 
 // -- Kanban Card --
 
-function KanbanCard({ task }: { task: Task }) {
-  const handleClick = () => {
-    if (task.url) {
-      window.open(task.url, "_blank", "noopener,noreferrer");
-    }
-  };
-
+function KanbanCard({
+  task,
+  isSelected,
+  isFocused,
+  onToggleSelect,
+  onFocus,
+  onOpenDetail,
+}: {
+  task: Task;
+  isSelected: boolean;
+  isFocused: boolean;
+  onToggleSelect: (id: string, additive?: boolean) => void;
+  onFocus: (id: string) => void;
+  onOpenDetail: (task: Task) => void;
+}) {
   return (
     <div
-      onClick={handleClick}
+      onClick={() => {
+        onFocus(task.id);
+        onOpenDetail(task);
+      }}
       className={cn(
-        "p-3 bg-background rounded-lg border border-border hover:border-gold/30 transition-colors group",
-        task.url && "cursor-pointer"
+        "p-3 bg-background rounded-lg border transition-colors group cursor-pointer",
+        isSelected
+          ? "border-gold bg-gold/5"
+          : isFocused
+            ? "border-gold/30"
+            : "border-border hover:border-gold/30"
       )}
     >
-      {/* Top row: identifier + priority */}
       <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-1.5">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect(task.id, true);
+            }}
+            className={cn(
+              "w-3.5 h-3.5 rounded border shrink-0 flex items-center justify-center transition-colors",
+              isSelected
+                ? "bg-gold border-gold text-background"
+                : "border-border group-hover:border-muted-foreground"
+            )}
+          >
+            {isSelected && <Check className="w-2.5 h-2.5" />}
+          </button>
           <PriorityIcon priority={task.priority} size="sm" />
           {task.identifier && (
             <span className="text-[10px] text-muted-foreground font-mono">
@@ -692,18 +1979,26 @@ function KanbanCard({ task }: { task: Task }) {
             </span>
           )}
           {task.source === "triage" && (
-            <span className="text-[10px] text-purple-400 font-mono">TRIAGE</span>
+            <span className="text-[10px] text-purple-400 font-mono">
+              TRIAGE
+            </span>
           )}
         </div>
         {task.url && (
-          <ExternalLink className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              window.open(task.url!, "_blank", "noopener,noreferrer");
+            }}
+            className="p-0.5 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground transition-all"
+          >
+            <ExternalLink className="w-3 h-3" />
+          </button>
         )}
       </div>
 
-      {/* Title */}
       <p className="text-sm leading-snug mb-2 line-clamp-2">{task.title}</p>
 
-      {/* Bottom row: labels, project, due date */}
       <div className="flex items-center gap-2 flex-wrap">
         {task.labels.slice(0, 2).map((label) => (
           <span
@@ -729,9 +2024,7 @@ function KanbanCard({ task }: { task: Task }) {
             {task.project.name}
           </span>
         )}
-        {task.dueDate && (
-          <DueDateBadge dueDate={task.dueDate} size="sm" />
-        )}
+        {task.dueDate && <DueDateBadge dueDate={task.dueDate} size="sm" />}
         {task.assignee?.avatarUrl && (
           <img
             src={task.assignee.avatarUrl}
@@ -754,18 +2047,27 @@ function PriorityIcon({
   size?: "sm" | "md";
 }) {
   const iconSize = size === "sm" ? "w-3 h-3" : "w-4 h-4";
-
   switch (priority) {
     case 1:
-      return <AlertCircle className={cn(iconSize, "text-status-urgent shrink-0")} />;
+      return (
+        <AlertCircle className={cn(iconSize, "text-status-urgent shrink-0")} />
+      );
     case 2:
-      return <ArrowUp className={cn(iconSize, "text-status-high shrink-0")} />;
+      return (
+        <ArrowUp className={cn(iconSize, "text-status-high shrink-0")} />
+      );
     case 3:
-      return <Minus className={cn(iconSize, "text-status-normal shrink-0")} />;
+      return (
+        <Minus className={cn(iconSize, "text-status-normal shrink-0")} />
+      );
     case 4:
-      return <ArrowDown className={cn(iconSize, "text-status-low shrink-0")} />;
+      return (
+        <ArrowDown className={cn(iconSize, "text-status-low shrink-0")} />
+      );
     default:
-      return <Minus className={cn(iconSize, "text-muted-foreground/40 shrink-0")} />;
+      return (
+        <Minus className={cn(iconSize, "text-muted-foreground/40 shrink-0")} />
+      );
   }
 }
 
@@ -779,7 +2081,6 @@ function StateIcon({
   color?: string;
 }) {
   const colorClass = STATE_TYPE_COLORS[stateType] ?? "text-muted-foreground";
-
   switch (stateType) {
     case "completed":
       return <CheckCircle2 className={cn("w-4 h-4 shrink-0", colorClass)} />;
@@ -820,7 +2121,9 @@ function DueDateBadge({
 }) {
   const date = new Date(dueDate);
   const now = new Date();
-  const diffDays = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  const diffDays = Math.ceil(
+    (date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+  );
 
   let colorClass = "text-muted-foreground";
   if (diffDays < 0) colorClass = "text-status-urgent";
@@ -830,7 +2133,9 @@ function DueDateBadge({
   const textSize = size === "sm" ? "text-[10px]" : "text-xs";
 
   return (
-    <span className={cn("flex items-center gap-1 shrink-0", colorClass, textSize)}>
+    <span
+      className={cn("flex items-center gap-1 shrink-0", colorClass, textSize)}
+    >
       <Clock className={size === "sm" ? "w-2.5 h-2.5" : "w-3 h-3"} />
       {date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
     </span>

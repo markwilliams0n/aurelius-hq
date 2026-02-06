@@ -308,6 +308,246 @@ export async function fetchViewerContext(): Promise<{
 }
 
 /**
+ * Fetch workflow states for all teams the viewer belongs to
+ */
+export async function fetchWorkflowStates(): Promise<
+  Array<{
+    id: string;
+    name: string;
+    type: string;
+    color: string;
+    position: number;
+    team: { id: string; name: string };
+  }>
+> {
+  const query = `
+    query WorkflowStates {
+      viewer {
+        teamMemberships {
+          nodes {
+            team {
+              id
+              name
+              states {
+                nodes {
+                  id
+                  name
+                  type
+                  color
+                  position
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const data = await graphql<{
+    viewer: {
+      teamMemberships: {
+        nodes: Array<{
+          team: {
+            id: string;
+            name: string;
+            states: {
+              nodes: Array<{
+                id: string;
+                name: string;
+                type: string;
+                color: string;
+                position: number;
+              }>;
+            };
+          };
+        }>;
+      };
+    };
+  }>(query);
+
+  const stateMap = new Map<string, {
+    id: string;
+    name: string;
+    type: string;
+    color: string;
+    position: number;
+    team: { id: string; name: string };
+  }>();
+
+  for (const m of data.viewer.teamMemberships.nodes) {
+    for (const s of m.team.states.nodes) {
+      if (!stateMap.has(s.id)) {
+        stateMap.set(s.id, {
+          ...s,
+          team: { id: m.team.id, name: m.team.name },
+        });
+      }
+    }
+  }
+
+  return Array.from(stateMap.values()).sort((a, b) => a.position - b.position);
+}
+
+/**
+ * Fetch team members for all teams the viewer belongs to
+ */
+export async function fetchTeamMembers(): Promise<
+  Array<{
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl?: string;
+  }>
+> {
+  const query = `
+    query TeamMembers {
+      viewer {
+        teamMemberships {
+          nodes {
+            team {
+              members {
+                nodes {
+                  id
+                  name
+                  email
+                  avatarUrl
+                  active
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const data = await graphql<{
+    viewer: {
+      teamMemberships: {
+        nodes: Array<{
+          team: {
+            members: {
+              nodes: Array<{
+                id: string;
+                name: string;
+                email: string;
+                avatarUrl?: string;
+                active: boolean;
+              }>;
+            };
+          };
+        }>;
+      };
+    };
+  }>(query);
+
+  const memberMap = new Map<string, {
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl?: string;
+  }>();
+
+  for (const m of data.viewer.teamMemberships.nodes) {
+    for (const member of m.team.members.nodes) {
+      if (member.active && !memberMap.has(member.id)) {
+        memberMap.set(member.id, {
+          id: member.id,
+          name: member.name,
+          email: member.email,
+          avatarUrl: member.avatarUrl,
+        });
+      }
+    }
+  }
+
+  return Array.from(memberMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Update a Linear issue
+ */
+export async function updateIssue(
+  issueId: string,
+  updates: {
+    stateId?: string;
+    assigneeId?: string | null;
+    projectId?: string | null;
+    priority?: number;
+    title?: string;
+    description?: string;
+  }
+): Promise<{ success: boolean; issue?: LinearIssueWithMeta }> {
+  const mutation = `
+    mutation UpdateIssue($id: String!, $input: IssueUpdateInput!) {
+      issueUpdate(id: $id, input: $input) {
+        success
+        issue {
+          ${ISSUE_FRAGMENT}
+        }
+      }
+    }
+  `;
+
+  const input: Record<string, unknown> = {};
+  if (updates.stateId !== undefined) input.stateId = updates.stateId;
+  if (updates.assigneeId !== undefined) input.assigneeId = updates.assigneeId;
+  if (updates.projectId !== undefined) input.projectId = updates.projectId;
+  if (updates.priority !== undefined) input.priority = updates.priority;
+  if (updates.title !== undefined) input.title = updates.title;
+  if (updates.description !== undefined) input.description = updates.description;
+
+  const data = await graphql<{
+    issueUpdate: {
+      success: boolean;
+      issue: LinearIssueWithMeta;
+    };
+  }>(mutation, { id: issueId, input });
+
+  return {
+    success: data.issueUpdate.success,
+    issue: data.issueUpdate.issue,
+  };
+}
+
+/**
+ * Create a new Linear issue
+ */
+export async function createIssue(input: {
+  title: string;
+  description?: string;
+  teamId: string;
+  stateId?: string;
+  assigneeId?: string;
+  projectId?: string;
+  priority?: number;
+}): Promise<{ success: boolean; issue?: LinearIssueWithMeta }> {
+  const mutation = `
+    mutation CreateIssue($input: IssueCreateInput!) {
+      issueCreate(input: $input) {
+        success
+        issue {
+          ${ISSUE_FRAGMENT}
+        }
+      }
+    }
+  `;
+
+  const data = await graphql<{
+    issueCreate: {
+      success: boolean;
+      issue: LinearIssueWithMeta;
+    };
+  }>(mutation, { input });
+
+  return {
+    success: data.issueCreate.success,
+    issue: data.issueCreate.issue,
+  };
+}
+
+/**
  * Fetch all issues: assigned to me + specific project(s)
  * Deduplicates issues that appear in both sets
  */
