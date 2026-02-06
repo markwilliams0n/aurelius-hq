@@ -8,6 +8,8 @@
  */
 
 import type { Capability, ToolDefinition, ToolResult } from './types';
+import { getConfig } from '@/lib/config';
+import type { ConfigKey } from '@/lib/config';
 
 // Import capabilities — add new ones here as they're created
 import { configCapability } from './config';
@@ -25,14 +27,30 @@ export function getAllTools(): { type: "function"; function: ToolDefinition }[] 
   );
 }
 
-/** Get formatted capability prompts for the system prompt */
-export function getCapabilityPrompts(): string {
-  const sections = ALL_CAPABILITIES
-    .filter(cap => cap.prompt.trim().length > 0)
-    .map(cap => cap.prompt);
+/** Load capability prompt from DB if modified, otherwise use default */
+async function loadCapabilityPrompt(capabilityName: string, defaultPrompt: string): Promise<string> {
+  try {
+    const configKey = `capability:${capabilityName}` as ConfigKey;
+    const config = await getConfig(configKey);
+    if (config?.content) return config.content;
+  } catch {
+    // DB not available or key doesn't exist — use default
+  }
+  return defaultPrompt;
+}
 
-  if (sections.length === 0) return '';
-  return `## Available Capabilities\n\n${sections.join('\n\n---\n\n')}`;
+/** Get formatted capability prompts for the system prompt */
+export async function getCapabilityPrompts(): Promise<string> {
+  const sections = await Promise.all(
+    ALL_CAPABILITIES.map(async cap => {
+      const prompt = await loadCapabilityPrompt(cap.name, cap.prompt);
+      return prompt.trim();
+    })
+  );
+
+  const nonEmpty = sections.filter(s => s.length > 0);
+  if (nonEmpty.length === 0) return '';
+  return `## Available Capabilities\n\n${nonEmpty.join('\n\n---\n\n')}`;
 }
 
 /** Dispatch a tool call to the right capability handler */

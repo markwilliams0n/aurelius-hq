@@ -58,10 +58,11 @@ export async function buildAgentContext(
 
   // Gather all context pieces in parallel
   const startTime = Date.now();
-  const [recentNotes, memoryContext, soulConfigResult] = await Promise.all([
+  const [recentNotes, memoryContext, soulConfigResult, capabilityPrompts] = await Promise.all([
     getRecentNotes(),
     buildMemoryContext(query),
     getConfig('soul'),
+    getCapabilityPrompts(),
   ]);
 
   const soulConfig = soulConfigResult?.content || null;
@@ -75,7 +76,6 @@ export async function buildAgentContext(
   });
 
   // Add capability instructions
-  const capabilityPrompts = getCapabilityPrompts();
   if (capabilityPrompts) {
     systemPrompt += `\n\n${capabilityPrompts}`;
   }
