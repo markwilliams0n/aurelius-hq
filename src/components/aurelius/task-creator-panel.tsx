@@ -240,8 +240,11 @@ export function TaskCreatorPanel({ item, onClose, onCreated }: TaskCreatorPanelP
         setCreatedIssues(data.createdIssues);
         setState("done");
         toast.success(`Created ${data.createdIssues.length} Linear issue(s)`);
+      } else if (data.linearError) {
+        toast.error(`Linear: ${data.linearError}`);
+        setState("review");
       } else {
-        // Tasks accepted but no Linear issues (maybe not configured)
+        // Tasks accepted but no Linear issues (not configured)
         toast.success("Tasks accepted");
         onCreated();
       }

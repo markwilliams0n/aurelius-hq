@@ -5,7 +5,7 @@ import { eq, and, inArray } from "drizzle-orm";
 import { upsertEntity } from "@/lib/memory/entities";
 import { createFact } from "@/lib/memory/facts";
 import { isConfigured } from "@/lib/linear/client";
-import { createIssue, fetchViewerContext } from "@/lib/linear/issues";
+import { createIssue, fetchViewerContext, getOwnerUserId } from "@/lib/linear/issues";
 
 // GET /api/triage/[id]/tasks - List suggested tasks for an item
 export async function GET(
@@ -197,24 +197,32 @@ export async function POST(
 
     // Create Linear issues for accepted tasks (default behavior, opt out with skipLinear)
     const createdIssues: Array<{ id: string; identifier: string; url: string; title: string }> = [];
+    let linearError: string | undefined;
     if (action === "accept" && !skipLinear && isConfigured()) {
       try {
         const context = await fetchViewerContext();
-        const defaultTeamId = context.teams[0]?.id;
+        // Prefer "Personal" team, fall back to first available
+        const defaultTeam = context.teams.find(
+          (t) => t.name.toLowerCase() === "personal",
+        ) || context.teams[0];
 
-        // When inlineTasks are provided, they are the source of truth for issue titles
-        // (the user may have edited them in the UI). Otherwise fall back to DB descriptions.
-        const issueTitles: string[] = inlineTasks && inlineTasks.length > 0
-          ? inlineTasks.map((t) => t.description).filter(Boolean)
-          : tasksToUpdate.map((t) => t.description);
+        if (!defaultTeam) {
+          linearError = "No teams available in Linear workspace";
+        } else {
+          const ownerUserId = getOwnerUserId();
 
-        if (defaultTeamId) {
+          // When inlineTasks are provided, they are the source of truth for issue titles
+          // (the user may have edited them in the UI). Otherwise fall back to DB descriptions.
+          const issueTitles: string[] = inlineTasks && inlineTasks.length > 0
+            ? inlineTasks.map((t) => t.description).filter(Boolean)
+            : tasksToUpdate.map((t) => t.description);
+
           for (const title of issueTitles) {
-
             try {
               const result = await createIssue({
                 title,
-                teamId: defaultTeamId,
+                teamId: defaultTeam.id,
+                assigneeId: ownerUserId,
               });
 
               if (result.success && result.issue) {
@@ -227,12 +235,17 @@ export async function POST(
               }
             } catch (issueError) {
               console.error(`[Tasks API] Failed to create Linear issue "${title}":`, issueError);
+              linearError = issueError instanceof Error ? issueError.message : String(issueError);
             }
           }
         }
       } catch (contextError) {
         console.error("[Tasks API] Failed to fetch Linear context:", contextError);
+        linearError = contextError instanceof Error ? contextError.message : String(contextError);
       }
+    } else if (action === "accept" && !skipLinear && !isConfigured()) {
+      linearError = "Linear not configured (missing LINEAR_CLIENT_ID/SECRET or LINEAR_API_KEY)";
+      console.warn("[Tasks API]", linearError);
     }
 
     return NextResponse.json({
@@ -240,6 +253,7 @@ export async function POST(
       action,
       taskIds: tasksToUpdate.map((t) => t.id),
       createdIssues: createdIssues.length > 0 ? createdIssues : undefined,
+      linearError,
     });
   } catch (error) {
     console.error("[Tasks API] Failed to update tasks:", error);
