@@ -189,6 +189,7 @@ export async function handleTaskTool(
               tasks: taskList,
               count: taskList.length,
               viewer: context.viewer.name,
+              accessibleTeams: context.teams.map((t) => t.name),
             },
             null,
             2,

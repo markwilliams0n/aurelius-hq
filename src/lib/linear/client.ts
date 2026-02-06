@@ -165,8 +165,44 @@ export async function graphql<T>(
 }
 
 /**
+ * Execute a GraphQL query as the personal user (via LINEAR_API_KEY).
+ * Notifications are per-user, so we must use the user's own token
+ * rather than the bot's OAuth token to see the user's inbox.
+ */
+async function graphqlAsUser<T>(
+  query: string,
+  variables?: Record<string, unknown>
+): Promise<T> {
+  const apiKey = process.env.LINEAR_API_KEY;
+  if (!apiKey) {
+    throw new Error('LINEAR_API_KEY required for user-scoped queries (notifications)');
+  }
+
+  const response = await fetch(LINEAR_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: apiKey,
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Linear API error: ${response.status} ${text}`);
+  }
+
+  const json = await response.json();
+  if (json.errors?.length > 0) {
+    throw new Error(`Linear GraphQL error: ${json.errors[0].message}`);
+  }
+  return json.data;
+}
+
+/**
  * Fetch unread/unarchived notifications
- * Uses inline fragments for IssueNotification since Notification is a union type
+ * Uses inline fragments for IssueNotification since Notification is a union type.
+ * Uses personal API key (not bot OAuth) since notifications are per-user.
  */
 export async function fetchNotifications(
   cursor?: string
@@ -279,13 +315,14 @@ export async function fetchNotifications(
     }
   `;
 
-  const data = await graphql<LinearNotificationsResponse>(query, {
+  const data = await graphqlAsUser<LinearNotificationsResponse>(query, {
     after: cursor,
   });
 
-  // Filter to only unread notifications (readAt is null)
+  // Filter to unarchived notifications (matches Linear's inbox view).
+  // Items stay in triage until archived/dismissed in Linear, even if read.
   const unreadNotifications = data.notifications.nodes.filter(
-    (n) => !n.readAt && !n.archivedAt
+    (n) => !n.archivedAt
   );
 
   return {
@@ -307,7 +344,7 @@ export async function archiveNotification(notificationId: string): Promise<boole
     }
   `;
 
-  const data = await graphql<{ notificationArchive: { success: boolean } }>(query, {
+  const data = await graphqlAsUser<{ notificationArchive: { success: boolean } }>(query, {
     id: notificationId,
   });
 

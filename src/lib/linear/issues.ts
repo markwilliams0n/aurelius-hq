@@ -541,7 +541,15 @@ export async function fetchIssue(idOrIdentifier: string): Promise<LinearIssueWit
     }
   }
 
-  // Search by identifier (e.g. "PER-123")
+  // Parse identifier (e.g. "PER-153") into team key + issue number
+  const identifierMatch = idOrIdentifier.toUpperCase().match(/^([A-Z]+)-(\d+)$/);
+  if (!identifierMatch) {
+    return null;
+  }
+
+  const [, teamKey, numberStr] = identifierMatch;
+  const issueNumber = parseInt(numberStr, 10);
+
   try {
     const query = `
       query SearchIssue($filter: IssueFilter) {
@@ -553,7 +561,10 @@ export async function fetchIssue(idOrIdentifier: string): Promise<LinearIssueWit
       }
     `;
     const data = await graphql<{ issues: { nodes: LinearIssueWithMeta[] } }>(query, {
-      filter: { identifier: { eq: idOrIdentifier.toUpperCase() } },
+      filter: {
+        team: { key: { eq: teamKey } },
+        number: { eq: issueNumber },
+      },
     });
     return data.issues.nodes[0] || null;
   } catch {

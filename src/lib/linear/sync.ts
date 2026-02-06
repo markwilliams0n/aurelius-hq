@@ -64,6 +64,95 @@ function generateContent(notif: LinearNotification): string {
 }
 
 /**
+ * Build a contextual preview based on notification type.
+ * Instead of generic "Katie changed status", produce something like:
+ *   "Katie moved to In Progress — Users are getting stuck in a redirect loop..."
+ */
+export function buildContextualPreview(notif: LinearNotification): string {
+  const actor = notif.actor?.name ?? '';
+  const issue = notif.issue;
+  const desc = issue?.description?.slice(0, 150);
+
+  // Helper to append issue description context
+  const withDesc = (action: string) =>
+    desc ? `${action} — ${desc}` : action;
+
+  // For issue notifications
+  if (issue) {
+    switch (notif.type) {
+      case 'issueStatusChanged':
+        return withDesc(
+          `${actor || 'Someone'} moved to ${issue.state?.name ?? 'unknown'}`
+        );
+
+      case 'issuePriorityChanged':
+        return withDesc(
+          `${actor || 'Someone'} set priority to ${priorityLabel(issue.priority)}`
+        );
+
+      case 'issueAssignedToYou': {
+        // Actor may be null for bot-assigned issues — fall back to creator
+        const assigner = actor || issue.creator?.name || issue.assignee?.name || 'Someone';
+        return withDesc(`${assigner} assigned this to you`);
+      }
+
+      case 'issueNewComment':
+      case 'issueCommentMention':
+        if (notif.comment?.body) {
+          const commenter = notif.comment.user?.name ?? (actor || 'Someone');
+          return `${commenter}: ${notif.comment.body.slice(0, 180)}`;
+        }
+        return withDesc(`${actor || 'Someone'} commented`);
+
+      case 'issueMention':
+        return withDesc(`${actor || 'Someone'} mentioned you`);
+
+      case 'issueDue':
+        return withDesc('Issue is due soon');
+
+      case 'issueCreated':
+        return withDesc(`${actor || 'Someone'} created this issue`);
+
+      default:
+        return withDesc(notificationDescription(notif.type, notif.actor));
+    }
+  }
+
+  // For project notifications
+  if (notif.project) {
+    const project = notif.project;
+    const update = notif.projectUpdate;
+    const author = update?.user?.name ?? (actor || 'Someone');
+
+    switch (notif.type) {
+      case 'projectUpdateCreated':
+        // Show the update content, not the project description
+        return `Project update from ${author}: ${update?.body?.slice(0, 150) || project.description?.slice(0, 150) || 'No details'}`;
+
+      case 'projectDeleted':
+        return `${actor || 'Someone'} deleted this project${project.description ? ` — ${project.description.slice(0, 150)}` : ''}`;
+
+      case 'projectUpdateMention':
+        return `${author} mentioned you in project update: ${update?.body?.slice(0, 150) || 'No details'}`;
+
+      case 'projectUpdatePrompt':
+        return `Project update reminder — time to post an update`;
+
+      default:
+        return `${actor || 'Someone'} updated project${project.description ? ` — ${project.description.slice(0, 150)}` : ''}`;
+    }
+  }
+
+  // For initiative notifications
+  if (notif.initiative) {
+    const body = notif.initiativeUpdate?.body;
+    return body?.slice(0, 200) || `Initiative update: ${notif.initiative.name}`;
+  }
+
+  return notificationDescription(notif.type, notif.actor);
+}
+
+/**
  * Generate smart tags based on notification and issue
  */
 function generateTags(notif: LinearNotification): string[] {
@@ -135,24 +224,31 @@ function mapNotificationToInboxItem(notif: LinearNotification): NewInboxItem {
   if (issue) {
     subject = `${issue.identifier}: ${issue.title}`;
     content = generateContent(notif);
-    preview = issue.description?.slice(0, 200) ?? notificationDescription(notif.type, notif.actor);
+    preview = buildContextualPreview(notif);
     linearUrl = issue.url;
   } else if (project) {
     const updateBody = notif.projectUpdate?.body;
-    subject = project.name;
+    // Prefix subject based on notification type
+    if (notif.type === 'projectDeleted') {
+      subject = `Project deleted: ${project.name}`;
+    } else if (notif.type === 'projectUpdateCreated' || notif.type === 'projectUpdateMention') {
+      subject = `Project update: ${project.name}`;
+    } else {
+      subject = project.name;
+    }
     content = updateBody || project.description || 'Project notification';
-    preview = (updateBody || project.description || 'Project update')?.slice(0, 200);
+    preview = buildContextualPreview(notif);
     linearUrl = notif.projectUpdate?.url || project.url || 'https://linear.app';
   } else if (initiative) {
     const updateBody = notif.initiativeUpdate?.body;
-    subject = initiative.name;
+    subject = `Initiative: ${initiative.name}`;
     content = updateBody || initiative.description || 'Initiative notification';
-    preview = (updateBody || initiative.description || 'Initiative update')?.slice(0, 200);
+    preview = buildContextualPreview(notif);
     linearUrl = 'https://linear.app';
   } else {
     subject = 'Linear notification';
     content = notificationDescription(notif.type, notif.actor);
-    preview = content;
+    preview = buildContextualPreview(notif);
     linearUrl = 'https://linear.app';
   }
 
@@ -183,10 +279,19 @@ function mapNotificationToInboxItem(notif: LinearNotification): NewInboxItem {
     connector: 'linear',
     externalId: notif.id,
 
-    // Sender is the actor who triggered
-    sender: notif.actor?.email ?? notif.actor?.name ?? 'Linear',
-    senderName: notif.actor?.name ?? 'Linear',
-    senderAvatar: notif.actor?.avatarUrl ?? undefined,
+    // Sender: actor, or fall back to issue creator / project update author
+    sender: notif.actor?.email ?? notif.actor?.name
+      ?? issue?.creator?.email ?? issue?.creator?.name
+      ?? notif.projectUpdate?.user?.email ?? notif.projectUpdate?.user?.name
+      ?? 'Linear',
+    senderName: notif.actor?.name
+      ?? issue?.creator?.name
+      ?? notif.projectUpdate?.user?.name
+      ?? 'Linear',
+    senderAvatar: notif.actor?.avatarUrl
+      ?? issue?.creator?.avatarUrl
+      ?? notif.projectUpdate?.user?.avatarUrl
+      ?? undefined,
 
     // Content
     subject,
@@ -284,12 +389,24 @@ export async function syncLinearNotifications(): Promise<LinearSyncResult> {
   let hasMore = true;
 
   try {
+    // Get owner user ID to skip self-triggered notifications
+    const ownerUserId = process.env.LINEAR_OWNER_USER_ID;
+    if (ownerUserId) {
+      console.log(`[Linear] Filtering out self-triggered notifications (owner: ${ownerUserId})`);
+    }
+
     // Paginate through notifications
     while (hasMore) {
       const result = await fetchNotifications(cursor);
 
       for (const notif of result.notifications) {
         try {
+          // Skip notifications triggered by the owner
+          if (ownerUserId && notif.actor?.id === ownerUserId) {
+            skipped++;
+            continue;
+          }
+
           // Skip if already in triage
           if (await notificationExists(notif.id)) {
             skipped++;

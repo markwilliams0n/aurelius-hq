@@ -1,5 +1,5 @@
 import { emitMemoryEvent } from './events';
-import { getMemoryContext, searchMemories } from './supermemory';
+import { getMemoryContext } from './supermemory';
 
 export interface BuildContextOptions {
   /** Maximum number of results */
@@ -87,50 +87,5 @@ export async function buildMemoryContext(
     }).catch(() => {});
     console.error('Supermemory context error:', error);
     return null;
-  }
-}
-
-/**
- * Get all memory for display in memory browser.
- * Fetches recent memories from Supermemory.
- */
-export async function getAllMemory(): Promise<
-  Array<{
-    entity: {
-      id: string;
-      name: string;
-      type: string;
-      summary: string | null;
-    };
-    facts: Array<{
-      id: string;
-      content: string;
-      category: string | null;
-      createdAt: Date;
-    }>;
-  }>
-> {
-  try {
-    const results = await searchMemories('*', 50);
-
-    return results.map((doc, i) => ({
-      entity: {
-        id: doc.documentId || `memory-${i}`,
-        name: (doc.metadata as Record<string, string>)?.subject
-          || doc.content?.slice(0, 60).replace(/\n/g, ' ')
-          || `Memory ${i + 1}`,
-        type: (doc.metadata as Record<string, string>)?.source || 'memory',
-        summary: doc.content?.slice(0, 200) || null,
-      },
-      facts: [{
-        id: `${doc.documentId || i}-content`,
-        content: doc.content || '',
-        category: (doc.metadata as Record<string, string>)?.source || null,
-        createdAt: doc.createdAt ? new Date(doc.createdAt) : new Date(),
-      }],
-    }));
-  } catch (error) {
-    console.error('Failed to fetch memories from Supermemory:', error);
-    return [];
   }
 }

@@ -31,12 +31,25 @@ export function getAllTools(): { type: "function"; function: ToolDefinition }[] 
 /**
  * Load a capability prompt from DB, seeding the default if no entry exists.
  * This makes the DB the single source of truth — first access seeds it.
+ * When cap.promptVersion is set and exceeds the DB version, the code
+ * default is pushed to DB (preserving upgrades while allowing runtime edits).
  */
 async function loadCapabilityPrompt(cap: Capability): Promise<string> {
   const configKey = `capability:${cap.name}` as ConfigKey;
   try {
     const config = await getConfig(configKey);
-    if (config?.content) return config.content.trim();
+
+    if (config?.content) {
+      // If code defines a promptVersion, use it to detect upgrades.
+      // DB version numbers are 1-based (first seed = v1), so
+      // promptVersion 3 means "needs at least DB v3".
+      if (cap.promptVersion && config.version < cap.promptVersion) {
+        await updateConfig(configKey, cap.prompt, 'user');
+        console.log(`[Capabilities] Upgraded ${configKey} to code v${cap.promptVersion}`);
+        return cap.prompt.trim();
+      }
+      return config.content.trim();
+    }
 
     // No DB entry yet — seed the default
     await updateConfig(configKey, cap.prompt, 'user');

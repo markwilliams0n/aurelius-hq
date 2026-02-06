@@ -29,6 +29,8 @@ export interface Capability {
   tools: ToolDefinition[];
   /** Agent instructions from capability.md */
   prompt: string;
+  /** Bump this when the code prompt changes to propagate to DB */
+  promptVersion?: number;
   /** Handle a tool call — return null if tool name not recognized */
   handleTool: (
     toolName: string,
