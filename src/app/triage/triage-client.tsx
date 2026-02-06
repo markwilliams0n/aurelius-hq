@@ -10,23 +10,20 @@ import { TriageDetailModal } from "@/components/aurelius/triage-detail-modal";
 import { TriageChat } from "@/components/aurelius/triage-chat";
 import { SuggestedTasksBox } from "@/components/aurelius/suggested-tasks-box";
 import { TriageSnoozeMenu } from "@/components/aurelius/triage-snooze-menu";
+import { TaskCreatorPanel } from "@/components/aurelius/task-creator-panel";
 import { toast } from "sonner";
 import {
-  Archive,
-  Brain,
-  Zap,
   MessageSquare,
   Inbox,
-  RefreshCw,
   Mail,
   LayoutList,
   Filter,
   CalendarDays,
-  Trash2,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type ViewMode = "triage" | "action" | "reply" | "detail" | "chat" | "snooze";
+type ViewMode = "triage" | "action" | "reply" | "detail" | "chat" | "snooze" | "create-task";
 type ConnectorFilter = "all" | "gmail" | "slack" | "linear" | "granola";
 
 // Define which actions are available for each connector
@@ -56,6 +53,14 @@ const CONNECTOR_FILTERS: Array<{
   { value: "granola", label: "Granola", icon: CalendarDays },
 ];
 
+// Cache for triage data to avoid refetching on every page visit
+let triageCache: {
+  data: { items: TriageItem[]; stats: any; tasksByItemId: Record<string, any[]> } | null;
+  timestamp: number;
+} = { data: null, timestamp: 0 };
+
+const CACHE_STALE_MS = 5 * 60 * 1000; // 5 minutes
+
 export function TriageClient() {
   const [items, setItems] = useState<TriageItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -68,25 +73,52 @@ export function TriageClient() {
     item: TriageItem;
   } | null>(null);
   const [stats, setStats] = useState({ new: 0, archived: 0, snoozed: 0, actioned: 0 });
+  const [tasksByItemId, setTasksByItemId] = useState<Record<string, any[]>>({});
   const [animatingOut, setAnimatingOut] = useState<"left" | "right" | "up" | null>(null);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
   const sidebarWidth = isSidebarExpanded ? 480 : 320;
 
-  // Fetch triage items
-  const fetchItems = useCallback(async () => {
+  // Fetch triage items with stale-while-revalidate caching
+  const fetchItems = useCallback(async (opts?: { skipCache?: boolean }) => {
+    const now = Date.now();
+    const cached = triageCache.data;
+    const isStale = now - triageCache.timestamp > CACHE_STALE_MS;
+
+    // Serve from cache immediately if available
+    if (cached && !opts?.skipCache) {
+      setItems(cached.items);
+      setStats(cached.stats);
+      setTasksByItemId(cached.tasksByItemId);
+      setIsLoading(false);
+
+      // If cache is fresh, don't refetch
+      if (!isStale) return;
+    }
+
+    // Fetch fresh data (in background if we served from cache)
     try {
       const response = await fetch("/api/triage");
       const data = await response.json();
-      setItems(data.items.map((item: any) => ({
+      const mappedItems = data.items.map((item: any) => ({
         ...item,
         id: item.externalId || item.id,
-      })));
+      }));
+
+      // Update cache
+      triageCache = {
+        data: { items: mappedItems, stats: data.stats, tasksByItemId: data.tasksByItemId || {} },
+        timestamp: Date.now(),
+      };
+
+      setItems(mappedItems);
       setStats(data.stats);
+      setTasksByItemId(data.tasksByItemId || {});
     } catch (error) {
       console.error("Failed to fetch triage items:", error);
-      toast.error("Failed to load triage items");
+      if (!cached) toast.error("Failed to load triage items");
     } finally {
       setIsLoading(false);
     }
@@ -304,6 +336,12 @@ export function TriageClient() {
   const handleActionComplete = useCallback(async (action: string, data?: any) => {
     if (!currentItem) return;
 
+    // Open task creator panel instead of marking as actioned
+    if (action === "create-task") {
+      setViewMode("create-task");
+      return;
+    }
+
     try {
       await fetch(`/api/triage/${currentItem.id}`, {
         method: "POST",
@@ -352,18 +390,35 @@ export function TriageClient() {
     toast.success("Restored");
   }, [lastAction]);
 
-  // Reset inbox (for development)
-  const handleReset = useCallback(async () => {
-    try {
-      await fetch("/api/triage", { method: "POST" });
-      setCurrentIndex(0);
-      await fetchItems();
-      toast.success("Inbox reset with fresh data");
-    } catch (error) {
-      console.error("Failed to reset:", error);
-      toast.error("Failed to reset");
-    }
-  }, [fetchItems]);
+  // Sync all connectors (fire-and-forget, poll for completion)
+  const handleSync = useCallback(async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    toast.info("Syncing connectors...");
+
+    // Fire heartbeat in background — don't await (can take 2+ min)
+    fetch("/api/heartbeat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trigger: "manual" }),
+    })
+      .then(() => {
+        // Final refresh when heartbeat completes
+        triageCache = { data: null, timestamp: 0 };
+        fetchItems({ skipCache: true });
+        toast.success("Sync complete");
+        setIsSyncing(false);
+      })
+      .catch((error) => {
+        console.error("Sync failed:", error);
+        toast.error("Sync failed");
+        setIsSyncing(false);
+      });
+
+    // Refresh triage data immediately (shows current DB state)
+    triageCache = { data: null, timestamp: 0 };
+    await fetchItems({ skipCache: true });
+  }, [isSyncing, fetchItems]);
 
   // Keyboard controls
   useEffect(() => {
@@ -382,6 +437,28 @@ export function TriageClient() {
           handleCloseOverlay();
           return;
         }
+      }
+
+      // Tab cycles through connector filters (works in all modes)
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const filterValues = CONNECTOR_FILTERS.map((f) => f.value);
+        const currentIdx = filterValues.indexOf(connectorFilter);
+        const nextIdx = e.shiftKey
+          ? (currentIdx - 1 + filterValues.length) % filterValues.length
+          : (currentIdx + 1) % filterValues.length;
+        setConnectorFilter(filterValues[nextIdx]);
+        return;
+      }
+
+      // Cmd+1-5 selects connector filters directly (works in all modes)
+      if ((e.metaKey || e.ctrlKey) && e.key >= "1" && e.key <= String(CONNECTOR_FILTERS.length)) {
+        e.preventDefault();
+        const idx = parseInt(e.key) - 1;
+        if (idx < CONNECTOR_FILTERS.length) {
+          setConnectorFilter(CONNECTOR_FILTERS[idx].value);
+        }
+        return;
       }
 
       // Only handle arrows in triage mode
@@ -424,6 +501,10 @@ export function TriageClient() {
           e.preventDefault();
           handleSpam();
           break;
+        case "t":
+          e.preventDefault();
+          if (currentItem) setViewMode("create-task");
+          break;
         case "l":
         case "L":
           // Open in Linear (if Linear item with URL)
@@ -455,6 +536,7 @@ export function TriageClient() {
   }, [
     viewMode,
     currentItem,
+    connectorFilter,
     handleArchive,
     handleMemory,
     handleMemoryFull,
@@ -468,48 +550,16 @@ export function TriageClient() {
     handleUndo,
   ]);
 
-  // Loading state
-  if (isLoading) {
-    return (
-      <AppShell>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-muted-foreground">Loading triage queue...</div>
-        </div>
-      </AppShell>
-    );
-  }
-
-  // Empty state
-  if (!hasItems) {
-    return (
-      <AppShell>
-        <div className="flex-1 flex flex-col items-center justify-center gap-4">
-          <Inbox className="w-16 h-16 text-muted-foreground" />
-          <h2 className="font-serif text-2xl text-gold">Inbox Zero</h2>
-          <p className="text-muted-foreground text-center max-w-md">
-            You've triaged everything! Take a break or reset the inbox with fake
-            data to test more.
-          </p>
-          <button
-            onClick={handleReset}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gold text-background font-medium hover:bg-gold/90 transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Reset with fake data
-          </button>
-        </div>
-      </AppShell>
-    );
-  }
-
   return (
     <AppShell
       rightSidebar={
-        <TriageSidebar
-          stats={stats}
-          isExpanded={isSidebarExpanded}
-          onToggleExpand={() => setIsSidebarExpanded(!isSidebarExpanded)}
-        />
+        !isLoading ? (
+          <TriageSidebar
+            stats={stats}
+            isExpanded={isSidebarExpanded}
+            onToggleExpand={() => setIsSidebarExpanded(!isSidebarExpanded)}
+          />
+        ) : undefined
       }
       wideSidebar={true}
       sidebarWidth={sidebarWidth}
@@ -520,23 +570,26 @@ export function TriageClient() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
               <h1 className="font-serif text-xl text-gold">Triage</h1>
-              <span className="text-sm text-muted-foreground font-mono">
-                {progress}
-              </span>
+              {!isLoading && (
+                <span className="text-sm text-muted-foreground font-mono">
+                  {progress}
+                </span>
+              )}
             </div>
             <button
-              onClick={handleReset}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-              title="Reset with fake data"
+              onClick={handleSync}
+              disabled={isSyncing}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
+              title="Sync all connectors"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Reset
+              <RefreshCw className={cn("w-3.5 h-3.5", isSyncing && "animate-spin")} />
+              {isSyncing ? "Syncing..." : "Sync"}
             </button>
           </div>
 
           {/* Connector filters */}
           <div className="flex items-center gap-2">
-            {CONNECTOR_FILTERS.map((filter) => {
+            {CONNECTOR_FILTERS.map((filter, index) => {
               const Icon = filter.icon;
               const count = connectorCounts[filter.value];
               const isActive = connectorFilter === filter.value;
@@ -551,6 +604,7 @@ export function TriageClient() {
                       ? "bg-gold/20 text-gold border border-gold/30"
                       : "text-muted-foreground hover:text-foreground hover:bg-secondary border border-transparent"
                   )}
+                  title={`${filter.label} (${"\u2318"}${index + 1})`}
                 >
                   <Icon className="w-3.5 h-3.5" />
                   <span>{filter.label}</span>
@@ -566,7 +620,26 @@ export function TriageClient() {
           </div>
         </header>
 
+        {/* Loading state */}
+        {isLoading && (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-muted-foreground">Loading triage queue...</div>
+          </div>
+        )}
+
+        {/* Empty state - shows below tabs */}
+        {!isLoading && !hasItems && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-4">
+            <Inbox className="w-16 h-16 text-muted-foreground" />
+            <h2 className="font-serif text-2xl text-gold">Inbox Zero</h2>
+            <p className="text-muted-foreground text-center max-w-md">
+              All caught up. New items will appear after the next sync.
+            </p>
+          </div>
+        )}
+
         {/* Card area */}
+        {!isLoading && hasItems && (
         <div className="flex-1 flex items-start justify-center pt-12 p-6 relative overflow-y-auto">
           {/* Card stack effect - show next cards behind */}
           {filteredItems.slice(currentIndex + 1, currentIndex + 3).map((item, idx) => (
@@ -598,78 +671,15 @@ export function TriageClient() {
 
             {/* Suggested tasks box */}
             {currentItem && !animatingOut && (
-              <SuggestedTasksBox itemId={currentItem.id} />
+              <SuggestedTasksBox
+                itemId={currentItem.id}
+                initialTasks={tasksByItemId[currentItem.id]}
+              />
             )}
           </div>
 
         </div>
-
-        {/* Bottom keyboard hints (always visible) */}
-        <div className="px-6 py-3 border-t border-border bg-background shrink-0">
-          {(() => {
-            const connectorActions = currentItem ? CONNECTOR_ACTIONS[currentItem.connector] : null;
-            return (
-              <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
-                <ActionButton
-                  keyName="←"
-                  label="Archive"
-                  onClick={handleArchive}
-                  color="text-red-400"
-                />
-                <ActionButton
-                  keyName="↑"
-                  label="Summary"
-                  onClick={handleMemory}
-                  color="text-gold"
-                />
-                <ActionButton
-                  keyName="⇧↑"
-                  label="Full"
-                  onClick={handleMemoryFull}
-                  color="text-gold"
-                />
-                <ActionButton
-                  keyName="s"
-                  label="Snooze"
-                  onClick={handleOpenSnooze}
-                  color="text-orange-400"
-                />
-                <ActionButton
-                  keyName="x"
-                  label="Spam"
-                  onClick={handleSpam}
-                  color="text-red-500"
-                />
-                <ActionButton
-                  keyName="␣"
-                  label="Chat"
-                  onClick={handleOpenChat}
-                  color="text-purple-400"
-                />
-                <ActionButton
-                  keyName="↵"
-                  label="Expand"
-                  onClick={handleOpenDetail}
-                  color="text-foreground"
-                />
-                <ActionButton
-                  keyName="→"
-                  label="Actions"
-                  onClick={handleOpenActions}
-                  color="text-blue-400"
-                />
-                {connectorActions?.canReply && (
-                  <ActionButton
-                    keyName="↓"
-                    label="Reply"
-                    onClick={handleOpenReply}
-                    color="text-green-400"
-                  />
-                )}
-              </div>
-            );
-          })()}
-        </div>
+        )}
       </div>
 
       {/* Action menu overlay */}
@@ -716,6 +726,18 @@ export function TriageClient() {
         />
       )}
 
+      {/* Task creator panel */}
+      {viewMode === "create-task" && currentItem && (
+        <TaskCreatorPanel
+          item={currentItem}
+          onClose={handleCloseOverlay}
+          onCreated={() => {
+            triageCache = { data: null, timestamp: 0 };
+            handleActionComplete("actioned");
+          }}
+        />
+      )}
+
       {/* Snooze menu overlay */}
       {viewMode === "snooze" && currentItem && (
         <TriageSnoozeMenu
@@ -724,40 +746,6 @@ export function TriageClient() {
         />
       )}
     </AppShell>
-  );
-}
-
-// Action button component
-function ActionButton({
-  keyName,
-  label,
-  onClick,
-  color,
-}: {
-  keyName: string;
-  label: string;
-  onClick: () => void;
-  color: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-secondary transition-colors group"
-      )}
-    >
-      <kbd
-        className={cn(
-          "px-2 py-1 rounded bg-secondary border border-border font-mono text-sm transition-colors",
-          "group-hover:border-gold/50 group-hover:bg-gold/10"
-        )}
-      >
-        {keyName}
-      </kbd>
-      <span className={cn("transition-colors", `group-hover:${color}`)}>
-        {label}
-      </span>
-    </button>
   );
 }
 

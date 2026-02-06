@@ -132,6 +132,38 @@ export async function fetchNotifications(
               }
             }
           }
+          ... on ProjectNotification {
+            project {
+              id
+              name
+              url
+              state
+              description
+            }
+            projectUpdate {
+              id
+              body
+              url
+              createdAt
+              user {
+                id
+                name
+                email
+                avatarUrl
+              }
+            }
+          }
+          ... on InitiativeNotification {
+            initiative {
+              id
+              name
+              description
+              status
+            }
+            initiativeUpdate {
+              body
+            }
+          }
         }
         pageInfo {
           hasNextPage

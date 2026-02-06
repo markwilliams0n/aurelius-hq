@@ -24,6 +24,10 @@ When the user wants to add something to memory, extract:
 
 If you need to trigger an action, include it in your response as JSON at the end:
 {"action": "snooze", "duration": "1d"} or {"action": "memory", "entity": "...", "fact": "..."}
+
+When the user asks to modify, add, remove, or update tasks, respond with a complete updated task list as JSON:
+{"action": "update_tasks", "tasks": [{"description": "Task description", "assignee": "Name or null", "assigneeType": "self", "dueDate": null, "confidence": "high"}]}
+The assigneeType should be "self" for user's own tasks or "other" for tasks assigned to others.
 `;
 
 export async function POST(request: Request) {
@@ -65,8 +69,8 @@ Current triage item:
     let action = null;
     let actionData = null;
 
-    // Check for action JSON at the end of response
-    const actionMatch = response.match(/\{[^}]*"action"[^}]*\}\s*$/);
+    // Check for action JSON at the end of response (supports nested objects like tasks arrays)
+    const actionMatch = response.match(/\{"action"[\s\S]*\}\s*$/);
     if (actionMatch) {
       try {
         const actionJson = JSON.parse(actionMatch[0]);
