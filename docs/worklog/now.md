@@ -59,6 +59,18 @@ Gmail Connector + Memory System Fixes:
 
 ## Just Completed
 
+**2026-02-06**
+
+Linear Task Management & Agent Capabilities:
+- PR #7: Task management page with Linear integration
+- PR #8: Triage performance, sync reconciliation, task creation from triage
+- PR #9: Agent capability system — tools for create/update/list/get tasks via chat
+- Fixed triage→Linear task creation (assignee, default team, error surfacing)
+- Fixed identifier lookup (PER-123) — was silently failing due to invalid Linear filter
+- Fixed agent team visibility (shows all 22 teams, defaults assignment to Mark)
+- Added prompt version propagation so code prompt changes auto-upgrade DB
+- Cleaned up all stale branches and worktrees
+
 **2026-02-05 (Evening)**
 
 Memory Debug Mode:
@@ -81,7 +93,6 @@ Nothing active - ready for next task.
 - [ ] **Connector-aware memory extraction** — `extractEmailMemory` is used for ALL connectors but the prompt is email-specific. Granola transcripts get treated as emails (wrong summary framing, extracts random metrics, misses meeting decisions/commitments). Need either separate prompts per connector type or a connector-aware prompt that adjusts for meetings vs emails vs slack. Key file: `src/lib/memory/ollama.ts:extractEmailMemory`
 - [ ] Test Gmail sync with real inbox
 - [ ] Add UI components for Gmail-specific features (thread expand/collapse)
-- [ ] Linear PM view (dedicated issue management)
 
 ## Known Issues (Documented)
 
