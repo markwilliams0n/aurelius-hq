@@ -1,33 +1,24 @@
 # Memory System
 
-The memory system gives Aurelius persistent knowledge across conversations. It uses a hybrid architecture combining file-based storage, database records, and vector search.
+The memory system gives Aurelius persistent knowledge across conversations. It uses a two-layer architecture: short-term daily notes (local files) and long-term memory via Supermemory (cloud API).
 
 ## Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        MEMORY LAYERS                             │
+│                        MEMORY LAYERS                            │
 ├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  SHORT-TERM                    LONG-TERM                         │
-│  ───────────                   ─────────                         │
-│                                                                  │
-│  Daily Notes (memory/)         Structured Entities (life/)       │
-│  • Last 24 hours direct        • People, companies, projects     │
-│  • Timestamped entries         • Facts with categories           │
-│  • Conversation snippets       • Searchable via QMD              │
-│                                                                  │
-│          ↓ Heartbeat extracts entities ↓                         │
-│                                                                  │
-├─────────────────────────────────────────────────────────────────┤
-│                        SEARCH LAYER                              │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  QMD Hybrid Search                                               │
-│  • BM25 keyword matching                                         │
-│  • Vector semantic search                                        │
-│  • Neural reranking                                              │
-│                                                                  │
+│                                                                 │
+│  SHORT-TERM                    LONG-TERM                        │
+│  ───────────                   ─────────                        │
+│                                                                 │
+│  Daily Notes (memory/)         Supermemory (cloud API)          │
+│  • Last 24 hours direct        • Knowledge graph                │
+│  • Timestamped entries         • Profile facts (static)         │
+│  • Conversation snippets       • Context-relevant memories      │
+│                                                                 │
+│  Chat messages and triage saves feed both layers directly       │
+│                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -41,52 +32,39 @@ The most recent memory layer. Conversations and events are logged here as they h
 
 **How it's used:**
 - Last 24 hours included directly in chat context (no search needed)
-- Older notes searchable via QMD after heartbeat indexes them
+- Provides immediate conversation context
 
 **See:** [Daily Notes](./daily-notes.md)
 
-### 2. Structured Entities (Long-Term)
+### 2. Supermemory (Long-Term)
 
-**Location:** `life/` directory
+**Backend:** [Supermemory](https://supermemory.com) cloud API
 
-```
-life/
-├── areas/
-│   ├── people/           # John Smith, Jane Doe
-│   │   └── {slug}/
-│   │       ├── summary.md
-│   │       └── items.json
-│   └── companies/        # Acme Corp, StubHub
-├── projects/             # Project Alpha, Website Redesign
-└── resources/            # Reference materials
-```
+All content is sent to Supermemory for automatic extraction, knowledge graph building, and semantic search.
 
-Each entity has:
-- `summary.md` - Overview and metadata
-- `items.json` - Facts with timestamps, sources, access tracking
+**How it's used:**
+- `addMemory(content, metadata)` — sends content for extraction + indexing
+- `getMemoryContext(query)` — returns profile facts + relevant memories
+- `searchMemories(query, limit)` — direct document search
 
-**How it's created:**
-- Heartbeat extracts entities from daily notes (with smart resolution)
-- Granola sync extracts from meeting transcripts
-- Manual creation via API or file editing
-
-**See:** [Entity Resolution](./entity-resolution.md) for how names like "Adam" get matched to "Adam Watson"
+**What Supermemory handles:**
+- Entity extraction (people, companies, projects)
+- Fact deduplication and knowledge graph maintenance
+- Semantic search with hybrid retrieval + reranking
+- User profile building (static facts about the user)
 
 ### 3. Database Records
 
 **Location:** PostgreSQL + pgvector
 
 ```
-entities          - People, projects, topics (with embeddings)
+entities          - People, projects, topics, companies
 facts             - Atomic facts linked to entities
 documents         - Ingested content
 document_chunks   - Chunked + embedded pieces
+conversations     - Chat history (shared between web + Telegram)
+inbox_items       - Triage inbox from connectors
 ```
-
-Used primarily by:
-- Granola sync (stores extracted memory with embeddings)
-- Document ingestion pipeline
-- Direct API access
 
 ## Data Flow
 
@@ -97,14 +75,13 @@ Conversation
     ↓
 containsMemorableContent()?
     ↓ yes
-appendToDailyNote()
-    ↓
-memory/YYYY-MM-DD.md
-    ↓ (heartbeat, every 15min)
-extractEntitiesWithLLM()
-    ↓
-life/areas/people/{name}/
+┌──────────────────────────────────┐
+│ appendToDailyNote()              │ → memory/YYYY-MM-DD.md (short-term)
+│ addMemory() (fire-and-forget)    │ → Supermemory (long-term)
+└──────────────────────────────────┘
 ```
+
+Triage "save to memory" follows the same pattern: daily note + Supermemory.
 
 ### Reading Memory
 
@@ -118,67 +95,31 @@ User Message
     ↓
 ┌─────────────────────────────┐
 │ buildMemoryContext()        │ → "## Relevant Memory"
-│ (QMD search on life/)       │    (query-based)
+│ (Supermemory profile API)   │    (query-based)
 └─────────────────────────────┘
     ↓
 System Prompt → AI Response
 ```
 
-## Search
-
-### QMD Collections
-
-| Collection | Content | Use Case |
-|------------|---------|----------|
-| `life` | Structured entities | Long-term knowledge |
-| `memory` | Daily notes | Historical search |
-| `me` | Personal profile | Self-reference |
-
-### Search Types
-
-| Type | Speed | Best For |
-|------|-------|----------|
-| Keyword (BM25) | ~0.2s | Exact name/term matches |
-| Semantic (vector) | ~3s | Conceptual similarity |
-| Hybrid | ~6s | Best results (default) |
-
 ## Background Processing
 
 ### Heartbeat
 
-Runs every 15 minutes to process new content:
-
-1. Extract entities from daily notes
-2. Sync Granola meetings
-3. Reindex QMD search
+Runs every 15 minutes to sync external connectors (Granola, Gmail, Linear, Slack) into the triage inbox. Memory extraction is **not** part of heartbeat — it happens inline when chat messages or triage saves occur.
 
 **See:** [Heartbeat](./heartbeat.md)
-
-### Synthesis (Future)
-
-Planned periodic process to:
-- Consolidate duplicate facts
-- Update entity summaries
-- Archive stale information
 
 ## Configuration
 
 ### Environment Variables
 
 ```bash
-# Entity extraction
-OLLAMA_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2:3b
+# Supermemory
+SUPERMEMORY_API_KEY=...        # Required for long-term memory
 
-# Embeddings (for database records)
-OPENAI_API_KEY=...
-```
-
-### Heartbeat Scheduling
-
-```bash
-HEARTBEAT_INTERVAL_MINUTES=15   # Default
-HEARTBEAT_ENABLED=true          # Disable with 'false'
+# Heartbeat Scheduling
+HEARTBEAT_INTERVAL_MINUTES=15  # Default
+HEARTBEAT_ENABLED=true         # Disable with 'false'
 ```
 
 ## File Locations
@@ -186,16 +127,15 @@ HEARTBEAT_ENABLED=true          # Disable with 'false'
 | Component | Path |
 |-----------|------|
 | Daily notes | `memory/*.md` |
-| Entity files | `life/` |
-| Search module | `src/lib/memory/search.ts` |
+| Supermemory client | `src/lib/memory/supermemory.ts` |
+| Context building | `src/lib/memory/search.ts` |
 | Daily notes module | `src/lib/memory/daily-notes.ts` |
+| Extraction | `src/lib/memory/extraction.ts` |
 | Heartbeat | `src/lib/memory/heartbeat.ts` |
-| Activity log | `life/system/activity-log.json` |
 
 ## Related Documentation
 
 - [Daily Notes](./daily-notes.md) - Short-term memory layer
-- [Heartbeat](./heartbeat.md) - Background processing
-- [Entity Resolution](./entity-resolution.md) - Smart matching of extracted names
+- [Heartbeat](./heartbeat.md) - Background connector sync
 - [Triage](./triage.md) - Inbox system that feeds memory
 - [Architecture](../../ARCHITECTURE.md) - System overview
