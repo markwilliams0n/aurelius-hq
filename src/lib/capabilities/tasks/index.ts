@@ -15,7 +15,8 @@ listing, and inspecting tasks, as well as reviewing suggested tasks from triage.
 
 ## Defaults
 
-- Default team: use get_team_context to check available teams; prefer the user's personal team if available
+- You have read/write access to ALL teams in the workspace — you can create, update, and list tasks in any team
+- Default team: prefer the user's Personal team; use get_team_context to discover all available teams
 - Tasks are automatically assigned to the owner (Mark) unless a different assignee is specified
 - You (the agent) operate as "Mark's Agent" in Linear — actions you take will show as from the agent account
 - Confirm before creating or updating tasks
