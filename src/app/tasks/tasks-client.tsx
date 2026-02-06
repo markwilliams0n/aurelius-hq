@@ -73,6 +73,7 @@ interface Task {
   priority: number;
   dueDate: string | null;
   state: TaskState;
+  team: { id: string; name: string; key: string } | null;
   project: TaskProject | null;
   labels: TaskLabel[];
   assignee: TaskAssignee | null;
@@ -155,7 +156,7 @@ export function TasksClient() {
   const [focusedId, setFocusedId] = useState<string | null>(null);
 
   // Detail panel
-  const [detailTask, setDetailTask] = useState<Task | null>(null);
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 
   // Action menu state
   const [actionMenu, setActionMenu] = useState<ActionMenu>(null);
@@ -218,6 +219,12 @@ export function TasksClient() {
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
+
+  // Eagerly fetch metadata (states, members) so actions work immediately
+  useEffect(() => {
+    fetchMetadata();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Filter tasks
   const filteredTasks = useMemo(() => {
@@ -296,6 +303,29 @@ export function TasksClient() {
     [tasks]
   );
 
+  // Derive detail task from tasks array (stays in sync with optimistic updates)
+  const detailTask = useMemo(
+    () => (detailTaskId ? tasks.find((t) => t.id === detailTaskId) ?? null : null),
+    [detailTaskId, tasks]
+  );
+
+  // Filter workflow states by selected/focused tasks' teams
+  const filteredStatusStates = useMemo(() => {
+    const targetIds =
+      selectedIds.size > 0
+        ? Array.from(selectedIds)
+        : focusedId
+          ? [focusedId]
+          : [];
+    const teamIds = new Set(
+      targetIds
+        .map((id) => tasks.find((t) => t.id === id)?.team?.id)
+        .filter((id): id is string => !!id)
+    );
+    if (teamIds.size === 0) return workflowStates;
+    return workflowStates.filter((s) => teamIds.has(s.team.id));
+  }, [selectedIds, focusedId, tasks, workflowStates]);
+
   // Get effective targets: selected tasks, or focused task
   const getTargetIds = useCallback((): string[] => {
     if (selectedIds.size > 0) return Array.from(selectedIds);
@@ -343,10 +373,10 @@ export function TasksClient() {
     [getTargetIds, fetchMetadata]
   );
 
-  // Apply update to selected tasks
+  // Apply update to selected tasks (or explicit targets)
   const applyUpdate = useCallback(
-    async (update: Record<string, unknown>, label: string) => {
-      const targetIds = getTargetIds().filter((id) => {
+    async (update: Record<string, unknown>, label: string, explicitTargetIds?: string[]) => {
+      const targetIds = (explicitTargetIds ?? getTargetIds()).filter((id) => {
         const task = tasks.find((t) => t.id === id);
         return task?.source === "linear";
       });
@@ -427,7 +457,7 @@ export function TasksClient() {
         );
       }
 
-      clearSelection();
+      if (!explicitTargetIds) clearSelection();
     },
     [
       getTargetIds,
@@ -469,6 +499,26 @@ export function TasksClient() {
     [fetchTasks]
   );
 
+  // Quick complete: find the "completed" state for the task's team and apply it
+  const handleQuickComplete = useCallback(
+    (taskId: string) => {
+      if (workflowStates.length === 0) {
+        fetchMetadata();
+        toast.info("Loading...");
+        return;
+      }
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task?.team) return;
+      const doneState = workflowStates.find(
+        (s) => s.team.id === task.team!.id && s.type === "completed"
+      );
+      if (doneState) {
+        applyUpdate({ stateId: doneState.id }, "Marked complete", [taskId]);
+      }
+    },
+    [tasks, workflowStates, fetchMetadata, applyUpdate]
+  );
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -490,9 +540,9 @@ export function TasksClient() {
 
       // Close detail panel
       if (e.key === "Escape") {
-        if (detailTask) {
+        if (detailTaskId) {
           e.preventDefault();
-          setDetailTask(null);
+          setDetailTaskId(null);
           return;
         }
         if (selectedIds.size > 0) {
@@ -531,10 +581,7 @@ export function TasksClient() {
           break;
         case "Enter": {
           e.preventDefault();
-          const target = focusedId
-            ? tasks.find((t) => t.id === focusedId)
-            : null;
-          if (target) setDetailTask(target);
+          if (focusedId) setDetailTaskId(focusedId);
           break;
         }
         case "ArrowDown":
@@ -583,7 +630,7 @@ export function TasksClient() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     actionMenu,
-    detailTask,
+    detailTaskId,
     selectedIds,
     focusedId,
     flatTaskIds,
@@ -614,7 +661,17 @@ export function TasksClient() {
     <AppShell
       rightSidebar={
         detailTask ? (
-          <DetailPanel task={detailTask} onClose={() => setDetailTask(null)} />
+          <DetailPanel
+            task={detailTask}
+            onClose={() => setDetailTaskId(null)}
+            workflowStates={workflowStates}
+            teamMembers={teamMembers}
+            projects={context?.projects ?? []}
+            onUpdate={(taskId, update, label) =>
+              applyUpdate(update, label, [taskId])
+            }
+            onQuickComplete={handleQuickComplete}
+          />
         ) : undefined
       }
       wideSidebar={!!detailTask}
@@ -890,10 +947,11 @@ export function TasksClient() {
             focusedId={focusedId}
             onToggleSelect={toggleSelect}
             onFocus={setFocusedId}
-            onOpenDetail={setDetailTask}
+            onOpenDetail={(task) => setDetailTaskId(task.id)}
             onOpenChat={(task) => {
               window.open(`/chat?context=task&taskId=${task.id}&taskTitle=${encodeURIComponent(task.identifier ? `${task.identifier}: ${task.title}` : task.title)}`, "_blank");
             }}
+            onQuickComplete={handleQuickComplete}
           />
         ) : (
           <KanbanView
@@ -902,7 +960,8 @@ export function TasksClient() {
             focusedId={focusedId}
             onToggleSelect={toggleSelect}
             onFocus={setFocusedId}
-            onOpenDetail={setDetailTask}
+            onOpenDetail={(task) => setDetailTaskId(task.id)}
+            onQuickComplete={handleQuickComplete}
           />
         )}
 
@@ -973,7 +1032,7 @@ export function TasksClient() {
       {actionMenu === "status" && (
         <CommandPalette
           title="Change Status"
-          items={workflowStates.map((s) => ({
+          items={filteredStatusStates.map((s) => ({
             id: s.id,
             label: s.name,
             color: s.color,
@@ -1471,10 +1530,49 @@ function CreateTaskDialog({
 function DetailPanel({
   task,
   onClose,
+  workflowStates,
+  teamMembers,
+  projects,
+  onUpdate,
+  onQuickComplete,
 }: {
   task: Task;
   onClose: () => void;
+  workflowStates: WorkflowState[];
+  teamMembers: TeamMember[];
+  projects: Array<{
+    id: string;
+    name: string;
+    state: string;
+    color?: string;
+    icon?: string;
+  }>;
+  onUpdate: (
+    taskId: string,
+    update: Record<string, unknown>,
+    label: string
+  ) => void;
+  onQuickComplete: (taskId: string) => void;
 }) {
+  const [editingField, setEditingField] = useState<
+    "status" | "priority" | "assignee" | "project" | null
+  >(null);
+
+  const isLinear = task.source === "linear";
+
+  // Filter states to this task's team only
+  const teamStates = useMemo(
+    () =>
+      workflowStates
+        .filter((s) => s.team.id === task.team?.id)
+        .sort((a, b) => a.position - b.position),
+    [workflowStates, task.team?.id]
+  );
+
+  const doneState = teamStates.find((s) => s.type === "completed");
+  const isCompleted =
+    task.state.type === "completed" || task.state.type === "canceled";
+
   return (
     <div className="h-full border-l border-border bg-background flex flex-col">
       {/* Header */}
@@ -1488,6 +1586,17 @@ function DetailPanel({
           <StateIcon stateType={task.state.type} color={task.state.color} />
         </div>
         <div className="flex items-center gap-1.5">
+          {/* Quick complete */}
+          {isLinear && doneState && !isCompleted && (
+            <button
+              onClick={() => onQuickComplete(task.id)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-green-500 hover:bg-green-500/10 transition-colors"
+              title="Mark complete"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Done
+            </button>
+          )}
           {task.url && (
             <button
               onClick={() =>
@@ -1527,55 +1636,220 @@ function DetailPanel({
 
         {/* Metadata */}
         <div className="space-y-3">
+          {/* Status - clickable */}
           <DetailField label="Status">
-            <div className="flex items-center gap-2">
-              <StateIcon
-                stateType={task.state.type}
-                color={task.state.color}
-              />
-              <span className="text-sm">{task.state.name}</span>
+            <div className="relative">
+              <button
+                onClick={() =>
+                  isLinear &&
+                  setEditingField(
+                    editingField === "status" ? null : "status"
+                  )
+                }
+                className={cn(
+                  "flex items-center gap-2 px-2 py-1 -mx-2 -my-1 rounded-lg transition-colors",
+                  isLinear
+                    ? "hover:bg-secondary cursor-pointer"
+                    : "cursor-default"
+                )}
+              >
+                <StateIcon
+                  stateType={task.state.type}
+                  color={task.state.color}
+                />
+                <span className="text-sm">{task.state.name}</span>
+              </button>
+              {editingField === "status" && (
+                <FieldDropdown
+                  items={teamStates.map((s) => ({
+                    id: s.id,
+                    label: s.name,
+                    color: s.color,
+                  }))}
+                  onSelect={(id) => {
+                    onUpdate(task.id, { stateId: id }, "Status updated");
+                    setEditingField(null);
+                  }}
+                  onClose={() => setEditingField(null)}
+                />
+              )}
             </div>
           </DetailField>
 
+          {/* Priority - clickable */}
           <DetailField label="Priority">
-            <div className="flex items-center gap-2">
-              <PriorityIcon priority={task.priority} />
-              <span className="text-sm">
-                {PRIORITY_LABELS[task.priority]?.label ?? "None"}
-              </span>
+            <div className="relative">
+              <button
+                onClick={() =>
+                  isLinear &&
+                  setEditingField(
+                    editingField === "priority" ? null : "priority"
+                  )
+                }
+                className={cn(
+                  "flex items-center gap-2 px-2 py-1 -mx-2 -my-1 rounded-lg transition-colors",
+                  isLinear
+                    ? "hover:bg-secondary cursor-pointer"
+                    : "cursor-default"
+                )}
+              >
+                <PriorityIcon priority={task.priority} />
+                <span className="text-sm">
+                  {PRIORITY_LABELS[task.priority]?.label ?? "None"}
+                </span>
+              </button>
+              {editingField === "priority" && (
+                <FieldDropdown
+                  items={[
+                    { id: "0", label: "No priority" },
+                    { id: "1", label: "Urgent", color: "hsl(0, 72%, 51%)" },
+                    { id: "2", label: "High", color: "hsl(30, 80%, 50%)" },
+                    { id: "3", label: "Normal", color: "hsl(195, 50%, 40%)" },
+                    { id: "4", label: "Low", color: "hsl(240, 5%, 55%)" },
+                  ]}
+                  onSelect={(id) => {
+                    onUpdate(
+                      task.id,
+                      { priority: parseInt(id) },
+                      "Priority updated"
+                    );
+                    setEditingField(null);
+                  }}
+                  onClose={() => setEditingField(null)}
+                />
+              )}
             </div>
           </DetailField>
 
-          {task.assignee && (
-            <DetailField label="Assignee">
-              <div className="flex items-center gap-2">
-                {task.assignee.avatarUrl ? (
-                  <img
-                    src={task.assignee.avatarUrl}
-                    alt={task.assignee.name}
-                    className="w-5 h-5 rounded-full"
-                  />
+          {/* Assignee - clickable */}
+          <DetailField label="Assignee">
+            <div className="relative">
+              <button
+                onClick={() =>
+                  isLinear &&
+                  setEditingField(
+                    editingField === "assignee" ? null : "assignee"
+                  )
+                }
+                className={cn(
+                  "flex items-center gap-2 px-2 py-1 -mx-2 -my-1 rounded-lg transition-colors",
+                  isLinear
+                    ? "hover:bg-secondary cursor-pointer"
+                    : "cursor-default"
+                )}
+              >
+                {task.assignee ? (
+                  <>
+                    {task.assignee.avatarUrl ? (
+                      <img
+                        src={task.assignee.avatarUrl}
+                        alt={task.assignee.name}
+                        className="w-5 h-5 rounded-full"
+                      />
+                    ) : (
+                      <User className="w-4 h-4 text-muted-foreground" />
+                    )}
+                    <span className="text-sm">{task.assignee.name}</span>
+                  </>
                 ) : (
-                  <User className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">
+                    Unassigned
+                  </span>
                 )}
-                <span className="text-sm">{task.assignee.name}</span>
-              </div>
-            </DetailField>
-          )}
+              </button>
+              {editingField === "assignee" && (
+                <FieldDropdown
+                  items={[
+                    {
+                      id: "__unassign",
+                      label: "Unassigned",
+                      meta: "Remove assignee",
+                    },
+                    ...teamMembers.map((m) => ({
+                      id: m.id,
+                      label: m.name,
+                      avatarUrl: m.avatarUrl,
+                      meta: m.email,
+                    })),
+                  ]}
+                  onSelect={(id) => {
+                    onUpdate(
+                      task.id,
+                      { assigneeId: id === "__unassign" ? null : id },
+                      "Assignee updated"
+                    );
+                    setEditingField(null);
+                  }}
+                  onClose={() => setEditingField(null)}
+                />
+              )}
+            </div>
+          </DetailField>
 
-          {task.project && (
-            <DetailField label="Project">
-              <div className="flex items-center gap-2">
-                {task.project.color && (
-                  <span
-                    className="w-2.5 h-2.5 rounded-full"
-                    style={{ backgroundColor: task.project.color }}
-                  />
+          {/* Project - clickable */}
+          <DetailField label="Project">
+            <div className="relative">
+              <button
+                onClick={() =>
+                  isLinear &&
+                  setEditingField(
+                    editingField === "project" ? null : "project"
+                  )
+                }
+                className={cn(
+                  "flex items-center gap-2 px-2 py-1 -mx-2 -my-1 rounded-lg transition-colors",
+                  isLinear
+                    ? "hover:bg-secondary cursor-pointer"
+                    : "cursor-default"
                 )}
-                <span className="text-sm">{task.project.name}</span>
-              </div>
-            </DetailField>
-          )}
+              >
+                {task.project ? (
+                  <>
+                    {task.project.color && (
+                      <span
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: task.project.color }}
+                      />
+                    )}
+                    <span className="text-sm">{task.project.name}</span>
+                  </>
+                ) : (
+                  <span className="text-sm text-muted-foreground">
+                    No project
+                  </span>
+                )}
+              </button>
+              {editingField === "project" && (
+                <FieldDropdown
+                  items={[
+                    {
+                      id: "__none",
+                      label: "No Project",
+                      meta: "Remove from project",
+                    },
+                    ...projects
+                      .filter(
+                        (p) => p.state === "started" || p.state === "planned"
+                      )
+                      .map((p) => ({
+                        id: p.id,
+                        label: p.name,
+                        color: p.color,
+                      })),
+                  ]}
+                  onSelect={(id) => {
+                    onUpdate(
+                      task.id,
+                      { projectId: id === "__none" ? null : id },
+                      "Project updated"
+                    );
+                    setEditingField(null);
+                  }}
+                  onClose={() => setEditingField(null)}
+                />
+              )}
+            </div>
+          </DetailField>
 
           {task.labels.length > 0 && (
             <DetailField label="Labels">
@@ -1648,6 +1922,113 @@ function DetailField({
   );
 }
 
+// -- Inline Field Dropdown --
+
+function FieldDropdown({
+  items,
+  onSelect,
+  onClose,
+}: {
+  items: Array<{
+    id: string;
+    label: string;
+    color?: string;
+    avatarUrl?: string;
+    meta?: string;
+  }>;
+  onSelect: (id: string) => void;
+  onClose: () => void;
+}) {
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", handler, true);
+    return () => document.removeEventListener("keydown", handler, true);
+  }, [onClose]);
+
+  const filtered = items.filter(
+    (i) =>
+      i.label.toLowerCase().includes(search.toLowerCase()) ||
+      i.meta?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div
+      ref={ref}
+      className="absolute top-full left-0 mt-1 w-64 bg-popover border border-border rounded-lg shadow-lg z-50"
+    >
+      {items.length > 5 && (
+        <div className="px-3 py-2 border-b border-border">
+          <input
+            ref={inputRef}
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search..."
+            className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+          />
+        </div>
+      )}
+      <div className="max-h-52 overflow-y-auto py-1">
+        {filtered.length === 0 ? (
+          <div className="px-3 py-3 text-center text-xs text-muted-foreground">
+            No matches
+          </div>
+        ) : (
+          filtered.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => onSelect(item.id)}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-secondary transition-colors"
+            >
+              {item.avatarUrl ? (
+                <img
+                  src={item.avatarUrl}
+                  alt={item.label}
+                  className="w-4 h-4 rounded-full shrink-0"
+                />
+              ) : item.color ? (
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: item.color }}
+                />
+              ) : (
+                <span className="w-2.5 h-2.5 shrink-0" />
+              )}
+              <span className="flex-1 truncate">{item.label}</span>
+              {item.meta && (
+                <span className="text-muted-foreground truncate text-[10px]">
+                  {item.meta}
+                </span>
+              )}
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 // -- List View --
 
 function ListView({
@@ -1658,6 +2039,7 @@ function ListView({
   onFocus,
   onOpenDetail,
   onOpenChat,
+  onQuickComplete,
 }: {
   groups: Array<[string, { label: string; color?: string; tasks: Task[] }]>;
   selectedIds: Set<string>;
@@ -1666,6 +2048,7 @@ function ListView({
   onFocus: (id: string) => void;
   onOpenDetail: (task: Task) => void;
   onOpenChat: (task: Task) => void;
+  onQuickComplete: (taskId: string) => void;
 }) {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
     new Set()
@@ -1719,6 +2102,7 @@ function ListView({
                     onFocus={onFocus}
                     onOpenDetail={onOpenDetail}
                     onOpenChat={onOpenChat}
+                    onQuickComplete={onQuickComplete}
                   />
                 ))}
               </div>
@@ -1739,6 +2123,7 @@ function KanbanView({
   onToggleSelect,
   onFocus,
   onOpenDetail,
+  onQuickComplete,
 }: {
   groups: Array<[string, { label: string; color?: string; tasks: Task[] }]>;
   selectedIds: Set<string>;
@@ -1746,6 +2131,7 @@ function KanbanView({
   onToggleSelect: (id: string, additive?: boolean) => void;
   onFocus: (id: string) => void;
   onOpenDetail: (task: Task) => void;
+  onQuickComplete: (taskId: string) => void;
 }) {
   return (
     <div className="flex-1 overflow-x-auto p-4">
@@ -1779,6 +2165,7 @@ function KanbanView({
                   onToggleSelect={onToggleSelect}
                   onFocus={onFocus}
                   onOpenDetail={onOpenDetail}
+                  onQuickComplete={onQuickComplete}
                 />
               ))}
             </div>
@@ -1799,6 +2186,7 @@ function TaskRow({
   onFocus,
   onOpenDetail,
   onOpenChat,
+  onQuickComplete,
 }: {
   task: Task;
   isSelected: boolean;
@@ -1807,6 +2195,7 @@ function TaskRow({
   onFocus: (id: string) => void;
   onOpenDetail: (task: Task) => void;
   onOpenChat: (task: Task) => void;
+  onQuickComplete: (taskId: string) => void;
 }) {
   return (
     <div
@@ -1896,6 +2285,20 @@ function TaskRow({
         />
       )}
 
+      {/* Quick complete */}
+      {task.source === "linear" && task.state.type !== "completed" && task.state.type !== "canceled" && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onQuickComplete(task.id);
+          }}
+          className="p-1 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-green-500 hover:bg-secondary transition-all shrink-0"
+          title="Mark complete"
+        >
+          <CheckCircle2 className="w-3.5 h-3.5" />
+        </button>
+      )}
+
       {/* Chat button */}
       <button
         onClick={(e) => {
@@ -1933,6 +2336,7 @@ function KanbanCard({
   onToggleSelect,
   onFocus,
   onOpenDetail,
+  onQuickComplete,
 }: {
   task: Task;
   isSelected: boolean;
@@ -1940,6 +2344,7 @@ function KanbanCard({
   onToggleSelect: (id: string, additive?: boolean) => void;
   onFocus: (id: string) => void;
   onOpenDetail: (task: Task) => void;
+  onQuickComplete: (taskId: string) => void;
 }) {
   return (
     <div
@@ -1984,17 +2389,31 @@ function KanbanCard({
             </span>
           )}
         </div>
-        {task.url && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              window.open(task.url!, "_blank", "noopener,noreferrer");
-            }}
-            className="p-0.5 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground transition-all"
-          >
-            <ExternalLink className="w-3 h-3" />
-          </button>
-        )}
+        <div className="flex items-center gap-0.5">
+          {task.source === "linear" && task.state.type !== "completed" && task.state.type !== "canceled" && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onQuickComplete(task.id);
+              }}
+              className="p-0.5 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-green-500 transition-all"
+              title="Mark complete"
+            >
+              <CheckCircle2 className="w-3 h-3" />
+            </button>
+          )}
+          {task.url && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(task.url!, "_blank", "noopener,noreferrer");
+              }}
+              className="p-0.5 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground transition-all"
+            >
+              <ExternalLink className="w-3 h-3" />
+            </button>
+          )}
+        </div>
       </div>
 
       <p className="text-sm leading-snug mb-2 line-clamp-2">{task.title}</p>

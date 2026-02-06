@@ -66,6 +66,7 @@ export interface LinearIssue {
   url: string;
   priority: number; // 0=none, 1=urgent, 2=high, 3=normal, 4=low
   state: LinearIssueState;
+  team?: { id: string; name: string; key: string };
   project?: LinearProject;
   labels: { nodes: LinearLabel[] };
   assignee?: LinearActor;

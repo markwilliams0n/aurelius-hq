@@ -77,6 +77,11 @@ const ISSUE_FRAGMENT = `
       color
     }
   }
+  team {
+    id
+    name
+    key
+  }
   assignee {
     id
     name

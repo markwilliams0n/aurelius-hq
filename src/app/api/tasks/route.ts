@@ -61,6 +61,9 @@ export async function GET(request: Request) {
         name: l.name,
         color: l.color,
       })),
+      team: issue.team
+        ? { id: issue.team.id, name: issue.team.name, key: issue.team.key }
+        : null,
       assignee: issue.assignee
         ? {
             id: issue.assignee.id,
@@ -87,6 +90,7 @@ export async function GET(request: Request) {
         type: 'triage' as const,
         color: '#9333ea', // purple
       },
+      team: null,
       project: null,
       labels: [] as Array<{ id: string; name: string; color?: string }>,
       assignee: task.assignee
