@@ -51,25 +51,16 @@ async function runHeartbeatSafe(): Promise<void> {
     const result = await runHeartbeat();
 
     const duration = Date.now() - startTime;
-    console.log(
-      `[Scheduler] Heartbeat completed in ${duration}ms - ` +
-      `created: ${result.entitiesCreated}, updated: ${result.entitiesUpdated}, ` +
-      `reindexed: ${result.reindexed}`
-    );
+    console.log(`[Scheduler] Heartbeat completed in ${duration}ms`);
 
     // Log to database (visible on System page)
     await logActivity({
       eventType: 'heartbeat_run',
       actor: 'system',
-      description: `Heartbeat: ${result.entitiesCreated} created, ${result.entitiesUpdated} updated`,
+      description: `Heartbeat: connector sync complete`,
       metadata: {
         trigger: 'scheduled',
         success: result.allStepsSucceeded,
-        entitiesCreated: result.entitiesCreated,
-        entitiesUpdated: result.entitiesUpdated,
-        reindexed: result.reindexed,
-        entities: result.entities,
-        extractionMethod: result.extractionMethod,
         steps: result.steps,
         gmail: result.gmail,
         granola: result.granola,
@@ -93,9 +84,6 @@ async function runHeartbeatSafe(): Promise<void> {
         metadata: {
           trigger: 'scheduled',
           success: false,
-          entitiesCreated: 0,
-          entitiesUpdated: 0,
-          reindexed: false,
           duration,
           error: error instanceof Error ? error.message : String(error),
         },
