@@ -520,24 +520,30 @@ export async function createIssue(input: {
 }
 
 /**
- * Fetch a single issue by ID or identifier (e.g. "PER-123")
+ * Fetch a single issue by ID (UUID) or identifier (e.g. "PER-123")
  */
 export async function fetchIssue(idOrIdentifier: string): Promise<LinearIssueWithMeta | null> {
-  // Try by ID first, then by identifier
-  const query = `
-    query GetIssue($id: String!) {
-      issue(id: $id) {
-        ${ISSUE_FRAGMENT}
-      }
-    }
-  `;
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-/.test(idOrIdentifier);
 
+  if (isUUID) {
+    try {
+      const query = `
+        query GetIssue($id: String!) {
+          issue(id: $id) {
+            ${ISSUE_FRAGMENT}
+          }
+        }
+      `;
+      const data = await graphql<{ issue: LinearIssueWithMeta }>(query, { id: idOrIdentifier });
+      return data.issue;
+    } catch {
+      return null;
+    }
+  }
+
+  // Search by identifier (e.g. "PER-123")
   try {
-    const data = await graphql<{ issue: LinearIssueWithMeta }>(query, { id: idOrIdentifier });
-    return data.issue;
-  } catch {
-    // If ID lookup fails, try searching by identifier
-    const searchQuery = `
+    const query = `
       query SearchIssue($filter: IssueFilter) {
         issues(first: 1, filter: $filter) {
           nodes {
@@ -546,15 +552,12 @@ export async function fetchIssue(idOrIdentifier: string): Promise<LinearIssueWit
         }
       }
     `;
-
-    try {
-      const data = await graphql<{ issues: { nodes: LinearIssueWithMeta[] } }>(searchQuery, {
-        filter: { identifier: { eq: idOrIdentifier.toUpperCase() } },
-      });
-      return data.issues.nodes[0] || null;
-    } catch {
-      return null;
-    }
+    const data = await graphql<{ issues: { nodes: LinearIssueWithMeta[] } }>(query, {
+      filter: { identifier: { eq: idOrIdentifier.toUpperCase() } },
+    });
+    return data.issues.nodes[0] || null;
+  } catch {
+    return null;
   }
 }
 

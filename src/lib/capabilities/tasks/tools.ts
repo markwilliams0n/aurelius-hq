@@ -357,14 +357,30 @@ export async function handleTaskTool(
 
     case "update_task": {
       try {
-        const issueId = toolInput.issueId;
-        if (!issueId || typeof issueId !== "string") {
+        const issueIdInput = toolInput.issueId;
+        if (!issueIdInput || typeof issueIdInput !== "string") {
           return {
             result: JSON.stringify({
               error:
-                "Missing required parameter: issueId. Please provide the Linear issue ID.",
+                "Missing required parameter: issueId. Please provide the Linear issue ID or identifier (e.g. 'PER-123').",
             }),
           };
+        }
+
+        // Resolve identifier (e.g. "PER-123") to UUID if needed
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-/.test(issueIdInput);
+        let issueId = issueIdInput;
+        let resolvedIssue: Awaited<ReturnType<typeof fetchIssue>> | undefined;
+        if (!isUUID) {
+          resolvedIssue = await fetchIssue(issueIdInput) ?? undefined;
+          if (!resolvedIssue) {
+            return {
+              result: JSON.stringify({
+                error: `Task "${issueIdInput}" not found.`,
+              }),
+            };
+          }
+          issueId = resolvedIssue.id;
         }
 
         const statusName =
@@ -399,16 +415,23 @@ export async function handleTaskTool(
           description?: string;
         } = {};
 
-        // Look up status by name if provided
+        // Look up status by name if provided — filter to the issue's team
         if (statusName) {
+          // Fetch the issue to get its team (if we didn't already resolve it)
+          if (!resolvedIssue) {
+            resolvedIssue = await fetchIssue(issueId) ?? undefined;
+          }
           const states = await fetchWorkflowStates();
-          const state = states.find(
+          const teamStates = resolvedIssue?.team?.id
+            ? states.filter((s) => s.team.id === resolvedIssue!.team!.id)
+            : states;
+          const state = teamStates.find(
             (s) => s.name.toLowerCase() === statusName.toLowerCase(),
           );
           if (!state) {
             return {
               result: JSON.stringify({
-                error: `Status "${statusName}" not found. Available statuses: ${states.map((s) => `${s.name} (${s.team.name})`).join(", ")}`,
+                error: `Status "${statusName}" not found. Available statuses: ${teamStates.map((s) => s.name).join(", ")}`,
               }),
             };
           }
@@ -593,8 +616,12 @@ export async function handleTaskTool(
 
     case "get_suggested_tasks": {
       try {
-        const statusFilter =
+        const validStatuses = ["suggested", "accepted", "dismissed", "all"] as const;
+        const statusInput =
           typeof toolInput.status === "string" ? toolInput.status : "suggested";
+        const statusFilter = validStatuses.includes(statusInput as typeof validStatuses[number])
+          ? statusInput
+          : "suggested";
 
         let rows;
         if (statusFilter === "all") {
