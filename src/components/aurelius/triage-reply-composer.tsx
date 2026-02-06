@@ -176,179 +176,203 @@ export function TriageReplyComposer({
         onClick={onClose}
       />
 
-      {/* Composer */}
-      <div className="relative w-full max-w-2xl mx-4 bg-secondary border border-border rounded-xl shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-        {/* Header */}
-        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">
-              Reply to {item.senderName || item.sender}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              Re: {item.subject}
-            </span>
+      {/* Side-by-side: Original email + Composer */}
+      <div className="relative w-full max-w-5xl mx-4 max-h-[85vh] flex bg-secondary border border-border rounded-xl shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+        {/* Left: Original email */}
+        <div className="w-1/2 border-r border-border flex flex-col min-h-0">
+          <div className="px-4 py-3 border-b border-border shrink-0">
+            <p className="text-sm font-medium">{item.senderName || item.sender}</p>
+            <p className="text-xs text-muted-foreground">{item.subject}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {new Date(item.receivedAt).toLocaleDateString(undefined, {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+              })}
+            </p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-background transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+              {item.content}
+            </div>
+          </div>
         </div>
 
-        {/* Recipient fields */}
-        <div className="px-4 pt-3 space-y-2">
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-muted-foreground w-8 text-right shrink-0">To</label>
-            <input
-              type="text"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="flex-1 bg-background/50 border border-border rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-gold/50"
-              placeholder="recipient@example.com"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-muted-foreground w-8 text-right shrink-0">CC</label>
-            <input
-              type="text"
-              value={cc}
-              onChange={(e) => setCc(e.target.value)}
-              className="flex-1 bg-background/50 border border-border rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-gold/50"
-              placeholder="cc@example.com"
-            />
+        {/* Right: Reply composer */}
+        <div className="w-1/2 flex flex-col min-h-0">
+          {/* Header */}
+          <div className="px-4 py-3 border-b border-border flex items-center justify-between shrink-0">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium">
+                Reply to {item.senderName || item.sender}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Re: {item.subject}
+              </span>
+            </div>
             <button
-              onClick={() => setShowBcc(!showBcc)}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              onClick={onClose}
+              className="p-1.5 rounded-lg hover:bg-background transition-colors"
             >
-              {showBcc ? "Hide" : "BCC"}
+              <X className="w-4 h-4" />
             </button>
           </div>
-          {showBcc && (
+
+          {/* Recipient fields */}
+          <div className="px-4 pt-3 space-y-2 shrink-0">
             <div className="flex items-center gap-2">
-              <label className="text-xs text-muted-foreground w-8 text-right shrink-0">BCC</label>
+              <label className="text-xs text-muted-foreground w-8 text-right shrink-0">To</label>
               <input
                 type="text"
-                value={bcc}
-                onChange={(e) => setBcc(e.target.value)}
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
                 className="flex-1 bg-background/50 border border-border rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-gold/50"
-                placeholder="bcc@example.com"
+                placeholder="recipient@example.com"
               />
             </div>
-          )}
-        </div>
-
-        {/* Compose area */}
-        <div className="p-4">
-          <textarea
-            ref={textareaRef}
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder="Write your reply..."
-            className="w-full bg-transparent resize-none text-sm focus:outline-none min-h-[100px] max-h-[200px]"
-            rows={4}
-            disabled={busy}
-          />
-        </div>
-
-        {/* Error */}
-        {error && (
-          <div className="px-4 pb-2">
-            <p className="text-xs text-red-500">{error}</p>
-          </div>
-        )}
-
-        {/* Send confirmation banner */}
-        {confirmSend && (
-          <div className="mx-4 mb-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-            <p className="text-sm text-amber-200">
-              Send this email to <strong>{to || item.sender}</strong>
-              {cc ? ` (CC: ${cc})` : ""}?
-            </p>
-            <div className="flex gap-2 mt-2">
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-muted-foreground w-8 text-right shrink-0">CC</label>
+              <input
+                type="text"
+                value={cc}
+                onChange={(e) => setCc(e.target.value)}
+                className="flex-1 bg-background/50 border border-border rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-gold/50"
+                placeholder="cc@example.com"
+              />
               <button
-                onClick={handleSend}
-                disabled={isSending}
-                className="px-3 py-1 bg-amber-600 text-white rounded text-sm hover:bg-amber-500 transition-colors flex items-center gap-1"
+                onClick={() => setShowBcc(!showBcc)}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
               >
-                {isSending ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <Send className="w-3 h-3" />
-                )}
-                Yes, send it
-              </button>
-              <button
-                onClick={() => setConfirmSend(false)}
-                className="px-3 py-1 bg-background border border-border rounded text-sm hover:bg-secondary transition-colors"
-              >
-                Cancel
+                {showBcc ? "Hide" : "BCC"}
               </button>
             </div>
+            {showBcc && (
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-muted-foreground w-8 text-right shrink-0">BCC</label>
+                <input
+                  type="text"
+                  value={bcc}
+                  onChange={(e) => setBcc(e.target.value)}
+                  className="flex-1 bg-background/50 border border-border rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-gold/50"
+                  placeholder="bcc@example.com"
+                />
+              </div>
+            )}
           </div>
-        )}
 
-        {/* Actions */}
-        <div className="px-4 py-3 border-t border-border flex items-center justify-between">
-          <button
-            onClick={handleGenerateDraft}
-            disabled={busy}
-            className={cn(
-              "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors",
-              busy
-                ? "opacity-50 cursor-not-allowed"
-                : "hover:bg-background text-gold"
-            )}
-          >
-            {isGenerating ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Wand2 className="w-4 h-4" />
-            )}
-            <span>Generate draft</span>
-          </button>
+          {/* Compose area */}
+          <div className="flex-1 p-4 overflow-y-auto">
+            <textarea
+              ref={textareaRef}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Write your reply..."
+              className="w-full h-full bg-transparent resize-none text-sm focus:outline-none min-h-[120px]"
+              disabled={busy}
+            />
+          </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">
-              <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[10px]">
-                ⌘
-              </kbd>
-              +
-              <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[10px]">
-                Enter
-              </kbd>
-              {" "}to save draft
-            </span>
+          {/* Error */}
+          {error && (
+            <div className="px-4 pb-2 shrink-0">
+              <p className="text-xs text-red-500">{error}</p>
+            </div>
+          )}
+
+          {/* Send confirmation banner */}
+          {confirmSend && (
+            <div className="mx-4 mb-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg shrink-0">
+              <p className="text-sm text-amber-200">
+                Send this email to <strong>{to || item.sender}</strong>
+                {cc ? ` (CC: ${cc})` : ""}?
+              </p>
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={handleSend}
+                  disabled={isSending}
+                  className="px-3 py-1 bg-amber-600 text-white rounded text-sm hover:bg-amber-500 transition-colors flex items-center gap-1"
+                >
+                  {isSending ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Send className="w-3 h-3" />
+                  )}
+                  Yes, send it
+                </button>
+                <button
+                  onClick={() => setConfirmSend(false)}
+                  className="px-3 py-1 bg-background border border-border rounded text-sm hover:bg-secondary transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="px-4 py-3 border-t border-border flex items-center justify-between shrink-0">
             <button
-              onClick={handleSaveDraft}
-              disabled={!message.trim() || busy}
-              className={cn(
-                "flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors",
-                message.trim() && !busy
-                  ? "bg-gold text-background hover:bg-gold/90"
-                  : "bg-muted text-muted-foreground cursor-not-allowed"
-              )}
-            >
-              {isSaving ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Save className="w-4 h-4" />
-              )}
-              <span>Save Draft</span>
-            </button>
-            <button
-              onClick={handleSend}
-              disabled={!message.trim() || busy}
+              onClick={handleGenerateDraft}
+              disabled={busy}
               className={cn(
                 "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors",
-                message.trim() && !busy
-                  ? "text-foreground hover:bg-background border border-border"
-                  : "text-muted-foreground cursor-not-allowed"
+                busy
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:bg-background text-gold"
               )}
             >
-              <Send className="w-4 h-4" />
-              <span>Send</span>
+              {isGenerating ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Wand2 className="w-4 h-4" />
+              )}
+              <span>Generate draft</span>
             </button>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground hidden lg:inline">
+                <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[10px]">
+                  ⌘
+                </kbd>
+                +
+                <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[10px]">
+                  Enter
+                </kbd>
+                {" "}to save draft
+              </span>
+              <button
+                onClick={handleSaveDraft}
+                disabled={!message.trim() || busy}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                  message.trim() && !busy
+                    ? "bg-gold text-background hover:bg-gold/90"
+                    : "bg-muted text-muted-foreground cursor-not-allowed"
+                )}
+              >
+                {isSaving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                <span>Save Draft</span>
+              </button>
+              <button
+                onClick={handleSend}
+                disabled={!message.trim() || busy}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors",
+                  message.trim() && !busy
+                    ? "text-foreground hover:bg-background border border-border"
+                    : "text-muted-foreground cursor-not-allowed"
+                )}
+              >
+                <Send className="w-4 h-4" />
+                <span>Send</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
