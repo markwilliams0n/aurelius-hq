@@ -51,7 +51,7 @@ export const TASK_TOOL_DEFINITIONS: ToolDefinition[] = [
         },
         teamName: {
           type: "string",
-          description: "Team name (default: 'Personal')",
+          description: "Team name (defaults to 'Personal' if available, otherwise first available team)",
         },
         projectName: {
           type: "string",
@@ -219,7 +219,7 @@ export async function handleTaskTool(
         const teamName =
           typeof toolInput.teamName === "string"
             ? toolInput.teamName
-            : "Personal";
+            : undefined;
         const projectName =
           typeof toolInput.projectName === "string"
             ? toolInput.projectName
@@ -243,16 +243,31 @@ export async function handleTaskTool(
           assigneeName ? fetchTeamMembers() : Promise.resolve([]),
         ]);
 
-        // Find team by name (case-insensitive)
-        const team = context.teams.find(
-          (t) => t.name.toLowerCase() === teamName.toLowerCase(),
-        );
-        if (!team) {
-          return {
-            result: JSON.stringify({
-              error: `Team "${teamName}" not found. Available teams: ${context.teams.map((t) => t.name).join(", ")}`,
-            }),
-          };
+        // Find team: use specified name, or fall back to first available team
+        let team;
+        if (teamName) {
+          team = context.teams.find(
+            (t) => t.name.toLowerCase() === teamName.toLowerCase(),
+          );
+          if (!team) {
+            return {
+              result: JSON.stringify({
+                error: `Team "${teamName}" not found. Available teams: ${context.teams.map((t) => t.name).join(", ")}`,
+              }),
+            };
+          }
+        } else {
+          // Prefer "Personal" if available, otherwise use first team
+          team = context.teams.find(
+            (t) => t.name.toLowerCase() === "personal",
+          ) || context.teams[0];
+          if (!team) {
+            return {
+              result: JSON.stringify({
+                error: "No teams available. Check Linear workspace access.",
+              }),
+            };
+          }
         }
 
         // Find project by name (case-insensitive) if specified

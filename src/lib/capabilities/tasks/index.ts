@@ -15,7 +15,7 @@ listing, and inspecting tasks, as well as reviewing suggested tasks from triage.
 
 ## Defaults
 
-- Default team: Personal
+- Default team: use get_team_context to check available teams; prefer the user's personal team if available
 - Tasks are automatically assigned to the owner (Mark) unless a different assignee is specified
 - You (the agent) operate as "Mark's Agent" in Linear — actions you take will show as from the agent account
 - Confirm before creating or updating tasks
