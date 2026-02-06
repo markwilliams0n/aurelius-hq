@@ -28,53 +28,6 @@ export function TriageReplyComposer({
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Pre-populate recipients from rawPayload
-  useEffect(() => {
-    if (item.connector === "gmail" && item.rawPayload) {
-      const raw = item.rawPayload;
-      setTo(item.sender);
-      const ccList = (raw.cc as Array<{ email: string; name?: string }>) || [];
-      const ccEmails = ccList.map((r) => r.email).filter(Boolean).join(", ");
-      if (ccEmails) setCc(ccEmails);
-    }
-  }, [item]);
-
-  // Focus textarea on mount
-  useEffect(() => {
-    textareaRef.current?.focus();
-  }, []);
-
-  // Handle escape key and Cmd+Enter for save draft
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (confirmSend) {
-          setConfirmSend(false);
-        } else {
-          onClose();
-        }
-      }
-      // Cmd/Ctrl + Enter = Save Draft (NOT send)
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-        if (message.trim() && !isSaving && !isSending) {
-          handleSaveDraft();
-        }
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [message, onClose, isSaving, isSending, confirmSend]);
-
-  // Auto-resize textarea
-  useEffect(() => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      textarea.style.height = "auto";
-      textarea.style.height = Math.min(textarea.scrollHeight, 200) + "px";
-    }
-  }, [message]);
-
   // Call the reply API
   const callReplyApi = useCallback(
     async (forceDraft: boolean) => {
@@ -165,6 +118,53 @@ export function TriageReplyComposer({
       setIsSending(false);
     }
   }, [message, isSending, confirmSend, callReplyApi, onComplete]);
+
+  // Pre-populate recipients from rawPayload
+  useEffect(() => {
+    if (item.connector === "gmail" && item.rawPayload) {
+      const raw = item.rawPayload;
+      setTo(item.sender);
+      const ccList = (raw.cc as Array<{ email: string; name?: string }>) || [];
+      const ccEmails = ccList.map((r) => r.email).filter(Boolean).join(", ");
+      if (ccEmails) setCc(ccEmails);
+    }
+  }, [item]);
+
+  // Focus textarea on mount
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
+
+  // Handle escape key and Cmd+Enter for save draft
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (confirmSend) {
+          setConfirmSend(false);
+        } else {
+          onClose();
+        }
+      }
+      // Cmd/Ctrl + Enter = Save Draft (NOT send)
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        if (message.trim() && !isSaving && !isSending) {
+          handleSaveDraft();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [message, onClose, isSaving, isSending, confirmSend, handleSaveDraft]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = Math.min(textarea.scrollHeight, 200) + "px";
+    }
+  }, [message]);
 
   const busy = isSaving || isSending || isGenerating;
 

@@ -21,6 +21,13 @@ export const runtime = 'nodejs';
 // Maximum reply body length (100KB should be plenty for email)
 const MAX_BODY_LENGTH = 100 * 1024;
 
+// Basic email validation for comma-separated lists
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function validateEmailList(value: string): boolean {
+  if (!value.trim()) return true;
+  return value.split(',').every(e => EMAIL_REGEX.test(e.trim()));
+}
+
 export async function POST(request: NextRequest) {
   const session = await getSession();
   if (!session) {
@@ -62,12 +69,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate email addresses if provided
+    const toStr = typeof to === 'string' ? to.trim() : undefined;
+    const ccStr = typeof cc === 'string' ? cc.trim() : undefined;
+    const bccStr = typeof bcc === 'string' ? bcc.trim() : undefined;
+
+    if (toStr && !validateEmailList(toStr)) {
+      return NextResponse.json({ error: 'Invalid To email address' }, { status: 400 });
+    }
+    if (ccStr && !validateEmailList(ccStr)) {
+      return NextResponse.json({ error: 'Invalid CC email address' }, { status: 400 });
+    }
+    if (bccStr && !validateEmailList(bccStr)) {
+      return NextResponse.json({ error: 'Invalid BCC email address' }, { status: 400 });
+    }
+
     const result = await replyToEmail(itemId, sanitizedBody, {
       replyAll,
       forceDraft,
-      to: typeof to === 'string' ? to : undefined,
-      cc: typeof cc === 'string' ? cc : undefined,
-      bcc: typeof bcc === 'string' ? bcc : undefined,
+      to: toStr || undefined,
+      cc: ccStr || undefined,
+      bcc: bccStr || undefined,
     });
 
     return NextResponse.json({

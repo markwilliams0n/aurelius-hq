@@ -343,6 +343,11 @@ export async function markAsSpam(messageId: string): Promise<void> {
   });
 }
 
+/** Strip CRLF and null bytes from header values to prevent header injection */
+function sanitizeHeader(value: string): string {
+  return value.replace(/[\r\n\0]/g, '');
+}
+
 /**
  * Create a draft reply
  */
@@ -358,12 +363,12 @@ export async function createDraft(options: {
   const gmail = await getGmailClient();
 
   const message = [
-    `To: ${options.to}`,
-    options.cc ? `Cc: ${options.cc}` : '',
-    options.bcc ? `Bcc: ${options.bcc}` : '',
-    `Subject: ${options.subject}`,
-    options.inReplyTo ? `In-Reply-To: ${options.inReplyTo}` : '',
-    options.inReplyTo ? `References: ${options.inReplyTo}` : '',
+    `To: ${sanitizeHeader(options.to)}`,
+    options.cc ? `Cc: ${sanitizeHeader(options.cc)}` : '',
+    options.bcc ? `Bcc: ${sanitizeHeader(options.bcc)}` : '',
+    `Subject: ${sanitizeHeader(options.subject)}`,
+    options.inReplyTo ? `In-Reply-To: ${sanitizeHeader(options.inReplyTo)}` : '',
+    options.inReplyTo ? `References: ${sanitizeHeader(options.inReplyTo)}` : '',
     'Content-Type: text/plain; charset=utf-8',
     '',
     options.body,
@@ -405,12 +410,12 @@ export async function sendEmail(options: {
   const gmail = await getGmailClient();
 
   const message = [
-    `To: ${options.to}`,
-    options.cc ? `Cc: ${options.cc}` : '',
-    options.bcc ? `Bcc: ${options.bcc}` : '',
-    `Subject: ${options.subject}`,
-    options.inReplyTo ? `In-Reply-To: ${options.inReplyTo}` : '',
-    options.inReplyTo ? `References: ${options.inReplyTo}` : '',
+    `To: ${sanitizeHeader(options.to)}`,
+    options.cc ? `Cc: ${sanitizeHeader(options.cc)}` : '',
+    options.bcc ? `Bcc: ${sanitizeHeader(options.bcc)}` : '',
+    `Subject: ${sanitizeHeader(options.subject)}`,
+    options.inReplyTo ? `In-Reply-To: ${sanitizeHeader(options.inReplyTo)}` : '',
+    options.inReplyTo ? `References: ${sanitizeHeader(options.inReplyTo)}` : '',
     'Content-Type: text/plain; charset=utf-8',
     '',
     options.body,
