@@ -119,14 +119,26 @@ export function TriageReplyComposer({
     }
   }, [message, isSending, confirmSend, callReplyApi, onComplete]);
 
-  // Pre-populate recipients from rawPayload
+  // Pre-populate recipients from rawPayload (reply-all style)
   useEffect(() => {
     if (item.connector === "gmail" && item.rawPayload) {
       const raw = item.rawPayload;
+      const sender = item.sender.toLowerCase();
+
+      // To: original sender
       setTo(item.sender);
+
+      // CC: original To recipients + original CC recipients, minus the sender (already in To)
+      const toList = (raw.to as Array<{ email: string; name?: string }>) || [];
       const ccList = (raw.cc as Array<{ email: string; name?: string }>) || [];
-      const ccEmails = ccList.map((r) => r.email).filter(Boolean).join(", ");
-      if (ccEmails) setCc(ccEmails);
+      const allCc = [...toList, ...ccList]
+        .map((r) => r.email)
+        .filter(Boolean)
+        .filter((email) => email.toLowerCase() !== sender);
+
+      // Deduplicate
+      const uniqueCc = [...new Set(allCc.map((e) => e.toLowerCase()))];
+      if (uniqueCc.length) setCc(uniqueCc.join(", "));
     }
   }, [item]);
 
