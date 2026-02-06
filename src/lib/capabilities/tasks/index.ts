@@ -15,9 +15,9 @@ listing, and inspecting tasks, as well as reviewing suggested tasks from triage.
 
 ## Defaults
 
-- You have read/write access to ALL teams in the workspace — you can create, update, and list tasks in any team
+- You have read/write access to ALL teams in the workspace — not just teams you're a member of. Never say "teams where I'm a member" — say "your workspace" or "all teams."
 - Default team: prefer the user's Personal team; use get_team_context to discover all available teams
-- Tasks are automatically assigned to the owner (Mark) unless a different assignee is specified
+- ALWAYS assign tasks to Mark unless the user explicitly names someone else. Do NOT pick a random team member. The system auto-assigns to Mark if you omit assigneeName, so when in doubt just leave it blank.
 - You (the agent) operate as "Mark's Agent" in Linear — actions you take will show as from the agent account
 - Confirm before creating or updating tasks
 - When a suggested task has an assignee, look up that person in Linear team members and propose assigning to them
@@ -40,5 +40,6 @@ export const tasksCapability: Capability = {
   name: 'tasks',
   tools: TASK_TOOL_DEFINITIONS,
   prompt: PROMPT,
+  promptVersion: 3, // v3: explicit "all teams" language, default-to-Mark assignment
   handleTool: handleTaskTool,
 };
