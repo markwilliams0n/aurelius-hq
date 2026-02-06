@@ -12,7 +12,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-  Brain,
   Database,
   User,
   Clock,
@@ -68,8 +67,9 @@ interface MemoriesData {
 
 interface SearchResult {
   documentId: string;
-  content: string;
+  chunks: Array<{ content: string; score: number; isRelevant: boolean }>;
   score: number;
+  title: string | null;
   metadata: Record<string, unknown> | null;
   createdAt: string;
 }
@@ -548,25 +548,26 @@ function OverviewTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchOverview() {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch("/api/memory/supermemory?view=overview");
-        if (!res.ok) throw new Error(`Failed to fetch overview: ${res.status}`);
-        const json = await res.json();
-        setData(json);
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Failed to load overview"
-        );
-      } finally {
-        setLoading(false);
-      }
+  const fetchOverview = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/memory/supermemory?view=overview");
+      if (!res.ok) throw new Error(`Failed to fetch overview: ${res.status}`);
+      const json = await res.json();
+      setData(json);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to load overview"
+      );
+    } finally {
+      setLoading(false);
     }
-    fetchOverview();
   }, []);
+
+  useEffect(() => {
+    fetchOverview();
+  }, [fetchOverview]);
 
   if (loading) {
     return (
@@ -583,6 +584,12 @@ function OverviewTab() {
     return (
       <div className="text-center py-12">
         <p className="text-sm text-red-400">{error}</p>
+        <button
+          onClick={fetchOverview}
+          className="mt-2 text-sm text-gold hover:underline"
+        >
+          Try again
+        </button>
       </div>
     );
   }
@@ -697,8 +704,7 @@ function MemoriesTab() {
       if (!query.trim()) {
         setSearchResults(null);
         setActiveSearch("");
-        fetchMemories(page);
-        return;
+        return; // useEffect handles re-fetching when activeSearch clears
       }
       setLoading(true);
       setError(null);
@@ -716,7 +722,7 @@ function MemoriesTab() {
         setLoading(false);
       }
     },
-    [fetchMemories, page]
+    []
   );
 
   useEffect(() => {
@@ -781,6 +787,12 @@ function MemoriesTab() {
       {error && !loading && (
         <div className="text-center py-8">
           <p className="text-sm text-red-400">{error}</p>
+          <button
+            onClick={() => activeSearch ? handleSearch(activeSearch) : fetchMemories(page)}
+            className="mt-2 text-sm text-gold hover:underline"
+          >
+            Try again
+          </button>
         </div>
       )}
 
@@ -793,26 +805,36 @@ function MemoriesTab() {
             </div>
           ) : (
             <div className="space-y-2">
-              {searchResults.map((result) => (
-                <div
-                  key={result.documentId}
-                  className="border border-border/50 bg-card rounded-lg p-4 hover:border-border transition-colors"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm text-foreground line-clamp-3">
-                      {result.content}
-                    </p>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
-                      {(result.score * 100).toFixed(0)}%
-                    </span>
+              {searchResults.map((result) => {
+                const bestChunk = result.chunks?.find((c) => c.isRelevant) ?? result.chunks?.[0];
+                return (
+                  <div
+                    key={result.documentId}
+                    className="border border-border/50 bg-card rounded-lg p-4 hover:border-border transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        {result.title && (
+                          <h3 className="text-sm font-medium text-foreground truncate mb-1">
+                            {result.title}
+                          </h3>
+                        )}
+                        <p className="text-sm text-muted-foreground line-clamp-3">
+                          {bestChunk?.content ?? "No content"}
+                        </p>
+                      </div>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
+                        {(result.score * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-2">
+                      <span className="text-xs text-muted-foreground">
+                        {formatRelativeDate(result.createdAt)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 mt-2">
-                    <span className="text-xs text-muted-foreground">
-                      {formatRelativeDate(result.createdAt)}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </>

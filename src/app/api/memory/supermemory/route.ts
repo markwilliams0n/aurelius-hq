@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getSession } from '@/lib/auth';
 import { listMemories, getProfile } from '@/lib/memory/supermemory';
 
 export async function GET(request: NextRequest) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const view = searchParams.get('view') || 'overview';
 
@@ -22,8 +28,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (view === 'memories') {
-      const page = parseInt(searchParams.get('page') || '1');
-      const limit = parseInt(searchParams.get('limit') || '20');
+      const page = Math.max(1, parseInt(searchParams.get('page') || '1') || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20') || 20));
       const result = await listMemories({ page, limit });
       return NextResponse.json(result);
     }
