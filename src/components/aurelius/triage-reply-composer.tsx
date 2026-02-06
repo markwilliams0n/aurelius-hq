@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { X, Send, Wand2, Loader2, Save, ChevronDown, ChevronUp } from "lucide-react";
+import { X, Send, Wand2, Loader2, Save } from "lucide-react";
 import { TriageItem } from "./triage-card";
 import { cn } from "@/lib/utils";
 
