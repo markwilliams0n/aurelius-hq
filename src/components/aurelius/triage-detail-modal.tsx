@@ -397,7 +397,8 @@ export function TriageDetailModal({ item, onClose, onReply }: TriageDetailModalP
                     [&_a]:text-gold [&_a]:no-underline [&_a:hover]:underline
                     [&_img]:max-w-full [&_img]:h-auto
                     [&_table]:border-collapse [&_td]:p-2 [&_th]:p-2
-                    [&_*]:max-w-full"
+                    [&_*]:max-w-full
+                    [&_:not(a)]:!text-inherit"
                   dangerouslySetInnerHTML={{ __html: bodyHtml }}
                 />
               );
