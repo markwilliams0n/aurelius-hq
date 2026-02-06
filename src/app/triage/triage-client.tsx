@@ -695,9 +695,12 @@ export function TriageClient() {
       {viewMode === "reply" && currentItem && (
         <TriageReplyComposer
           item={currentItem}
-          onSend={(message) => {
-            // In production, this would send the reply
-            toast.success("Reply sent (simulated)");
+          onComplete={(result) => {
+            if (result.wasDraft) {
+              toast.success("Draft saved in Gmail");
+            } else {
+              toast.success("Email sent");
+            }
             handleActionComplete("actioned");
           }}
           onClose={handleCloseOverlay}
