@@ -3,22 +3,16 @@ import { db } from "@/lib/db";
 import { inboxItems, activityLog as activityLogTable } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { appendToDailyNote } from "@/lib/memory/daily-notes";
-import { extractEmailMemory, isOllamaAvailable } from "@/lib/memory/ollama";
-import { listEntities } from "@/lib/memory/entities";
+import { addMemory } from "@/lib/memory/supermemory";
 import { logActivity } from "@/lib/activity";
 
 /**
- * POST /api/triage/[id]/memory - Save triage item to daily notes for memory processing
- *
- * ARCHITECTURE: This endpoint saves rich content to daily notes.
- * The heartbeat process then extracts entities and facts from daily notes.
- * This centralizes memory processing in heartbeat for consistency.
+ * POST /api/triage/[id]/memory - Save triage item to memory
  *
  * Flow:
  * 1. User triggers "save to memory" on a triage item
- * 2. This endpoint extracts key info using Ollama and saves to daily notes
- * 3. Heartbeat later processes daily notes → creates entities/facts in life/
- * 4. QMD indexes life/ for search
+ * 2. Content saved to daily notes (short-term) and Supermemory (long-term)
+ * 3. Supermemory handles extraction, entity resolution, and indexing
  */
 export async function POST(
   request: Request,
@@ -122,8 +116,7 @@ async function processMemoryInBackground(item: any, activityId: string) {
   }
 }
 
-// Extract from triage item and save to daily notes
-// Heartbeat will later process daily notes into entities/facts
+// Extract from triage item, save to daily notes, and send to Supermemory
 async function extractAndSaveToDailyNotes(item: any): Promise<{
   factsExtracted: number;
   facts: string[];
@@ -133,10 +126,10 @@ async function extractAndSaveToDailyNotes(item: any): Promise<{
     ? ` (${item.priority.toUpperCase()})`
     : "";
 
-  // Get email content
-  let emailContent = item.content || "";
-  if (!emailContent && item.rawPayload?.bodyHtml) {
-    emailContent = (item.rawPayload.bodyHtml as string)
+  // Get content
+  let content = item.content || "";
+  if (!content && item.rawPayload?.bodyHtml) {
+    content = (item.rawPayload.bodyHtml as string)
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
       .replace(/<[^>]+>/g, ' ')
@@ -148,89 +141,35 @@ async function extractAndSaveToDailyNotes(item: any): Promise<{
       .trim();
   }
 
-  // Try Ollama extraction for rich content
-  const ollamaAvailable = await isOllamaAvailable();
-  let extractedFacts: string[] = [];
-  let summary = "";
-  let actionItems: Array<{ description: string; dueDate?: string }> = [];
-
-  if (ollamaAvailable && emailContent) {
-    try {
-      // Get existing entities for context
-      const existingEntities = await listEntities(undefined, 30);
-      const entityHints = existingEntities.map(e => ({
-        name: e.name,
-        type: e.type as 'person' | 'company' | 'project',
-        recentFacts: [],
-      }));
-
-      const extraction = await extractEmailMemory(
-        item.subject,
-        item.sender,
-        item.senderName,
-        emailContent,
-        entityHints,
-        item.connector
-      );
-
-      summary = extraction.summary;
-      actionItems = extraction.actionItems;
-
-      // Collect all facts from extraction
-      for (const entity of extraction.entities) {
-        extractedFacts.push(...entity.facts);
-      }
-      for (const fact of extraction.facts) {
-        extractedFacts.push(fact.content);
-      }
-    } catch (error) {
-      console.error("[Memory] Ollama extraction failed:", error);
-    }
-  }
-
   // Build daily note entry
   let entry = `**${senderName}** via ${item.connector}${priority}: "${item.subject}"`;
 
-  // Add summary
-  if (summary) {
-    entry += `\n\n> ${summary}`;
-  }
-
-  // Add action items
-  if (actionItems.length > 0) {
-    entry += "\n\n**Action Items:**";
-    for (const action of actionItems) {
-      entry += `\n- [ ] ${action.description}${action.dueDate ? ` (due: ${action.dueDate})` : ''}`;
-    }
-  }
-
-  // Add extracted facts
-  if (extractedFacts.length > 0) {
-    entry += "\n\n**Key Facts:**";
-    for (const fact of extractedFacts.slice(0, 10)) {
-      entry += `\n- ${fact}`;
-    }
-    if (extractedFacts.length > 10) {
-      entry += `\n- _(+${extractedFacts.length - 10} more)_`;
-    }
-  }
-
-  // Add content preview for heartbeat to process later
-  if (emailContent && emailContent.length > 100) {
-    const cleanContent = emailContent
-      .replace(/https?:\/\/\S+/g, '') // Remove URLs
+  if (content && content.length > 100) {
+    const cleanContent = content
+      .replace(/https?:\/\/\S+/g, '')
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 1000);
 
-    entry += `\n\n**Content:**\n${cleanContent}${emailContent.length > 1000 ? '...' : ''}`;
+    entry += `\n\n**Content:**\n${cleanContent}${content.length > 1000 ? '...' : ''}`;
   }
 
-  // Save to daily notes
+  // Save to daily notes (short-term context)
   await appendToDailyNote(entry);
 
+  // Send to Supermemory for long-term memory (fire-and-forget)
+  // Supermemory handles extraction, entity resolution, and indexing
+  const supermemoryContent = `From: ${senderName} via ${item.connector}\nSubject: ${item.subject}\n\n${content}`;
+  addMemory(supermemoryContent, {
+    source: item.connector,
+    subject: item.subject,
+    sender: senderName,
+  }).catch((error) => {
+    console.error("[Memory] Supermemory add failed:", error);
+  });
+
   return {
-    factsExtracted: extractedFacts.length,
-    facts: extractedFacts,
+    factsExtracted: 0,
+    facts: [],
   };
 }
