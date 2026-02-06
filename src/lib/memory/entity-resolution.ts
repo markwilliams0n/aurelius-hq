@@ -407,6 +407,33 @@ export async function resolveEntity(
     };
   }
 
+  // If Ollama available, always use LLM for final decision
+  const ollamaAvailable = await isOllamaAvailable();
+  if (ollamaAvailable && candidates.length > 0) {
+    const llmResult = await llmResolve(extracted, candidates, originalContent);
+
+    if (llmResult.matchIndex > 0 && llmResult.matchIndex <= candidates.length) {
+      const matchedCandidate = candidates[llmResult.matchIndex - 1];
+      return {
+        extracted,
+        match: matchedCandidate.entity,
+        confidence: llmResult.confidence,
+        isNew: false,
+        reason: `LLM resolved: ${llmResult.reason}`,
+      };
+    }
+
+    // LLM said create new
+    return {
+      extracted,
+      match: null,
+      confidence: llmResult.confidence,
+      isNew: true,
+      reason: `LLM decided new entity: ${llmResult.reason}`,
+    };
+  }
+
+  // Fallback: heuristic-only resolution (when Ollama is not available)
   const topCandidate = candidates[0];
 
   // High confidence match
@@ -432,32 +459,6 @@ export async function resolveEntity(
         reason: `Best match with clear margin: ${topCandidate.reasons.join(', ')}`,
       };
     }
-  }
-
-  // Ambiguous - use LLM if available
-  const ollamaAvailable = await isOllamaAvailable();
-  if (ollamaAvailable && candidates.length > 0 && topCandidate.score > 0.3) {
-    const llmResult = await llmResolve(extracted, candidates, originalContent);
-
-    if (llmResult.matchIndex > 0 && llmResult.matchIndex <= candidates.length) {
-      const matchedCandidate = candidates[llmResult.matchIndex - 1];
-      return {
-        extracted,
-        match: matchedCandidate.entity,
-        confidence: llmResult.confidence,
-        isNew: false,
-        reason: `LLM resolved: ${llmResult.reason}`,
-      };
-    }
-
-    // LLM said create new
-    return {
-      extracted,
-      match: null,
-      confidence: llmResult.confidence,
-      isNew: true,
-      reason: `LLM decided new entity: ${llmResult.reason}`,
-    };
   }
 
   // Low confidence - create new to be safe

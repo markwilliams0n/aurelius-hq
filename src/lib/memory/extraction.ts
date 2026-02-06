@@ -1,4 +1,5 @@
 import { appendToDailyNote } from './daily-notes';
+import { emitMemoryEvent } from './events';
 import { isOllamaAvailable, generate } from './ollama';
 
 /**
@@ -9,17 +10,34 @@ export async function extractAndSaveMemories(
   userMessage: string,
   assistantResponse: string
 ): Promise<void> {
-  // Try to use Ollama for semantic extraction
+  const startTime = Date.now();
   const useOllama = await isOllamaAvailable();
+  let entry: string;
+  let method: 'ollama' | 'fallback';
 
   if (useOllama) {
-    const entry = await extractSemanticNote(userMessage, assistantResponse);
-    await appendToDailyNote(entry);
+    entry = await extractSemanticNote(userMessage, assistantResponse);
+    method = 'ollama';
   } else {
-    // Fallback to simple formatting
-    const entry = formatConversationEntry(userMessage, assistantResponse);
-    await appendToDailyNote(entry);
+    entry = formatConversationEntry(userMessage, assistantResponse);
+    method = 'fallback';
   }
+
+  await appendToDailyNote(entry);
+
+  emitMemoryEvent({
+    eventType: 'extract',
+    trigger: 'chat',
+    summary: `Chat extraction (${method}): ${entry.slice(0, 80)}...`,
+    payload: {
+      userMessage: userMessage.slice(0, 500),
+      assistantResponse: assistantResponse.slice(0, 500),
+      extractedEntry: entry,
+      method,
+    },
+    durationMs: Date.now() - startTime,
+    metadata: { method },
+  }).catch(() => {});
 }
 
 /**
@@ -75,25 +93,4 @@ function formatConversationEntry(
   return `**User:** ${truncatedUser}
 
 **Aurelius:** ${truncatedAssistant}`;
-}
-
-/**
- * Check if a message contains information worth persisting.
- * Used to avoid logging purely transactional exchanges.
- */
-export function containsMemorableContent(message: string): boolean {
-  // Simple heuristics - can be enhanced later
-  const patterns = [
-    /\b(?:my|i|we|our)\b.*\b(?:friend|colleague|boss|partner|wife|husband|brother|sister|mom|dad|mother|father)\b/i,
-    /\b(?:works?|working)\s+(?:at|for|on)\b/i,
-    /\b(?:lives?|living)\s+in\b/i,
-    /\b(?:project|company|team)\b/i,
-    /\b(?:prefer|like|want|need|always|never)\b/i,
-    /\b(?:remember|don't forget|note that)\b/i,
-    /\b(?:meeting|call|appointment)\b/i,
-    /\b(?:birthday|anniversary|deadline)\b/i,
-    /\b(?:email|phone|address)\b/i,
-  ];
-
-  return patterns.some(p => p.test(message));
 }

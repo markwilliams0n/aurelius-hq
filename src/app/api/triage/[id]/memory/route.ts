@@ -169,7 +169,8 @@ async function extractAndSaveToDailyNotes(item: any): Promise<{
         item.sender,
         item.senderName,
         emailContent,
-        entityHints
+        entityHints,
+        item.connector
       );
 
       summary = extraction.summary;

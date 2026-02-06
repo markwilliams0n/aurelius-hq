@@ -9,6 +9,7 @@ import { syncGmailMessages, type GmailSyncResult } from '@/lib/gmail';
 import { syncLinearNotifications, type LinearSyncResult } from '@/lib/linear';
 import { syncSlackMessages, type SlackSyncResult, startSocketMode, isSocketConfigured } from '@/lib/slack';
 import { createBackup, type BackupResult } from './backup';
+import { emitMemoryEvent } from './events';
 
 const LIFE_DIR = path.join(process.cwd(), 'life');
 const HEARTBEAT_STATE_FILE = path.join(LIFE_DIR, 'system', 'heartbeat-state.json');
@@ -591,6 +592,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
 
         // FIRST: Try to use pre-extracted content from daily notes
         // Daily notes from triage already have **Memory Saved:** sections with rich extracted facts
+        const noteExtractionStart = Date.now();
         const preExtracted = parsePreExtractedContent(content);
         let extracted: ExtractedEntity[];
 
@@ -650,6 +652,34 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
         console.log(`[Heartbeat] Resolving ${extracted.length} entities...`);
         const resolved = await resolveEntities(extracted, content);
 
+        const noteExtractionMethod = preExtracted.length > 0 ? 'pre-extracted' : (useOllama ? 'ollama' : 'pattern');
+        emitMemoryEvent({
+          eventType: 'extract',
+          trigger: 'heartbeat',
+          summary: `Heartbeat extracted ${extracted.length} entities (${noteExtractionMethod}) from ${date}`,
+          payload: {
+            extractedEntities: extracted,
+            resolvedEntities: resolved.map(r => ({
+              name: r.extracted.name,
+              type: r.extracted.type,
+              isNew: r.isNew,
+              matchedTo: r.match?.name ?? null,
+              confidence: r.confidence,
+              reason: r.reason,
+            })),
+            extractionMethod: noteExtractionMethod,
+            notesProcessed: date,
+          },
+          durationMs: Date.now() - noteExtractionStart,
+          metadata: { extractionMethod: noteExtractionMethod },
+        }).catch(() => {});
+
+        const noteSaveStart = Date.now();
+        let noteFactsAdded = 0;
+        let noteFactsSkipped = 0;
+        let noteEntitiesCreated = 0;
+        let noteEntitiesUpdated = 0;
+
         for (const resolution of resolved) {
           const { extracted: entity, match, isNew, reason, confidence } = resolution;
 
@@ -671,6 +701,8 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
             );
             console.log(`[Heartbeat] Created entity: ${entity.name} (${entity.type}) - ${reason}`);
             entitiesCreated++;
+            noteEntitiesCreated++;
+            noteFactsAdded += entity.facts.length;
             entityDetails.push({
               name: entity.name,
               type: entity.type,
@@ -697,6 +729,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
                 const isRedundant = await isFactRedundant(fact, existingFacts, targetName);
                 if (isRedundant) {
                   console.log(`[Heartbeat] Skipping redundant fact for ${targetName}: "${fact.slice(0, 50)}..."`);
+                  noteFactsSkipped++;
                   continue;
                 }
               }
@@ -712,14 +745,18 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
               });
               if (wasAdded) {
                 factsAdded++;
+                noteFactsAdded++;
                 addedFacts.push(fact);
                 existingFacts.push(fact); // Add to existing for subsequent checks
+              } else {
+                noteFactsSkipped++;
               }
             }
             // Only count as updated if we actually added new facts
             if (factsAdded > 0) {
               console.log(`[Heartbeat] Updated entity: ${targetName} (+${factsAdded} facts)`);
               entitiesUpdated++;
+              noteEntitiesUpdated++;
               entityDetails.push({
                 name: targetName,
                 type: targetType,
@@ -730,6 +767,20 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
             }
           }
         }
+
+        emitMemoryEvent({
+          eventType: 'save',
+          trigger: 'heartbeat',
+          summary: `Heartbeat saved ${noteEntitiesCreated} new, ${noteEntitiesUpdated} updated entities from ${date}`,
+          payload: {
+            entitiesCreated: noteEntitiesCreated,
+            entitiesUpdated: noteEntitiesUpdated,
+            entityDetails: entityDetails.map(e => ({ name: e.name, type: e.type, factCount: e.facts.length, action: e.action })),
+            factsAdded: noteFactsAdded,
+            factsSkipped: noteFactsSkipped,
+          },
+          durationMs: Date.now() - noteSaveStart,
+        }).catch(() => {});
 
         // Mark this note as processed with the latest timestamp
         if (newTimestamp) {
@@ -892,6 +943,8 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
   // Step 6: Reindex QMD (split into update + embed for better observability)
   let reindexed = false;
   if (!options.skipReindex) {
+    const reindexStart = Date.now();
+
     // QMD Update (fast - just document index)
     progress?.('qmd_update', 'start');
     const updateStart = Date.now();
@@ -951,6 +1004,21 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
         warnings.push('QMD update succeeded but embed failed - keyword search works, semantic search may be stale');
       }
     }
+
+    const updateSuccess = steps.qmdUpdate?.success ?? false;
+    const embedSuccess = steps.qmdEmbed?.success ?? false;
+    emitMemoryEvent({
+      eventType: 'reindex',
+      trigger: 'heartbeat',
+      summary: `QMD reindex ${updateSuccess && embedSuccess ? 'completed' : 'failed'}`,
+      payload: {
+        updateSuccess,
+        embedSuccess,
+        updateDuration: steps.qmdUpdate?.durationMs ?? 0,
+        embedDuration: steps.qmdEmbed?.durationMs ?? 0,
+      },
+      durationMs: Date.now() - reindexStart,
+    }).catch(() => {});
   }
 
   const totalDuration = Date.now() - overallStart;

@@ -107,7 +107,7 @@ export async function POST() {
   await db.delete(inboxItemsTable).where(eq(inboxItemsTable.connector, 'manual'));
 
   // Generate fresh fake data (excluding Gmail - use real sync)
-  const allFakeItems = generateFakeInboxItems();
+  const allFakeItems = await generateFakeInboxItems();
   const fakeItems = allFakeItems.filter(item => item.connector !== 'gmail');
 
   // Insert fake data - skip AI task extraction for performance

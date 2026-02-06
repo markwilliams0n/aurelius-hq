@@ -6,7 +6,7 @@
 
 import { chatStreamWithTools, type Message } from '@/lib/ai/client';
 import { buildAgentContext } from '@/lib/ai/context';
-import { extractAndSaveMemories, containsMemorableContent } from '@/lib/memory/extraction';
+import { extractAndSaveMemories } from '@/lib/memory/extraction';
 import { db } from '@/lib/db';
 import { conversations } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
@@ -216,13 +216,11 @@ The user is ${message.from?.first_name || 'a user'}${message.from?.username ? ` 
 
     await saveConversation(conversationId, newStoredMessages);
 
-    // Extract and save memories if the message contains memorable content
-    if (containsMemorableContent(userText)) {
-      try {
-        await extractAndSaveMemories(userText, fullResponse);
-      } catch (error) {
-        console.error('Failed to extract memories:', error);
-      }
+    // Extract and save memories — let extraction decide what's notable
+    try {
+      await extractAndSaveMemories(userText, fullResponse);
+    } catch (error) {
+      console.error('Failed to extract memories:', error);
     }
 
     // Split long messages and send

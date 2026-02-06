@@ -3,6 +3,8 @@
  * Used for entity extraction in heartbeat process
  */
 
+import { emitMemoryEvent } from './events';
+
 const OLLAMA_BASE_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const DEFAULT_MODEL = process.env.OLLAMA_MODEL || 'llama3.2:3b';
 
@@ -16,6 +18,7 @@ interface ExtractedEntity {
   name: string;
   type: 'person' | 'company' | 'project';
   facts: string[];
+  reasoning?: string;
 }
 
 /**
@@ -136,13 +139,14 @@ For each entity, provide:
 - name: The entity's name (use full name for people when available)
 - type: One of "person", "company", or "project"
 - facts: Array of specific facts about this entity from the text
+- reasoning: A brief explanation of WHY this entity was extracted (what makes it noteworthy)
 
 Output ONLY valid JSON array. No explanation, no markdown, just JSON.
 
 Example output:
 [
-  {"name": "John Smith", "type": "person", "facts": ["Works at Acme Corp", "Based in Austin"]},
-  {"name": "Acme Corp", "type": "company", "facts": ["John Smith works here", "Headquartered in SF"]}
+  {"name": "John Smith", "type": "person", "facts": ["Works at Acme Corp", "Based in Austin"], "reasoning": "Named individual mentioned as key contact"},
+  {"name": "Acme Corp", "type": "company", "facts": ["John Smith works here", "Headquartered in SF"], "reasoning": "Company where John works, relevant business relationship"}
 ]
 
 Text to analyze:
@@ -228,6 +232,7 @@ Extract entities (JSON array only):`;
         name: String(e.name).trim(),
         type: ['person', 'company', 'project'].includes(e.type) ? e.type : 'person',
         facts: e.facts.map(f => String(f).trim()).filter(f => f.length > 0),
+        reasoning: e.reasoning ? String(e.reasoning).trim() : undefined,
       }))
       .filter(e => {
         const nameLower = e.name.toLowerCase();
@@ -347,17 +352,27 @@ Write ONLY the summary, no introduction or explanation:`;
  * Email memory extraction result
  */
 export interface EmailMemoryExtraction {
-  entities: ExtractedEntity[];
+  entities: Array<{
+    name: string;
+    type: 'person' | 'company' | 'project';
+    facts: string[];
+    reasoning?: string;
+  }>;
   facts: Array<{
     content: string;
     category: 'status' | 'preference' | 'relationship' | 'context' | 'milestone' | 'metric';
     entityName?: string;
+    reasoning?: string;
   }>;
   actionItems: Array<{
     description: string;
     dueDate?: string;
   }>;
   summary: string;
+  skipped?: Array<{
+    item: string;
+    reasoning: string;
+  }>;
 }
 
 /**
@@ -368,8 +383,11 @@ export async function extractEmailMemory(
   sender: string,
   senderName: string | undefined,
   content: string,
-  existingEntities?: ExistingEntityHint[]
+  existingEntities?: ExistingEntityHint[],
+  connector?: string
 ): Promise<EmailMemoryExtraction> {
+  const startTime = Date.now();
+
   // Build context about known entities
   let knownEntitiesContext = '';
   if (existingEntities && existingEntities.length > 0) {
@@ -429,13 +447,18 @@ Extract:
    - BAD: Made-up tasks not in the email
    - If unsure, return empty array - don't guess
 
-4. **Summary** - What this email tells us, with key numbers
+4. **Skipped** - Items you considered extracting but decided NOT to, with reasoning for why they were skipped
+
+5. **Summary** - What this email tells us, with key numbers
+
+For each entity and fact, include a brief "reasoning" explaining WHY it was extracted. Also include a "skipped" array with items you considered but rejected, with reasoning.
 
 Output ONLY valid JSON:
 {
-  "entities": [{"name": "...", "type": "person|company|project", "facts": ["..."]}],
-  "facts": [{"content": "...", "category": "status|preference|relationship|context|milestone|metric", "entityName": "..."}],
+  "entities": [{"name": "...", "type": "person|company|project", "facts": ["..."], "reasoning": "why this entity was extracted"}],
+  "facts": [{"content": "...", "category": "status|preference|relationship|context|milestone|metric", "entityName": "...", "reasoning": "why this fact matters"}],
   "actionItems": [{"description": "...", "dueDate": "..."}],
+  "skipped": [{"item": "...", "reasoning": "why this was not worth extracting"}],
   "summary": "..."
 }
 
@@ -461,12 +484,35 @@ JSON only, no explanation:`;
     const parsed = JSON.parse(jsonStr) as EmailMemoryExtraction;
 
     // Validate and return
-    return {
+    const result: EmailMemoryExtraction = {
       entities: (parsed.entities || []).filter(e => e.name && e.type),
       facts: (parsed.facts || []).filter(f => f.content),
       actionItems: parsed.actionItems || [],
       summary: parsed.summary || `Email from ${senderName || sender}: ${subject}`,
+      skipped: parsed.skipped || [],
     };
+
+    emitMemoryEvent({
+      eventType: 'extract',
+      trigger: 'triage',
+      summary: `Extracted ${result.entities.length} entities, ${result.facts.length} facts from "${subject.slice(0, 60)}"`,
+      payload: {
+        input: { subject, sender, senderName, contentLength: content.length },
+        output: result,
+        rawOllamaResponse: response,
+        filteredEntities: (parsed.entities || []).filter(e => !e.name || !e.type),
+        filteredFacts: (parsed.facts || []).filter(f => !f.content),
+      },
+      reasoning: {
+        entities: result.entities.map(e => ({ name: e.name, reasoning: e.reasoning })),
+        facts: result.facts.map(f => ({ content: f.content.slice(0, 80), reasoning: f.reasoning })),
+        skipped: parsed.skipped || [],
+      },
+      durationMs: Date.now() - startTime,
+      metadata: { model: DEFAULT_MODEL, connector: connector || 'email' },
+    }).catch(() => {});
+
+    return result;
   } catch (error) {
     console.error('[Ollama] Email memory extraction failed:', error);
     return getEmptyEmailExtraction(subject, senderName || sender);

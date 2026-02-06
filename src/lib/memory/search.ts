@@ -2,6 +2,7 @@ import { execSync } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { recordSearchAccess } from './access-tracking';
+import { emitMemoryEvent } from './events';
 
 /**
  * Clean QMD file path by removing qmd:// prefix
@@ -45,12 +46,15 @@ export interface SearchOptions {
  */
 export function searchMemory(
   query: string,
-  options: SearchOptions = {}
+  options: SearchOptions & { _skipEvent?: boolean } = {}
 ): SearchResult[] {
   const {
     collection = 'all',
     limit = 10,
+    _skipEvent = false,
   } = options;
+
+  const startTime = Date.now();
 
   try {
     const collectionFlag = collection === 'all' ? '' : `-c ${collection}`;
@@ -65,16 +69,47 @@ export function searchMemory(
 
     try {
       const parsed = JSON.parse(result);
-      return parsed.map((item: { docid?: string; path?: string; file?: string; title?: string; content?: string; snippet?: string; score?: number }) => ({
+      const results: SearchResult[] = parsed.map((item: { docid?: string; path?: string; file?: string; title?: string; content?: string; snippet?: string; score?: number }) => ({
         path: cleanQmdPath(item.file || item.path || item.docid || ''),
         content: cleanQmdSnippet(item.content || item.snippet || '', item.title),
         score: item.score || 0,
         collection: collection
       }));
+
+      const durationMs = Date.now() - startTime;
+      if (!_skipEvent) {
+        emitMemoryEvent({
+          eventType: 'search',
+          trigger: 'api',
+          summary: `QMD hybrid search: ${results.length} results for "${query.slice(0, 60)}"`,
+          payload: {
+            query,
+            collection,
+            limit,
+            resultCount: results.length,
+            results: results.map(r => ({ path: r.path, score: r.score, contentPreview: r.content.slice(0, 200) })),
+          },
+          durationMs,
+          metadata: { collection, searchType: 'hybrid' },
+        }).catch(() => {});
+      }
+
+      return results;
     } catch {
       return [];
     }
   } catch (error) {
+    const durationMs = Date.now() - startTime;
+    if (!_skipEvent) {
+      emitMemoryEvent({
+        eventType: 'search',
+        trigger: 'api',
+        summary: `QMD hybrid search: error for "${query.slice(0, 60)}"`,
+        payload: { query, collection, limit, resultCount: 0, error: String(error) },
+        durationMs,
+        metadata: { collection, searchType: 'hybrid' },
+      }).catch(() => {});
+    }
     console.error('QMD search error:', error);
     return [];
   }
@@ -89,6 +124,8 @@ export function keywordSearch(
 ): SearchResult[] {
   const { collection = 'all', limit = 10 } = options;
 
+  const startTime = Date.now();
+
   try {
     const collectionFlag = collection === 'all' ? '' : `-c ${collection}`;
     const escapedQuery = query.replace(/"/g, '\\"');
@@ -102,16 +139,43 @@ export function keywordSearch(
 
     try {
       const parsed = JSON.parse(result);
-      return parsed.map((item: { docid?: string; path?: string; file?: string; title?: string; content?: string; snippet?: string; score?: number }) => ({
+      const results: SearchResult[] = parsed.map((item: { docid?: string; path?: string; file?: string; title?: string; content?: string; snippet?: string; score?: number }) => ({
         path: cleanQmdPath(item.file || item.path || item.docid || ''),
         content: cleanQmdSnippet(item.content || item.snippet || '', item.title),
         score: item.score || 0,
         collection: collection
       }));
+
+      const durationMs = Date.now() - startTime;
+      emitMemoryEvent({
+        eventType: 'search',
+        trigger: 'api',
+        summary: `QMD keyword search: ${results.length} results for "${query.slice(0, 60)}"`,
+        payload: {
+          query,
+          collection,
+          limit,
+          resultCount: results.length,
+          results: results.map(r => ({ path: r.path, score: r.score, contentPreview: r.content.slice(0, 200) })),
+        },
+        durationMs,
+        metadata: { collection, searchType: 'keyword' },
+      }).catch(() => {});
+
+      return results;
     } catch {
       return [];
     }
   } catch (error) {
+    const durationMs = Date.now() - startTime;
+    emitMemoryEvent({
+      eventType: 'search',
+      trigger: 'api',
+      summary: `QMD keyword search: error for "${query.slice(0, 60)}"`,
+      payload: { query, collection, limit, resultCount: 0, error: String(error) },
+      durationMs,
+      metadata: { collection, searchType: 'keyword' },
+    }).catch(() => {});
     console.error('QMD keyword search error:', error);
     return [];
   }
@@ -126,6 +190,8 @@ export function semanticSearch(
 ): SearchResult[] {
   const { collection = 'all', limit = 10 } = options;
 
+  const startTime = Date.now();
+
   try {
     const collectionFlag = collection === 'all' ? '' : `-c ${collection}`;
     const escapedQuery = query.replace(/"/g, '\\"');
@@ -139,16 +205,43 @@ export function semanticSearch(
 
     try {
       const parsed = JSON.parse(result);
-      return parsed.map((item: { docid?: string; path?: string; file?: string; title?: string; content?: string; snippet?: string; score?: number }) => ({
+      const results: SearchResult[] = parsed.map((item: { docid?: string; path?: string; file?: string; title?: string; content?: string; snippet?: string; score?: number }) => ({
         path: cleanQmdPath(item.file || item.path || item.docid || ''),
         content: cleanQmdSnippet(item.content || item.snippet || '', item.title),
         score: item.score || 0,
         collection: collection
       }));
+
+      const durationMs = Date.now() - startTime;
+      emitMemoryEvent({
+        eventType: 'search',
+        trigger: 'api',
+        summary: `QMD semantic search: ${results.length} results for "${query.slice(0, 60)}"`,
+        payload: {
+          query,
+          collection,
+          limit,
+          resultCount: results.length,
+          results: results.map(r => ({ path: r.path, score: r.score, contentPreview: r.content.slice(0, 200) })),
+        },
+        durationMs,
+        metadata: { collection, searchType: 'semantic' },
+      }).catch(() => {});
+
+      return results;
     } catch {
       return [];
     }
   } catch (error) {
+    const durationMs = Date.now() - startTime;
+    emitMemoryEvent({
+      eventType: 'search',
+      trigger: 'api',
+      summary: `QMD semantic search: error for "${query.slice(0, 60)}"`,
+      payload: { query, collection, limit, resultCount: 0, error: String(error) },
+      durationMs,
+      metadata: { collection, searchType: 'semantic' },
+    }).catch(() => {});
     console.error('QMD semantic search error:', error);
     return [];
   }
@@ -178,11 +271,21 @@ export async function buildMemoryContext(
   query: string,
   options: BuildContextOptions = {}
 ): Promise<string | null> {
+  const startTime = Date.now();
   const { limit = 5, collection = 'life' } = options;
 
-  const results = searchMemory(query, { limit, collection });
+  const results = searchMemory(query, { limit, collection, _skipEvent: true });
+  const durationMs = Date.now() - startTime;
 
   if (results.length === 0) {
+    emitMemoryEvent({
+      eventType: 'search',
+      trigger: 'chat',
+      summary: `Memory search: no results for "${query.slice(0, 60)}"`,
+      payload: { query, collection, limit, resultCount: 0 },
+      durationMs,
+      metadata: { collection, searchType: 'hybrid' },
+    }).catch(() => {});
     return null;
   }
 
@@ -192,6 +295,21 @@ export async function buildMemoryContext(
   } catch (error) {
     console.error('Failed to record search access:', error);
   }
+
+  emitMemoryEvent({
+    eventType: 'search',
+    trigger: 'chat',
+    summary: `Memory search: ${results.length} results for "${query.slice(0, 60)}"`,
+    payload: {
+      query,
+      collection,
+      limit,
+      resultCount: results.length,
+      results: results.map(r => ({ path: r.path, score: r.score, contentPreview: r.content.slice(0, 200) })),
+    },
+    durationMs,
+    metadata: { collection, searchType: 'hybrid' },
+  }).catch(() => {});
 
   const lines: string[] = [];
 
