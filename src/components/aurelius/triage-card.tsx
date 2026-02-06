@@ -324,8 +324,8 @@ export const TriageCard = forwardRef<HTMLDivElement, TriageCardProps>(
 
         {/* Bottom bar: Keyboard hints (only show when active) */}
         {isActive && (
-          <div className="px-4 py-2 border-t border-border bg-background/50 flex items-center justify-between">
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <div className="px-4 py-2 border-t border-border bg-background/50">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
               <KeyHint keyName="←" label="Archive" />
               <KeyHint keyName="↑" label="Summary" />
               <KeyHint keyName="s" label="Snooze" />
