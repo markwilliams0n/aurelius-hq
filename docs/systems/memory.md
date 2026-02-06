@@ -68,7 +68,7 @@ inbox_items       - Triage inbox from connectors
 
 ## Data Flow
 
-### Writing Memory
+### Writing Memory — Chat
 
 ```
 Conversation
@@ -81,7 +81,32 @@ containsMemorableContent()?
 └──────────────────────────────────┘
 ```
 
-Triage "save to memory" follows the same pattern: daily note + Supermemory.
+Chat messages always send full content to both layers.
+
+### Writing Memory — Triage (Summary vs Full)
+
+Triage items support two save modes to control Supermemory token usage:
+
+| Mode | Shortcut | Daily Notes | Supermemory | Use case |
+|------|----------|-------------|-------------|----------|
+| **Summary** | ↑ | Ollama summary | Ollama summary | Long content (Granola, emails) |
+| **Full** | ⇧↑ | Full content | Full content | Short/important content |
+
+```
+User presses ↑ (summary) or ⇧↑ (full)
+    ↓
+POST /api/triage/{id}/memory  { mode: "summary" | "full" }
+    ↓
+mode == "summary"?
+    ├─ yes → Ollama summarizes content (2-4 sentences)
+    │        Falls back to full if Ollama unavailable
+    └─ no  → Use raw content
+    ↓
+appendToDailyNote(content)     → memory/YYYY-MM-DD.md
+addMemory(content, metadata)   → Supermemory
+```
+
+**Why summarize?** Supermemory charges by token. A single Granola meeting transcript can use 5K+ tokens. An Ollama summary brings that down to ~200 tokens while preserving key facts, people, and decisions.
 
 ### Reading Memory
 
@@ -117,6 +142,10 @@ Runs every 15 minutes to sync external connectors (Granola, Gmail, Linear, Slack
 # Supermemory
 SUPERMEMORY_API_KEY=...        # Required for long-term memory
 
+# Ollama (local LLM for summarization + enrichment)
+OLLAMA_URL=http://localhost:11434  # Default
+OLLAMA_MODEL=llama3.2:3b           # Default
+
 # Heartbeat Scheduling
 HEARTBEAT_INTERVAL_MINUTES=15  # Default
 HEARTBEAT_ENABLED=true         # Disable with 'false'
@@ -130,12 +159,19 @@ HEARTBEAT_ENABLED=true         # Disable with 'false'
 | Supermemory client | `src/lib/memory/supermemory.ts` |
 | Context building | `src/lib/memory/search.ts` |
 | Daily notes module | `src/lib/memory/daily-notes.ts` |
-| Extraction | `src/lib/memory/extraction.ts` |
+| Chat extraction | `src/lib/memory/extraction.ts` |
+| Triage memory save | `src/app/api/triage/[id]/memory/route.ts` |
+| Ollama client | `src/lib/memory/ollama.ts` |
 | Heartbeat | `src/lib/memory/heartbeat.ts` |
+
+## Migration History
+
+See [Supermemory Transition](./supermemory-transition.md) for details on the migration from QMD/Ollama extraction to Supermemory, including revert instructions.
 
 ## Related Documentation
 
 - [Daily Notes](./daily-notes.md) - Short-term memory layer
 - [Heartbeat](./heartbeat.md) - Background connector sync
 - [Triage](./triage.md) - Inbox system that feeds memory
+- [Supermemory Transition](./supermemory-transition.md) - Migration details + revert guide
 - [Architecture](../../ARCHITECTURE.md) - System overview

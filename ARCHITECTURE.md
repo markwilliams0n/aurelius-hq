@@ -64,6 +64,7 @@ src/
 - `lib/memory/search.ts` - `buildMemoryContext()` — formats Supermemory results for AI prompts
 - `lib/memory/daily-notes.ts` - Append-only daily logs + recent notes retrieval
 - `lib/memory/extraction.ts` - Saves conversations to daily notes + Supermemory
+- `lib/memory/ollama.ts` - Local LLM for triage summarization + enrichment
 
 ### 3. Heartbeat System
 
@@ -272,7 +273,7 @@ Follow the Telegram pattern:
 
 - **Streaming**: All AI responses stream via SSE
 - **Tool loops**: Max 5 iterations to prevent runaway
-- **Memory extraction**: Heuristic-based, saves to daily notes
+- **Memory extraction**: Chat → daily notes + Supermemory. Triage → summary or full mode
 - **Config approval**: AI proposes, human approves
 - **Shared state**: Web + Telegram use same conversation
 - **Polling sync**: Web polls for external messages (3s interval)
