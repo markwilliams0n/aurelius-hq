@@ -285,9 +285,16 @@ export async function fetchViewerContext(): Promise<{
     key: m.team.key,
   }));
 
-  const projects = data.viewer.teamMemberships.nodes.flatMap((m) =>
-    m.team.projects.nodes
-  );
+  // Deduplicate projects that appear across multiple teams
+  const projectMap = new Map<string, typeof data.viewer.teamMemberships.nodes[0]['team']['projects']['nodes'][0]>();
+  for (const m of data.viewer.teamMemberships.nodes) {
+    for (const p of m.team.projects.nodes) {
+      if (!projectMap.has(p.id)) {
+        projectMap.set(p.id, p);
+      }
+    }
+  }
+  const projects = Array.from(projectMap.values());
 
   return {
     viewer: {
