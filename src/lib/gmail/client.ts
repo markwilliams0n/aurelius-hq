@@ -352,11 +352,15 @@ export async function createDraft(options: {
   subject: string;
   body: string;
   inReplyTo?: string;
+  cc?: string;
+  bcc?: string;
 }): Promise<string> {
   const gmail = await getGmailClient();
 
   const message = [
     `To: ${options.to}`,
+    options.cc ? `Cc: ${options.cc}` : '',
+    options.bcc ? `Bcc: ${options.bcc}` : '',
     `Subject: ${options.subject}`,
     options.inReplyTo ? `In-Reply-To: ${options.inReplyTo}` : '',
     options.inReplyTo ? `References: ${options.inReplyTo}` : '',
@@ -389,6 +393,8 @@ export async function sendEmail(options: {
   subject: string;
   body: string;
   inReplyTo?: string;
+  cc?: string;
+  bcc?: string;
 }): Promise<string> {
   if (process.env.GMAIL_ENABLE_SEND !== 'true') {
     // Fall back to draft
@@ -400,6 +406,8 @@ export async function sendEmail(options: {
 
   const message = [
     `To: ${options.to}`,
+    options.cc ? `Cc: ${options.cc}` : '',
+    options.bcc ? `Bcc: ${options.bcc}` : '',
     `Subject: ${options.subject}`,
     options.inReplyTo ? `In-Reply-To: ${options.inReplyTo}` : '',
     options.inReplyTo ? `References: ${options.inReplyTo}` : '',
