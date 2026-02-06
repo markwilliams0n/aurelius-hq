@@ -169,7 +169,7 @@ export function TriageReplyComposer({
   const busy = isSaving || isSending || isGenerating;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-background/80 backdrop-blur-sm"
@@ -177,7 +177,7 @@ export function TriageReplyComposer({
       />
 
       {/* Composer */}
-      <div className="relative w-full max-w-2xl mx-4 mb-4 bg-secondary border border-border rounded-xl shadow-2xl animate-in slide-in-from-bottom-4 duration-200">
+      <div className="relative w-full max-w-2xl mx-4 bg-secondary border border-border rounded-xl shadow-2xl animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="px-4 py-3 border-b border-border flex items-center justify-between">
           <div className="flex flex-col">
