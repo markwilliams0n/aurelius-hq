@@ -29,6 +29,8 @@ export interface LinearIssueState {
   id: string;
   name: string;
   type: 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled';
+  color?: string;
+  position?: number;
 }
 
 // Issue label
@@ -43,6 +45,8 @@ export interface LinearProject {
   id: string;
   name: string;
   state: string;
+  color?: string;
+  icon?: string;
 }
 
 // Comment
@@ -62,6 +66,7 @@ export interface LinearIssue {
   url: string;
   priority: number; // 0=none, 1=urgent, 2=high, 3=normal, 4=low
   state: LinearIssueState;
+  team?: { id: string; name: string; key: string };
   project?: LinearProject;
   labels: { nodes: LinearLabel[] };
   assignee?: LinearActor;

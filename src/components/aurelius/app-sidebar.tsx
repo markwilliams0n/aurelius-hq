@@ -22,9 +22,9 @@ import { useMemoryDebug } from "./memory-debug-provider";
 const navItems = [
   { href: "/chat", icon: MessageSquare, label: "Chat" },
   { href: "/triage", icon: Inbox, label: "Triage" },
+  { href: "/tasks", icon: CheckSquare, label: "Tasks" },
   { href: "/memory", icon: Brain, label: "Memory" },
   { href: "/system", icon: Activity, label: "System" },
-  { href: "/actions", icon: CheckSquare, label: "Actions", disabled: true },
   { href: "/settings", icon: Settings, label: "Settings", disabled: true },
 ];
 

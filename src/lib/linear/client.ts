@@ -25,7 +25,7 @@ export function isConfigured(): boolean {
 /**
  * Execute a GraphQL query against Linear API
  */
-async function graphql<T>(
+export async function graphql<T>(
   query: string,
   variables?: Record<string, unknown>
 ): Promise<T> {
