@@ -21,6 +21,13 @@ export async function extractAndSaveMemories(
     { source: "chat" }
   ).catch((error) => {
     console.error('[Extraction] Supermemory add failed:', error);
+    emitMemoryEvent({
+      eventType: 'save',
+      trigger: 'chat',
+      summary: `Supermemory save failed: ${error instanceof Error ? error.message : String(error)}`,
+      payload: { error: String(error), content: userMessage.slice(0, 200) },
+      metadata: { status: 'error', method: 'supermemory' },
+    }).catch(() => {});
   });
 
   emitMemoryEvent({

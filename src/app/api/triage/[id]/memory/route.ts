@@ -65,8 +65,25 @@ export async function POST(
   });
 
   // Process in background (don't await)
-  processMemoryInBackground(item, activityEntry.id, mode).catch((error) => {
+  processMemoryInBackground(item, activityEntry.id, mode).catch(async (error) => {
     console.error("[Memory] Background processing failed:", error);
+    try {
+      await db
+        .update(activityLogTable)
+        .set({
+          description: `Memory save crashed: ${item.subject}`,
+          metadata: {
+            action: "memory",
+            mode,
+            itemId: id,
+            status: "crashed",
+            error: String(error),
+          },
+        })
+        .where(eq(activityLogTable.id, activityEntry.id));
+    } catch {
+      // Last resort — activity log update also failed
+    }
   });
 
   // Return immediately
@@ -212,13 +229,11 @@ async function extractAndSaveMemory(
   // Supermemory
   const supermemoryContent = `From: ${senderName} via ${item.connector}\nSubject: ${item.subject}\n\n${memoryContent}`;
 
-  addMemory(supermemoryContent, {
+  await addMemory(supermemoryContent, {
     source: item.connector,
     subject: item.subject,
     sender: senderName,
     mode: effectiveMode,
-  }).catch((error) => {
-    console.error("[Memory] Supermemory add failed:", error);
   });
 
   return { effectiveMode };

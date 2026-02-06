@@ -5,7 +5,7 @@ import type {
 } from "supermemory/resources/top-level";
 import type { SearchDocumentsResponse } from "supermemory/resources/search";
 
-const CONTAINER_TAG = "mark"; // Single-user, hardcoded for now
+const CONTAINER_TAG = process.env.SUPERMEMORY_CONTAINER_TAG || "default";
 
 let client: Supermemory | null = null;
 
@@ -25,7 +25,7 @@ function getClient(): Supermemory {
  */
 export async function addMemory(
   content: string,
-  metadata?: Record<string, string | number | boolean | string[]>
+  metadata?: Record<string, string | number | boolean>
 ): Promise<AddResponse> {
   const sm = getClient();
   return sm.add({

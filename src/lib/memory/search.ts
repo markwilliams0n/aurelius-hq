@@ -1,7 +1,5 @@
-import { promises as fs } from 'fs';
-import path from 'path';
 import { emitMemoryEvent } from './events';
-import { getMemoryContext } from './supermemory';
+import { getMemoryContext, searchMemories } from './supermemory';
 
 export interface BuildContextOptions {
   /** Maximum number of results */
@@ -93,8 +91,8 @@ export async function buildMemoryContext(
 }
 
 /**
- * Get all memory for display in memory browser
- * Reads from file-based memory (life/ directory)
+ * Get all memory for display in memory browser.
+ * Fetches recent memories from Supermemory.
  */
 export async function getAllMemory(): Promise<
   Array<{
@@ -112,95 +110,27 @@ export async function getAllMemory(): Promise<
     }>;
   }>
 > {
-  const LIFE_DIR = path.join(process.cwd(), 'life');
-  const result: Array<{
-    entity: {
-      id: string;
-      name: string;
-      type: string;
-      summary: string | null;
-    };
-    facts: Array<{
-      id: string;
-      content: string;
-      category: string | null;
-      createdAt: Date;
-    }>;
-  }> = [];
+  try {
+    const results = await searchMemories('*', 50);
 
-  // Scan entity directories
-  const entityDirs = [
-    { path: 'areas/people', type: 'person' },
-    { path: 'areas/companies', type: 'company' },
-    { path: 'projects', type: 'project' },
-    { path: 'resources', type: 'resource' },
-  ];
-
-  for (const { path: entityPath, type } of entityDirs) {
-    const dirPath = path.join(LIFE_DIR, entityPath);
-
-    try {
-      const items = await fs.readdir(dirPath, { withFileTypes: true });
-
-      for (const item of items) {
-        if (item.isDirectory() && !item.name.startsWith('_')) {
-          const entityDir = path.join(dirPath, item.name);
-
-          // Try to read summary.md
-          let summary: string | null = null;
-          try {
-            const summaryContent = await fs.readFile(
-              path.join(entityDir, 'summary.md'),
-              'utf-8'
-            );
-            // Extract summary from markdown
-            const match = summaryContent.match(/## Summary\n\n([\s\S]*?)(?=\n##|$)/);
-            summary = match ? match[1].trim() : summaryContent.slice(0, 200);
-          } catch {
-            // No summary file
-          }
-
-          // Try to read items.json for facts
-          const facts: Array<{
-            id: string;
-            content: string;
-            category: string | null;
-            createdAt: Date;
-          }> = [];
-
-          try {
-            const itemsContent = await fs.readFile(
-              path.join(entityDir, 'items.json'),
-              'utf-8'
-            );
-            const items = JSON.parse(itemsContent);
-            for (const item of items) {
-              facts.push({
-                id: item.id || `${item.name}-${facts.length}`,
-                content: item.fact || item.content || '',
-                category: item.category || null,
-                createdAt: item.timestamp ? new Date(item.timestamp) : new Date(),
-              });
-            }
-          } catch {
-            // No items file
-          }
-
-          result.push({
-            entity: {
-              id: `${entityPath}/${item.name}`,
-              name: item.name.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-              type,
-              summary,
-            },
-            facts,
-          });
-        }
-      }
-    } catch {
-      // Directory doesn't exist
-    }
+    return results.map((doc, i) => ({
+      entity: {
+        id: doc.documentId || `memory-${i}`,
+        name: (doc.metadata as Record<string, string>)?.subject
+          || doc.content?.slice(0, 60).replace(/\n/g, ' ')
+          || `Memory ${i + 1}`,
+        type: (doc.metadata as Record<string, string>)?.source || 'memory',
+        summary: doc.content?.slice(0, 200) || null,
+      },
+      facts: [{
+        id: `${doc.documentId || i}-content`,
+        content: doc.content || '',
+        category: (doc.metadata as Record<string, string>)?.source || null,
+        createdAt: doc.createdAt ? new Date(doc.createdAt) : new Date(),
+      }],
+    }));
+  } catch (error) {
+    console.error('Failed to fetch memories from Supermemory:', error);
+    return [];
   }
-
-  return result;
 }
