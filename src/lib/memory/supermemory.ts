@@ -65,3 +65,32 @@ export async function searchMemories(
   });
   return response.results;
 }
+
+/**
+ * List memories with pagination. For memory dashboard.
+ */
+export async function listMemories(options?: {
+  page?: number;
+  limit?: number;
+  order?: 'asc' | 'desc';
+}) {
+  const sm = getClient();
+  return sm.memories.list({
+    containerTags: [CONTAINER_TAG],
+    page: options?.page ?? 1,
+    limit: options?.limit ?? 20,
+    order: options?.order ?? 'desc',
+    sort: 'createdAt',
+  });
+}
+
+/**
+ * Get user profile facts. For memory dashboard overview.
+ */
+export async function getProfile() {
+  const sm = getClient();
+  return sm.profile({
+    containerTag: CONTAINER_TAG,
+    q: '*',
+  });
+}
