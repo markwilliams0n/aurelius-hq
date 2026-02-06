@@ -17,16 +17,18 @@ interface SuggestedTask {
 
 interface SuggestedTasksBoxProps {
   itemId: string;
+  initialTasks?: SuggestedTask[];
   className?: string;
 }
 
-export function SuggestedTasksBox({ itemId, className }: SuggestedTasksBoxProps) {
-  const [tasks, setTasks] = useState<SuggestedTask[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+export function SuggestedTasksBox({ itemId, initialTasks, className }: SuggestedTasksBoxProps) {
+  const [tasks, setTasks] = useState<SuggestedTask[]>(initialTasks || []);
+  const [isLoading, setIsLoading] = useState(!initialTasks);
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
 
-  // Fetch tasks for this item
+  // Only fetch if no initial tasks were provided (fallback)
   const fetchTasks = useCallback(async () => {
+    if (initialTasks) return;
     try {
       const response = await fetch(`/api/triage/${itemId}/tasks`);
       if (!response.ok) throw new Error("Failed to fetch tasks");
@@ -37,11 +39,19 @@ export function SuggestedTasksBox({ itemId, className }: SuggestedTasksBoxProps)
     } finally {
       setIsLoading(false);
     }
-  }, [itemId]);
+  }, [itemId, initialTasks]);
 
   useEffect(() => {
-    fetchTasks();
-  }, [fetchTasks]);
+    if (!initialTasks) fetchTasks();
+  }, [fetchTasks, initialTasks]);
+
+  // Update tasks when initialTasks prop changes (new card shown)
+  useEffect(() => {
+    if (initialTasks) {
+      setTasks(initialTasks);
+      setIsLoading(false);
+    }
+  }, [initialTasks]);
 
   // Accept a single task
   const handleAccept = async (taskId: string) => {

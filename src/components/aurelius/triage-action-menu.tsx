@@ -72,7 +72,7 @@ export function TriageActionMenu({
       // Direct actions
       switch (e.key.toLowerCase()) {
         case "t":
-          onAction("actioned"); // Create task (simulated)
+          onAction("create-task");
           break;
         case "f":
           onAction("flag");
@@ -131,8 +131,8 @@ export function TriageActionMenu({
             keyName="T"
             icon={ListTodo}
             label="Create task"
-            description="Add to your task list"
-            onClick={() => onAction("actioned")}
+            description="Extract tasks with AI"
+            onClick={() => onAction("create-task")}
           />
           <ActionRow
             keyName="F"

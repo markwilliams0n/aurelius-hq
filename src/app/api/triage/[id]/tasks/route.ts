@@ -4,6 +4,8 @@ import { suggestedTasks, inboxItems } from "@/lib/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { upsertEntity } from "@/lib/memory/entities";
 import { createFact } from "@/lib/memory/facts";
+import { isConfigured } from "@/lib/linear/client";
+import { createIssue, fetchViewerContext } from "@/lib/linear/issues";
 
 // GET /api/triage/[id]/tasks - List suggested tasks for an item
 export async function GET(
@@ -82,11 +84,13 @@ export async function POST(
 
   try {
     const body = await request.json();
-    const { action, taskIds, all, assigneeType } = body as {
+    const { action, taskIds, all, assigneeType, skipLinear, tasks: inlineTasks } = body as {
       action: "accept" | "dismiss";
       taskIds?: string[];
       all?: boolean;
       assigneeType?: "self" | "other"; // For "Accept All" which only affects "self"
+      skipLinear?: boolean; // Set true to skip Linear issue creation (default: create issues)
+      tasks?: Array<{ description: string; assignee?: string }>; // Inline task data (for edited tasks)
     };
 
     if (!action || !["accept", "dismiss"].includes(action)) {
@@ -191,10 +195,49 @@ export async function POST(
       }
     }
 
+    // Create Linear issues for accepted tasks (default behavior, opt out with skipLinear)
+    const createdIssues: Array<{ id: string; identifier: string; url: string; title: string }> = [];
+    if (action === "accept" && !skipLinear && isConfigured()) {
+      try {
+        const context = await fetchViewerContext();
+        const defaultTeamId = context.teams[0]?.id;
+
+        if (defaultTeamId) {
+          for (let i = 0; i < tasksToUpdate.length; i++) {
+            const task = tasksToUpdate[i];
+            // Use inline edited data if provided, otherwise use DB data
+            const taskData = inlineTasks?.[i];
+            const title = taskData?.description || task.description;
+
+            try {
+              const result = await createIssue({
+                title,
+                teamId: defaultTeamId,
+              });
+
+              if (result.success && result.issue) {
+                createdIssues.push({
+                  id: result.issue.id,
+                  identifier: result.issue.identifier,
+                  url: result.issue.url,
+                  title: result.issue.title,
+                });
+              }
+            } catch (issueError) {
+              console.error(`[Tasks API] Failed to create Linear issue for task ${task.id}:`, issueError);
+            }
+          }
+        }
+      } catch (contextError) {
+        console.error("[Tasks API] Failed to fetch Linear context:", contextError);
+      }
+    }
+
     return NextResponse.json({
       updated: tasksToUpdate.length,
       action,
       taskIds: tasksToUpdate.map((t) => t.id),
+      createdIssues: createdIssues.length > 0 ? createdIssues : undefined,
     });
   } catch (error) {
     console.error("[Tasks API] Failed to update tasks:", error);

@@ -45,6 +45,8 @@ export interface LinearProject {
   id: string;
   name: string;
   state: string;
+  url?: string;
+  description?: string;
   color?: string;
   icon?: string;
 }
@@ -75,6 +77,28 @@ export interface LinearIssue {
   updatedAt: string;
 }
 
+// Project update
+export interface LinearProjectUpdate {
+  id: string;
+  body: string;
+  url?: string;
+  createdAt: string;
+  user?: LinearActor;
+}
+
+// Initiative
+export interface LinearInitiative {
+  id: string;
+  name: string;
+  description?: string;
+  status?: string;
+}
+
+// Initiative update
+export interface LinearInitiativeUpdate {
+  body: string;
+}
+
 // Notification from Linear API
 export interface LinearNotification {
   id: string;
@@ -83,8 +107,15 @@ export interface LinearNotification {
   readAt?: string;
   archivedAt?: string;
   actor?: LinearActor;
+  // IssueNotification fields
   issue?: LinearIssue;
   comment?: LinearComment;
+  // ProjectNotification fields
+  project?: LinearProject;
+  projectUpdate?: LinearProjectUpdate;
+  // InitiativeNotification fields
+  initiative?: LinearInitiative;
+  initiativeUpdate?: LinearInitiativeUpdate;
 }
 
 // Paginated response

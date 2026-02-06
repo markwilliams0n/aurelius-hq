@@ -137,31 +137,11 @@ export function TriageSidebar({ stats, isExpanded = false, onToggleExpand, onUnd
     }
   };
 
-  // Keyboard shortcuts footer
-  const keyboardShortcuts = (
-    <div className="px-4 py-3 border-t border-border bg-secondary/30">
-      <h4 className="text-xs font-medium mb-2 text-muted-foreground">
-        Keyboard Shortcuts
-      </h4>
-      <div className="grid grid-cols-2 gap-1 text-xs">
-        <ShortcutHint keys="←" label="Archive" />
-        <ShortcutHint keys="↑" label="Memory" />
-        <ShortcutHint keys="⇧↑" label="Mem+Archive" />
-        <ShortcutHint keys="s" label="Snooze" />
-        <ShortcutHint keys="Space" label="Chat" />
-        <ShortcutHint keys="→" label="Actions" />
-        <ShortcutHint keys="↵" label="Expand" />
-        <ShortcutHint keys="Esc" label="Close" />
-      </div>
-    </div>
-  );
-
   return (
     <RightSidebar
       title="Inbox Stats"
       isExpanded={isExpanded}
       onToggleExpand={onToggleExpand}
-      footer={keyboardShortcuts}
     >
       {/* Stats section */}
       <div className="px-4 py-3 border-b border-border">
@@ -235,17 +215,6 @@ function StatBadge({
         <span className="font-mono text-sm font-medium">{value}</span>
         <span className="text-[10px] text-muted-foreground">{label}</span>
       </div>
-    </div>
-  );
-}
-
-function ShortcutHint({ keys, label }: { keys: string; label: string }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[10px]">
-        {keys}
-      </kbd>
-      <span className="text-muted-foreground">{label}</span>
     </div>
   );
 }

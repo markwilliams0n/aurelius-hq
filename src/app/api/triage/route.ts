@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { generateFakeInboxItems, getTriageQueue } from "@/lib/triage/fake-data";
+import { getTriageQueue } from "@/lib/triage/queue";
 import { db } from "@/lib/db";
 import { inboxItems as inboxItemsTable, suggestedTasks } from "@/lib/db/schema";
-import { eq, desc, and, or, lt, isNull } from "drizzle-orm";
-import { insertInboxItemWithTasks } from "@/lib/triage/insert-with-tasks";
+import { eq, desc, and, lt, sql, inArray } from "drizzle-orm";
 
 // Wake up snoozed items whose snooze time has passed
 async function wakeUpSnoozedItems() {
@@ -66,74 +65,77 @@ export async function GET(request: Request) {
   // First, wake up any snoozed items whose time has passed
   await wakeUpSnoozedItems();
 
-  // Fetch from database
-  const dbItems = await getInboxItemsFromDb({
-    status,
-    connector: connector || undefined,
-    limit,
-  });
-
-  // Get all items for stats
-  const allItems = await getInboxItemsFromDb({ includeAll: true });
+  // Fetch filtered items and stats in parallel
+  const [dbItems, statsRows] = await Promise.all([
+    getInboxItemsFromDb({
+      status,
+      connector: connector || undefined,
+      limit,
+    }),
+    // Single GROUP BY query for stats instead of fetching all items
+    db
+      .select({
+        status: inboxItemsTable.status,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(inboxItemsTable)
+      .groupBy(inboxItemsTable.status),
+  ]);
 
   // Sort by priority then date
   const queue = getTriageQueue(dbItems);
 
-  // Count snoozed items that are still snoozed (not yet woken up)
-  const snoozedCount = allItems.filter(
-    (i) => i.status === "snoozed" && i.snoozedUntil && new Date(i.snoozedUntil) > new Date()
-  ).length;
+  // Build stats from aggregated counts
+  const statsByStatus: Record<string, number> = {};
+  for (const row of statsRows) {
+    statsByStatus[row.status] = row.count;
+  }
+
+  // Batch-fetch all suggested tasks for the items we're returning
+  const limitedQueue = queue.slice(0, limit);
+  const itemIds = limitedQueue.map((item) => item.id);
+  const allTasks = itemIds.length > 0
+    ? await db
+        .select()
+        .from(suggestedTasks)
+        .where(
+          and(
+            inArray(suggestedTasks.sourceItemId, itemIds as string[]),
+            eq(suggestedTasks.status, "suggested")
+          )
+        )
+    : [];
+
+  // Build a map from DB id to display id (externalId || id)
+  // item.id is always present (primary key) but drizzle types it as possibly undefined
+  const dbIdToDisplayId: Record<string, string> = {};
+  for (const item of limitedQueue) {
+    if (!item.id) continue;
+    dbIdToDisplayId[item.id] = item.externalId ?? item.id;
+  }
+
+  // Group tasks by display ID so the client can look them up directly
+  const tasksByItemId: Record<string, typeof allTasks> = {};
+  for (const task of allTasks) {
+    const sourceId = task.sourceItemId;
+    if (!sourceId) continue;
+    const displayId = dbIdToDisplayId[sourceId] ?? sourceId;
+    if (!tasksByItemId[displayId]) {
+      tasksByItemId[displayId] = [];
+    }
+    tasksByItemId[displayId].push(task);
+  }
 
   return NextResponse.json({
     items: queue.slice(0, limit),
     total: queue.length,
+    tasksByItemId,
     stats: {
-      new: allItems.filter((i) => i.status === "new").length,
-      archived: allItems.filter((i) => i.status === "archived").length,
-      snoozed: snoozedCount,
-      actioned: allItems.filter((i) => i.status === "actioned").length,
+      new: statsByStatus["new"] || 0,
+      archived: statsByStatus["archived"] || 0,
+      snoozed: statsByStatus["snoozed"] || 0,
+      actioned: statsByStatus["actioned"] || 0,
     },
   });
 }
 
-// POST /api/triage - Reset with fresh fake data (for development)
-// NOTE: Does NOT delete gmail items - those come from real Gmail sync
-export async function POST() {
-  // Clear existing fake items and their tasks (keep real connector data like granola, gmail)
-  // Tasks are cascade deleted when inbox items are deleted
-  // Gmail is excluded - use real Gmail sync instead of fake data
-  await db.delete(inboxItemsTable).where(eq(inboxItemsTable.connector, 'slack'));
-  await db.delete(inboxItemsTable).where(eq(inboxItemsTable.connector, 'linear'));
-  await db.delete(inboxItemsTable).where(eq(inboxItemsTable.connector, 'manual'));
-
-  // Generate fresh fake data (excluding Gmail - use real sync)
-  const allFakeItems = await generateFakeInboxItems();
-  const fakeItems = allFakeItems.filter(item => item.connector !== 'gmail');
-
-  // Insert fake data - skip AI task extraction for performance
-  // Fake data could include simulated tasks later if needed
-  for (const item of fakeItems) {
-    await insertInboxItemWithTasks(
-      {
-        connector: item.connector as any,
-        externalId: item.externalId,
-        sender: item.sender,
-        senderName: item.senderName,
-        subject: item.subject,
-        content: item.content,
-        preview: item.preview,
-        status: item.status as any,
-        priority: item.priority as any,
-        tags: item.tags,
-        receivedAt: item.receivedAt,
-        enrichment: item.enrichment,
-      },
-      { skipAiExtraction: true }
-    );
-  }
-
-  return NextResponse.json({
-    message: "Inbox reset with fresh fake data",
-    count: fakeItems.length,
-  });
-}
