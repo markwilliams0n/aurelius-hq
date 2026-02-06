@@ -194,7 +194,9 @@ export async function fetchProjectIssues(
 }
 
 /**
- * Fetch the current viewer's teams and projects (for filtering)
+ * Fetch accessible teams, projects, and viewer info.
+ * Uses the top-level `teams` query (not teamMemberships) so the agent
+ * sees all teams it has access to, not just teams it's a member of.
  */
 export async function fetchViewerContext(): Promise<{
   viewer: {
@@ -221,21 +223,19 @@ export async function fetchViewerContext(): Promise<{
         id
         name
         email
-        teamMemberships {
-          nodes {
-            team {
+      }
+      teams {
+        nodes {
+          id
+          name
+          key
+          projects {
+            nodes {
               id
               name
-              key
-              projects {
-                nodes {
-                  id
-                  name
-                  state
-                  color
-                  icon
-                }
-              }
+              state
+              color
+              icon
             }
           }
         }
@@ -248,37 +248,35 @@ export async function fetchViewerContext(): Promise<{
       id: string;
       name: string;
       email: string;
-      teamMemberships: {
-        nodes: Array<{
-          team: {
+    };
+    teams: {
+      nodes: Array<{
+        id: string;
+        name: string;
+        key: string;
+        projects: {
+          nodes: Array<{
             id: string;
             name: string;
-            key: string;
-            projects: {
-              nodes: Array<{
-                id: string;
-                name: string;
-                state: string;
-                color?: string;
-                icon?: string;
-              }>;
-            };
-          };
-        }>;
-      };
+            state: string;
+            color?: string;
+            icon?: string;
+          }>;
+        };
+      }>;
     };
   }>(query);
 
-  const teams = data.viewer.teamMemberships.nodes.map((m) => ({
-    id: m.team.id,
-    name: m.team.name,
-    key: m.team.key,
+  const teams = data.teams.nodes.map((t) => ({
+    id: t.id,
+    name: t.name,
+    key: t.key,
   }));
 
-  // Deduplicate projects that appear across multiple teams
-  const projectMap = new Map<string, typeof data.viewer.teamMemberships.nodes[0]['team']['projects']['nodes'][0]>();
-  for (const m of data.viewer.teamMemberships.nodes) {
-    for (const p of m.team.projects.nodes) {
+  // Deduplicate projects across teams
+  const projectMap = new Map<string, { id: string; name: string; state: string; color?: string; icon?: string }>();
+  for (const t of data.teams.nodes) {
+    for (const p of t.projects.nodes) {
       if (!projectMap.has(p.id)) {
         projectMap.set(p.id, p);
       }
@@ -298,7 +296,7 @@ export async function fetchViewerContext(): Promise<{
 }
 
 /**
- * Fetch workflow states for all teams the viewer belongs to
+ * Fetch workflow states for all accessible teams
  */
 export async function fetchWorkflowStates(): Promise<
   Array<{
@@ -312,21 +310,17 @@ export async function fetchWorkflowStates(): Promise<
 > {
   const query = `
     query WorkflowStates {
-      viewer {
-        teamMemberships {
-          nodes {
-            team {
+      teams {
+        nodes {
+          id
+          name
+          states {
+            nodes {
               id
               name
-              states {
-                nodes {
-                  id
-                  name
-                  type
-                  color
-                  position
-                }
-              }
+              type
+              color
+              position
             }
           }
         }
@@ -335,24 +329,20 @@ export async function fetchWorkflowStates(): Promise<
   `;
 
   const data = await graphql<{
-    viewer: {
-      teamMemberships: {
-        nodes: Array<{
-          team: {
+    teams: {
+      nodes: Array<{
+        id: string;
+        name: string;
+        states: {
+          nodes: Array<{
             id: string;
             name: string;
-            states: {
-              nodes: Array<{
-                id: string;
-                name: string;
-                type: string;
-                color: string;
-                position: number;
-              }>;
-            };
-          };
-        }>;
-      };
+            type: string;
+            color: string;
+            position: number;
+          }>;
+        };
+      }>;
     };
   }>(query);
 
@@ -365,12 +355,12 @@ export async function fetchWorkflowStates(): Promise<
     team: { id: string; name: string };
   }>();
 
-  for (const m of data.viewer.teamMemberships.nodes) {
-    for (const s of m.team.states.nodes) {
+  for (const t of data.teams.nodes) {
+    for (const s of t.states.nodes) {
       if (!stateMap.has(s.id)) {
         stateMap.set(s.id, {
           ...s,
-          team: { id: m.team.id, name: m.team.name },
+          team: { id: t.id, name: t.name },
         });
       }
     }
@@ -380,7 +370,7 @@ export async function fetchWorkflowStates(): Promise<
 }
 
 /**
- * Fetch team members for all teams the viewer belongs to
+ * Fetch team members across all accessible teams
  */
 export async function fetchTeamMembers(): Promise<
   Array<{
@@ -392,19 +382,15 @@ export async function fetchTeamMembers(): Promise<
 > {
   const query = `
     query TeamMembers {
-      viewer {
-        teamMemberships {
-          nodes {
-            team {
-              members {
-                nodes {
-                  id
-                  name
-                  email
-                  avatarUrl
-                  active
-                }
-              }
+      teams {
+        nodes {
+          members {
+            nodes {
+              id
+              name
+              email
+              avatarUrl
+              active
             }
           }
         }
@@ -413,22 +399,18 @@ export async function fetchTeamMembers(): Promise<
   `;
 
   const data = await graphql<{
-    viewer: {
-      teamMemberships: {
-        nodes: Array<{
-          team: {
-            members: {
-              nodes: Array<{
-                id: string;
-                name: string;
-                email: string;
-                avatarUrl?: string;
-                active: boolean;
-              }>;
-            };
-          };
-        }>;
-      };
+    teams: {
+      nodes: Array<{
+        members: {
+          nodes: Array<{
+            id: string;
+            name: string;
+            email: string;
+            avatarUrl?: string;
+            active: boolean;
+          }>;
+        };
+      }>;
     };
   }>(query);
 
@@ -439,8 +421,8 @@ export async function fetchTeamMembers(): Promise<
     avatarUrl?: string;
   }>();
 
-  for (const m of data.viewer.teamMemberships.nodes) {
-    for (const member of m.team.members.nodes) {
+  for (const t of data.teams.nodes) {
+    for (const member of t.members.nodes) {
       if (member.active && !memberMap.has(member.id)) {
         memberMap.set(member.id, {
           id: member.id,
