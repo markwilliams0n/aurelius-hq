@@ -11,6 +11,7 @@ import { buildMemoryContext } from '@/lib/memory/search';
 import { getRecentNotes } from '@/lib/memory/daily-notes';
 import { getConfig } from '@/lib/config';
 import { emitMemoryEvent } from '@/lib/memory/events';
+import { getCapabilityPrompts } from '@/lib/capabilities';
 
 export interface AgentContextOptions {
   /** The user's message - used for semantic search */
@@ -72,6 +73,12 @@ export async function buildAgentContext(
     soulConfig,
     modelId,
   });
+
+  // Add capability instructions
+  const capabilityPrompts = getCapabilityPrompts();
+  if (capabilityPrompts) {
+    systemPrompt += `\n\n${capabilityPrompts}`;
+  }
 
   // Append any additional context (e.g., Telegram-specific info)
   if (additionalContext) {
