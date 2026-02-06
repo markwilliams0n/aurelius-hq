@@ -147,4 +147,6 @@ export const CONFIG_DESCRIPTIONS: Record<ConfigKey, string> = {
   system_prompt: "Core system prompt that defines my fundamental capabilities and context.",
   agents: "Configuration for specialized sub-agents (reserved for future use).",
   processes: "Automated process definitions and schedules (reserved for future use).",
+  "capability:tasks": "Instructions for the Tasks capability — how the agent manages tasks via Linear.",
+  "capability:config": "Instructions for the Configuration capability — how the agent manages its own config.",
 };

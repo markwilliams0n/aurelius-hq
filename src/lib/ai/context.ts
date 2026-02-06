@@ -11,6 +11,7 @@ import { buildMemoryContext } from '@/lib/memory/search';
 import { getRecentNotes } from '@/lib/memory/daily-notes';
 import { getConfig } from '@/lib/config';
 import { emitMemoryEvent } from '@/lib/memory/events';
+import { getCapabilityPrompts } from '@/lib/capabilities';
 
 export interface AgentContextOptions {
   /** The user's message - used for semantic search */
@@ -57,10 +58,11 @@ export async function buildAgentContext(
 
   // Gather all context pieces in parallel
   const startTime = Date.now();
-  const [recentNotes, memoryContext, soulConfigResult] = await Promise.all([
+  const [recentNotes, memoryContext, soulConfigResult, capabilityPrompts] = await Promise.all([
     getRecentNotes(),
     buildMemoryContext(query),
     getConfig('soul'),
+    getCapabilityPrompts(),
   ]);
 
   const soulConfig = soulConfigResult?.content || null;
@@ -72,6 +74,11 @@ export async function buildAgentContext(
     soulConfig,
     modelId,
   });
+
+  // Add capability instructions
+  if (capabilityPrompts) {
+    systemPrompt += `\n\n${capabilityPrompts}`;
+  }
 
   // Append any additional context (e.g., Telegram-specific info)
   if (additionalContext) {

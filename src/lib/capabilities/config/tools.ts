@@ -1,8 +1,9 @@
 import { getConfig, getAllConfigs, proposePendingChange, CONFIG_DESCRIPTIONS, ConfigKey } from "@/lib/config";
 import { configKeyEnum } from "@/lib/db/schema";
+import type { ToolDefinition, ToolResult } from "../types";
 
 // Tool definitions for Claude (OpenAI function calling format)
-export const CONFIG_TOOLS = [
+export const CONFIG_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "list_configs",
     description: "List all available configuration keys and their descriptions. Use this to see what configs can be modified.",
@@ -57,12 +58,12 @@ function isValidConfigKey(key: unknown): key is ConfigKey {
   return typeof key === "string" && key !== "" && configKeyEnum.enumValues.includes(key as ConfigKey);
 }
 
-// Tool handlers
+// Tool handler — returns null for unrecognized tool names
 export async function handleConfigTool(
   toolName: string,
   toolInput: Record<string, unknown>,
   conversationId?: string
-): Promise<{ result: string; pendingChangeId?: string }> {
+): Promise<ToolResult | null> {
   switch (toolName) {
     case "list_configs": {
       const configs = await getAllConfigs();
@@ -190,11 +191,6 @@ export async function handleConfigTool(
     }
 
     default:
-      return { result: JSON.stringify({ error: `Unknown tool: ${toolName}` }) };
+      return null;
   }
-}
-
-// Check if a tool name is a config tool
-export function isConfigTool(toolName: string): boolean {
-  return CONFIG_TOOLS.some((t) => t.name === toolName);
 }

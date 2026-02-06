@@ -1,5 +1,5 @@
 import { OpenRouter } from "@openrouter/sdk";
-import { CONFIG_TOOLS, handleConfigTool } from "./config-tools";
+import { getAllTools, handleToolCall } from "@/lib/capabilities";
 
 // OpenRouter client singleton
 export const ai = new OpenRouter({
@@ -97,10 +97,7 @@ export async function* chatStreamWithTools(
         body: JSON.stringify({
           model: TOOL_MODEL,
           messages: conversationMessages,
-          tools: CONFIG_TOOLS.map(t => ({
-            type: "function",
-            function: t,
-          })),
+          tools: getAllTools(),
           tool_choice: "auto",
         }),
         signal: controller.signal,
@@ -165,7 +162,7 @@ export async function* chatStreamWithTools(
       yield { type: "tool_use", toolName, toolInput: parsedArgs };
 
       try {
-        const { result: toolResult, pendingChangeId } = await handleConfigTool(
+        const { result: toolResult, pendingChangeId } = await handleToolCall(
           toolName,
           parsedArgs,
           conversationId
