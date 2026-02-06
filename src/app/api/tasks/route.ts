@@ -96,13 +96,21 @@ export async function GET(request: Request) {
       updatedAt: task.extractedAt.toISOString(),
     }));
 
+    // Deduplicate by ID
+    const seen = new Set<string>();
+    const allTasks = [...linearTasks, ...triageTaskItems].filter((t) => {
+      if (seen.has(t.id)) return false;
+      seen.add(t.id);
+      return true;
+    });
+
     return NextResponse.json({
-      tasks: [...linearTasks, ...triageTaskItems],
+      tasks: allTasks,
       context: linearResult.context,
       counts: {
-        linear: linearTasks.length,
-        triage: triageTaskItems.length,
-        total: linearTasks.length + triageTaskItems.length,
+        linear: allTasks.filter((t) => t.source === 'linear').length,
+        triage: allTasks.filter((t) => t.source === 'triage').length,
+        total: allTasks.length,
       },
     });
   } catch (error) {

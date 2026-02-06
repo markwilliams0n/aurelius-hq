@@ -140,7 +140,14 @@ export function TasksClient() {
       const response = await fetch(`/api/tasks?${params}`);
       if (!response.ok) throw new Error("Failed to fetch tasks");
       const data = await response.json();
-      setTasks(data.tasks || []);
+      // Deduplicate by ID (same issue can appear in multiple Linear queries)
+      const seen = new Set<string>();
+      const uniqueTasks = (data.tasks || []).filter((t: Task) => {
+        if (seen.has(t.id)) return false;
+        seen.add(t.id);
+        return true;
+      });
+      setTasks(uniqueTasks);
       setContext(data.context || null);
     } catch (error) {
       console.error("Failed to fetch tasks:", error);
