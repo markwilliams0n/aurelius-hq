@@ -5,20 +5,35 @@ import { eq } from "drizzle-orm";
 import { appendToDailyNote } from "@/lib/memory/daily-notes";
 import { addMemory } from "@/lib/memory/supermemory";
 import { logActivity } from "@/lib/activity";
+import { isOllamaAvailable, generate } from "@/lib/memory/ollama";
+
+type MemoryMode = "full" | "summary";
 
 /**
  * POST /api/triage/[id]/memory - Save triage item to memory
  *
- * Flow:
- * 1. User triggers "save to memory" on a triage item
- * 2. Content saved to daily notes (short-term) and Supermemory (long-term)
- * 3. Supermemory handles extraction, entity resolution, and indexing
+ * Body: { mode?: "full" | "summary" }
+ *   - "summary" (default): Ollama summarizes before sending to Supermemory (saves tokens)
+ *   - "full": Send raw content to Supermemory
+ *
+ * Daily notes always get full content regardless of mode.
  */
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+
+  // Parse mode from body
+  let mode: MemoryMode = "summary";
+  try {
+    const body = await request.json().catch(() => ({}));
+    if (body.mode === "full" || body.mode === "summary") {
+      mode = body.mode;
+    }
+  } catch {
+    // No body, use default
+  }
 
   // Query database for the item
   const items = await db
@@ -37,9 +52,10 @@ export async function POST(
   const activityEntry = await logActivity({
     eventType: "triage_action",
     actor: "user",
-    description: `Saving memory from: ${item.subject}`,
+    description: `Saving memory (${mode}) from: ${item.subject}`,
     metadata: {
       action: "memory",
+      mode,
       itemId: id,
       connector: item.connector,
       subject: item.subject,
@@ -49,7 +65,7 @@ export async function POST(
   });
 
   // Process in background (don't await)
-  processMemoryInBackground(item, activityEntry.id).catch((error) => {
+  processMemoryInBackground(item, activityEntry.id, mode).catch((error) => {
     console.error("[Memory] Background processing failed:", error);
   });
 
@@ -57,50 +73,48 @@ export async function POST(
   return NextResponse.json({
     success: true,
     itemId: id,
+    mode,
     status: "queued",
     activityId: activityEntry.id,
-    message: "Memory extraction started in background",
   });
 }
 
-// Background processing - extract with Ollama and save to daily notes
-async function processMemoryInBackground(item: any, activityId: string) {
+// Background processing
+async function processMemoryInBackground(item: any, activityId: string, mode: MemoryMode) {
   const startTime = Date.now();
 
   try {
-    const result = await extractAndSaveToDailyNotes(item);
+    const result = await extractAndSaveMemory(item, mode);
     const duration = Date.now() - startTime;
 
-    // Update activity log with success
     await db
       .update(activityLogTable)
       .set({
-        description: `Saved memory from: ${item.subject}`,
+        description: `Saved memory (${result.effectiveMode}) from: ${item.subject}`,
         metadata: {
           action: "memory",
+          mode: result.effectiveMode,
           itemId: item.externalId,
           connector: item.connector,
           subject: item.subject,
           sender: item.senderName || item.sender,
           status: "completed",
-          factsCount: result.factsExtracted,
-          facts: result.facts.slice(0, 5),
           durationMs: duration,
         },
       })
       .where(eq(activityLogTable.id, activityId));
 
-    console.log(`[Memory] Saved to daily notes in ${duration}ms (${result.factsExtracted} facts extracted)`);
+    console.log(`[Memory] Saved (${result.effectiveMode}) in ${duration}ms`);
   } catch (error) {
     const duration = Date.now() - startTime;
 
-    // Update activity log with error
     await db
       .update(activityLogTable)
       .set({
-        description: `Failed to extract memory from: ${item.subject}`,
+        description: `Failed to save memory from: ${item.subject}`,
         metadata: {
           action: "memory",
+          mode,
           itemId: item.externalId,
           connector: item.connector,
           subject: item.subject,
@@ -112,15 +126,40 @@ async function processMemoryInBackground(item: any, activityId: string) {
       })
       .where(eq(activityLogTable.id, activityId));
 
-    console.error("[Memory] Background extraction failed:", error);
+    console.error("[Memory] Background processing failed:", error);
+  }
+}
+
+// Summarize content using Ollama
+async function summarizeForMemory(
+  content: string,
+  sender: string,
+  connector: string,
+  subject: string
+): Promise<string | null> {
+  const ollamaUp = await isOllamaAvailable();
+  if (!ollamaUp) return null;
+
+  try {
+    const prompt = `Summarize this message for long-term memory storage. Keep key facts, people, decisions, and action items. Be concise (2-4 sentences).
+
+From: ${sender} via ${connector}
+Subject: ${subject}
+
+${content.slice(0, 4000)}`;
+
+    return await generate(prompt, { temperature: 0.1, maxTokens: 500 });
+  } catch (error) {
+    console.error("[Memory] Ollama summarization failed:", error);
+    return null;
   }
 }
 
 // Extract from triage item, save to daily notes, and send to Supermemory
-async function extractAndSaveToDailyNotes(item: any): Promise<{
-  factsExtracted: number;
-  facts: string[];
-}> {
+async function extractAndSaveMemory(
+  item: any,
+  mode: MemoryMode
+): Promise<{ effectiveMode: MemoryMode }> {
   const senderName = item.senderName || item.sender;
   const priority = item.priority === "urgent" || item.priority === "high"
     ? ` (${item.priority.toUpperCase()})`
@@ -141,35 +180,46 @@ async function extractAndSaveToDailyNotes(item: any): Promise<{
       .trim();
   }
 
-  // Build daily note entry
-  let entry = `**${senderName}** via ${item.connector}${priority}: "${item.subject}"`;
+  // Summarize if needed (used for both daily notes and Supermemory)
+  let effectiveMode = mode;
+  let memoryContent: string;
 
-  if (content && content.length > 100) {
-    const cleanContent = content
+  if (mode === "summary") {
+    const summary = await summarizeForMemory(content, senderName, item.connector, item.subject);
+    if (summary) {
+      memoryContent = summary;
+    } else {
+      console.warn("[Memory] Ollama unavailable, falling back to full mode");
+      effectiveMode = "full";
+      memoryContent = content;
+    }
+  } else {
+    memoryContent = content;
+  }
+
+  // Daily note entry
+  let entry = `**${senderName}** via ${item.connector}${priority}: "${item.subject}"`;
+  if (memoryContent && memoryContent.length > 100) {
+    const cleanContent = memoryContent
       .replace(/https?:\/\/\S+/g, '')
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 1000);
-
-    entry += `\n\n**Content:**\n${cleanContent}${content.length > 1000 ? '...' : ''}`;
+    entry += `\n\n**Content:**\n${cleanContent}${memoryContent.length > 1000 ? '...' : ''}`;
   }
-
-  // Save to daily notes (short-term context)
   await appendToDailyNote(entry);
 
-  // Send to Supermemory for long-term memory (fire-and-forget)
-  // Supermemory handles extraction, entity resolution, and indexing
-  const supermemoryContent = `From: ${senderName} via ${item.connector}\nSubject: ${item.subject}\n\n${content}`;
+  // Supermemory
+  const supermemoryContent = `From: ${senderName} via ${item.connector}\nSubject: ${item.subject}\n\n${memoryContent}`;
+
   addMemory(supermemoryContent, {
     source: item.connector,
     subject: item.subject,
     sender: senderName,
+    mode: effectiveMode,
   }).catch((error) => {
     console.error("[Memory] Supermemory add failed:", error);
   });
 
-  return {
-    factsExtracted: 0,
-    facts: [],
-  };
+  return { effectiveMode };
 }
