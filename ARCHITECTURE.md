@@ -28,8 +28,12 @@ src/
 │   └── memory-*.tsx       # Memory display components
 │
 └── lib/                   # Core logic
-    ├── ai/                # AI client + tools
+    ├── ai/                # AI client + context building
+    ├── capabilities/      # Agent capabilities (tools + prompts)
+    │   ├── config/        # Self-modification tools
+    │   └── tasks/         # Linear task management
     ├── db/                # Database connection + schema
+    ├── linear/            # Linear API client + issues
     ├── memory/            # Memory operations
     ├── telegram/          # Telegram integration
     └── config.ts          # Config management
@@ -132,12 +136,29 @@ Save to conversation
 Return streamed response
 ```
 
-### 6. Configuration System (`lib/config.ts`)
+### 6. Agent Capabilities (`lib/capabilities/`)
 
-- **Keys**: `soul`, `system_prompt`, `agents`, `processes`
+> **Detailed docs:** [docs/systems/capabilities.md](docs/systems/capabilities.md)
+
+Modular, self-modifiable agent skills. Each capability provides tools + instructions.
+
+**Current capabilities:**
+| Capability | Tools | Purpose |
+|-----------|-------|---------|
+| **Config** | `list_configs`, `read_config`, `propose_config_change` | Agent reads/modifies its own config |
+| **Tasks** | `list_tasks`, `create_task`, `update_task`, `get_task`, `get_team_context`, `get_suggested_tasks` | Manage tasks via Linear |
+
+**Key design:**
+- DB is source of truth for capability prompts (seeded from code on first access)
+- Agent can propose prompt changes → user approves via slide-out diff panel
+- All chat surfaces (web, Telegram) get capabilities via `buildAgentContext()` + `chatStreamWithTools()`
+
+### 7. Configuration System (`lib/config.ts`)
+
+- **Keys**: `soul`, `system_prompt`, `agents`, `processes`, `capability:tasks`, `capability:config`
 - **Versioned**: Every change creates new version
 - **Approval workflow**: AI proposes → user approves/rejects
-- **Tools**: `list_configs`, `read_config`, `propose_config_change`
+- **Tools**: `list_configs`, `read_config`, `propose_config_change` (via config capability)
 
 ## Integrations
 
