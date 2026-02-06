@@ -8,5 +8,5 @@ export default async function TriagePage() {
     redirect("/login");
   }
 
-  return <TriageClient />;
+  return <TriageClient userEmail={process.env.GOOGLE_IMPERSONATE_EMAIL} />;
 }

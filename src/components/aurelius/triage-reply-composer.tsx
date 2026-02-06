@@ -7,12 +7,14 @@ import { cn } from "@/lib/utils";
 
 interface TriageReplyComposerProps {
   item: TriageItem;
+  userEmail?: string;
   onComplete: (result: { wasDraft: boolean }) => void;
   onClose: () => void;
 }
 
 export function TriageReplyComposer({
   item,
+  userEmail,
   onComplete,
   onClose,
 }: TriageReplyComposerProps) {
@@ -128,13 +130,17 @@ export function TriageReplyComposer({
       // To: original sender
       setTo(item.sender);
 
-      // CC: original To recipients + original CC recipients, minus the sender (already in To)
+      // CC: original To recipients + original CC recipients, minus sender and self
+      const self = userEmail?.toLowerCase();
       const toList = (raw.to as Array<{ email: string; name?: string }>) || [];
       const ccList = (raw.cc as Array<{ email: string; name?: string }>) || [];
       const allCc = [...toList, ...ccList]
         .map((r) => r.email)
         .filter(Boolean)
-        .filter((email) => email.toLowerCase() !== sender);
+        .filter((email) => {
+          const lower = email.toLowerCase();
+          return lower !== sender && lower !== self;
+        });
 
       // Deduplicate
       const uniqueCc = [...new Set(allCc.map((e) => e.toLowerCase()))];

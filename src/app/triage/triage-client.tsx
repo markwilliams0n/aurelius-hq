@@ -61,7 +61,7 @@ let triageCache: {
 
 const CACHE_STALE_MS = 5 * 60 * 1000; // 5 minutes
 
-export function TriageClient() {
+export function TriageClient({ userEmail }: { userEmail?: string }) {
   const [items, setItems] = useState<TriageItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -695,6 +695,7 @@ export function TriageClient() {
       {viewMode === "reply" && currentItem && (
         <TriageReplyComposer
           item={currentItem}
+          userEmail={userEmail}
           onComplete={(result) => {
             if (result.wasDraft) {
               toast.success("Draft saved in Gmail");
