@@ -434,21 +434,27 @@ export function TasksClient() {
         })
       );
 
-      // Fire API calls
+      // Fire API calls (throw on non-ok responses so allSettled catches them)
       const results = await Promise.allSettled(
-        targetIds.map((id) =>
-          fetch(`/api/tasks/${id}`, {
+        targetIds.map(async (id) => {
+          const res = await fetch(`/api/tasks/${id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(update),
-          })
-        )
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error || `HTTP ${res.status}`);
+          }
+          return res;
+        })
       );
 
-      const failures = results.filter((r) => r.status === "rejected").length;
-      if (failures > 0) {
-        toast.error(`${failures} update(s) failed`);
-        fetchTasks();
+      const failures = results.filter((r) => r.status === "rejected");
+      if (failures.length > 0) {
+        const reason = failures[0].status === "rejected" ? (failures[0] as PromiseRejectedResult).reason : "";
+        toast.error(`Update failed: ${reason}`);
+        fetchTasks(); // revert optimistic changes
       } else {
         toast.success(
           targetIds.length === 1

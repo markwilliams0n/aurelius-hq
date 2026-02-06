@@ -25,6 +25,8 @@ export async function PATCH(
       description?: string;
     };
 
+    console.log(`[Tasks API] Updating task ${id}:`, { stateId, assigneeId, projectId, priority });
+
     const result = await updateIssue(id, {
       stateId,
       assigneeId,
@@ -35,9 +37,11 @@ export async function PATCH(
     });
 
     if (!result.success) {
+      console.error(`[Tasks API] Linear returned success=false for task ${id}`);
       return NextResponse.json({ error: 'Failed to update issue' }, { status: 500 });
     }
 
+    console.log(`[Tasks API] Successfully updated task ${id}`);
     return NextResponse.json({ success: true, issue: result.issue });
   } catch (error) {
     console.error('[Tasks API] Failed to update task:', error);
