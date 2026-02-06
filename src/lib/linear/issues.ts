@@ -516,6 +516,45 @@ export async function createIssue(input: {
 }
 
 /**
+ * Fetch a single issue by ID or identifier (e.g. "PER-123")
+ */
+export async function fetchIssue(idOrIdentifier: string): Promise<LinearIssueWithMeta | null> {
+  // Try by ID first, then by identifier
+  const query = `
+    query GetIssue($id: String!) {
+      issue(id: $id) {
+        ${ISSUE_FRAGMENT}
+      }
+    }
+  `;
+
+  try {
+    const data = await graphql<{ issue: LinearIssueWithMeta }>(query, { id: idOrIdentifier });
+    return data.issue;
+  } catch {
+    // If ID lookup fails, try searching by identifier
+    const searchQuery = `
+      query SearchIssue($filter: IssueFilter) {
+        issues(first: 1, filter: $filter) {
+          nodes {
+            ${ISSUE_FRAGMENT}
+          }
+        }
+      }
+    `;
+
+    try {
+      const data = await graphql<{ issues: { nodes: LinearIssueWithMeta[] } }>(searchQuery, {
+        filter: { identifier: { eq: idOrIdentifier.toUpperCase() } },
+      });
+      return data.issues.nodes[0] || null;
+    } catch {
+      return null;
+    }
+  }
+}
+
+/**
  * Fetch all issues: assigned to me + specific project(s)
  * Deduplicates issues that appear in both sets
  */

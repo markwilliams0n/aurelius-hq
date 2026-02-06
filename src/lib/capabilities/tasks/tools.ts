@@ -1,5 +1,6 @@
 import {
   fetchAllMyTasks,
+  fetchIssue,
   fetchViewerContext,
   fetchTeamMembers,
   fetchWorkflowStates,
@@ -112,6 +113,21 @@ export const TASK_TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
+    name: "get_task",
+    description:
+      "Get full details of a single task by its ID or identifier (e.g. 'PER-123'). Use this when the user asks about a specific task.",
+    parameters: {
+      type: "object",
+      properties: {
+        idOrIdentifier: {
+          type: "string",
+          description: "The Linear issue ID (UUID) or identifier (e.g. 'PER-123')",
+        },
+      },
+      required: ["idOrIdentifier"],
+    },
+  },
+  {
     name: "get_team_context",
     description:
       "Get workspace context: viewer info, teams, projects, and team members. Useful for understanding the workspace before creating or assigning tasks.",
@@ -144,6 +160,7 @@ export const TASK_TOOL_DEFINITIONS: ToolDefinition[] = [
 export async function handleTaskTool(
   toolName: string,
   toolInput: Record<string, unknown>,
+  _conversationId?: string,
 ): Promise<ToolResult | null> {
   switch (toolName) {
     case "list_tasks": {
@@ -453,6 +470,64 @@ export async function handleTaskTool(
         return {
           result: JSON.stringify({
             error: "Failed to update task in Linear",
+            details: error instanceof Error ? error.message : String(error),
+          }),
+        };
+      }
+    }
+
+    case "get_task": {
+      try {
+        const idOrIdentifier = toolInput.idOrIdentifier;
+        if (!idOrIdentifier || typeof idOrIdentifier !== "string") {
+          return {
+            result: JSON.stringify({
+              error: "Missing required parameter: idOrIdentifier. Provide a task ID or identifier (e.g. 'PER-123').",
+            }),
+          };
+        }
+
+        const issue = await fetchIssue(idOrIdentifier);
+        if (!issue) {
+          return {
+            result: JSON.stringify({
+              error: `Task "${idOrIdentifier}" not found.`,
+            }),
+          };
+        }
+
+        return {
+          result: JSON.stringify(
+            {
+              task: {
+                id: issue.id,
+                identifier: issue.identifier,
+                title: issue.title,
+                description: issue.description,
+                status: issue.state?.name,
+                statusType: issue.state?.type,
+                priority: issue.priority != null
+                  ? `${issue.priority} (${PRIORITY_LABELS[issue.priority] ?? "Unknown"})`
+                  : undefined,
+                project: issue.project?.name,
+                team: issue.team?.name,
+                assignee: issue.assignee?.name,
+                creator: issue.creator?.name,
+                labels: issue.labels?.nodes?.map((l: { name: string }) => l.name),
+                dueDate: issue.dueDate,
+                createdAt: issue.createdAt,
+                updatedAt: issue.updatedAt,
+                url: issue.url,
+              },
+            },
+            null,
+            2,
+          ),
+        };
+      } catch (error) {
+        return {
+          result: JSON.stringify({
+            error: "Failed to fetch task from Linear",
             details: error instanceof Error ? error.message : String(error),
           }),
         };
