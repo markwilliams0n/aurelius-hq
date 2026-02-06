@@ -42,6 +42,7 @@ export interface GmailMessagePart {
 // Parsed email for our use
 export interface ParsedEmail {
   messageId: string;
+  rfc822MessageId?: string;
   threadId: string;
   from: {
     email: string;

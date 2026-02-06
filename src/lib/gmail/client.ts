@@ -216,6 +216,7 @@ function parseMessage(message: GmailMessage): ParsedEmail {
 
   return {
     messageId: message.id,
+    rfc822MessageId: getHeader(headers, 'Message-ID') || getHeader(headers, 'Message-Id'),
     threadId: message.threadId,
     from,
     to,

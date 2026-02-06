@@ -102,7 +102,7 @@ export async function replyToEmail(
 
   const rawPayload = item.rawPayload as Record<string, unknown>;
   const threadId = rawPayload?.threadId as string | undefined;
-  const messageId = rawPayload?.messageId as string | undefined;
+  const rfc822MessageId = rawPayload?.rfc822MessageId as string | undefined;
   const to = options?.to || item.sender;
   const cc = options?.cc || undefined;
   const bcc = options?.bcc || undefined;
@@ -121,7 +121,7 @@ export async function replyToEmail(
       to,
       subject,
       body,
-      inReplyTo: messageId,
+      inReplyTo: rfc822MessageId,
       cc,
       bcc,
     });
@@ -132,7 +132,7 @@ export async function replyToEmail(
       to,
       subject,
       body,
-      inReplyTo: messageId,
+      inReplyTo: rfc822MessageId,
       cc,
       bcc,
     });
