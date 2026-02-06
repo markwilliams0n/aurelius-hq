@@ -59,7 +59,7 @@ export async function buildAgentContext(
   const startTime = Date.now();
   const [recentNotes, memoryContext, soulConfigResult] = await Promise.all([
     getRecentNotes(),
-    buildMemoryContext(query, { collection: 'life' }),
+    buildMemoryContext(query),
     getConfig('soul'),
   ]);
 

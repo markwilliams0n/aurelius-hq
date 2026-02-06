@@ -19,9 +19,9 @@ vi.mock('@/lib/memory/ollama', () => ({
   generate: vi.fn(),
 }));
 
-// Mock memory search to return empty results
-vi.mock('@/lib/memory/search', () => ({
-  searchMemory: vi.fn().mockReturnValue([]),
+// Mock Supermemory search to return empty results
+vi.mock('@/lib/memory/supermemory', () => ({
+  searchMemories: vi.fn().mockResolvedValue([]),
 }));
 
 describe('fake-data', () => {

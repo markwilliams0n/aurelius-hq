@@ -13,9 +13,9 @@ vi.mock('@/lib/memory/ollama', () => ({
   generate: vi.fn(),
 }));
 
-// Mock memory search to return empty results
-vi.mock('@/lib/memory/search', () => ({
-  searchMemory: vi.fn().mockReturnValue([]),
+// Mock Supermemory search to return empty results
+vi.mock('@/lib/memory/supermemory', () => ({
+  searchMemories: vi.fn().mockResolvedValue([]),
 }));
 
 describe('enrichment', () => {
@@ -491,10 +491,10 @@ describe('enrichment', () => {
       });
 
       it('returns memory context when search returns results', async () => {
-        const { searchMemory } = await import('@/lib/memory/search');
-        const mockSearchMemory = vi.mocked(searchMemory);
-        mockSearchMemory.mockReturnValueOnce([
-          { path: '/test', content: 'Sarah is the CTO at Acme Corp', score: 0.9, collection: 'life' },
+        const { searchMemories } = await import('@/lib/memory/supermemory');
+        const mockSearchMemories = vi.mocked(searchMemories);
+        mockSearchMemories.mockResolvedValueOnce([
+          { content: 'Sarah is the CTO at Acme Corp' } as any,
         ]);
 
         const item: NewInboxItem = {
