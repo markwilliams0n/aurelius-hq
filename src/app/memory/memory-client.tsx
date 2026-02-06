@@ -9,32 +9,20 @@ import {
   FlaskConical,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Loader2,
+  Brain,
+  Database,
+  User,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AppShell } from "@/components/aurelius/app-shell";
-import { MemoryBrowser } from "@/components/aurelius/memory-browser";
 
-// --- Types ---
-
-type MemoryItem = {
-  entity: {
-    id: string;
-    name: string;
-    type: string;
-    summary: string | null;
-  };
-  facts: Array<{
-    id: string;
-    content: string;
-    category: string | null;
-    createdAt: Date;
-  }>;
-};
-
-type MemoryClientProps = {
-  initialMemory: MemoryItem[];
-};
+// ============================================================
+// Types
+// ============================================================
 
 interface MemoryEvent {
   id: string;
@@ -50,7 +38,45 @@ interface MemoryEvent {
   metadata: Record<string, unknown> | null;
 }
 
-// --- Icon & Color Config ---
+interface OverviewData {
+  stats: { totalMemories: number; totalPages: number };
+  profile: { static: string[]; dynamic: string[] };
+}
+
+interface MemoryItem {
+  id: string;
+  title: string | null;
+  type: string;
+  status: string;
+  summary: string | null;
+  createdAt: string;
+  updatedAt: string;
+  metadata: Record<string, unknown> | null;
+  containerTags: string[];
+  content?: string;
+}
+
+interface MemoriesData {
+  memories: MemoryItem[];
+  pagination: {
+    currentPage: number;
+    totalItems: number;
+    totalPages: number;
+    limit: number;
+  };
+}
+
+interface SearchResult {
+  documentId: string;
+  content: string;
+  score: number;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+// ============================================================
+// Debug Feed: Icon & Color Config
+// ============================================================
 
 const EVENT_TYPE_CONFIG: Record<
   MemoryEvent["eventType"],
@@ -87,7 +113,9 @@ const TRIGGER_FILTERS = [
   "Api",
 ] as const;
 
-// --- Helpers ---
+// ============================================================
+// Debug Feed: Helpers
+// ============================================================
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
@@ -147,7 +175,45 @@ function groupEventsByDay(
   }));
 }
 
-// --- Feed Event Card ---
+// ============================================================
+// Memories Tab: Helpers
+// ============================================================
+
+function formatRelativeDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function statusColor(status: string): string {
+  switch (status) {
+    case "done":
+      return "bg-green-500/20 text-green-400";
+    case "failed":
+      return "bg-red-500/20 text-red-400";
+    case "queued":
+    case "extracting":
+    case "chunking":
+    case "embedding":
+    case "indexing":
+      return "bg-amber-500/20 text-amber-400";
+    default:
+      return "bg-muted text-muted-foreground";
+  }
+}
+
+// ============================================================
+// Debug Feed: FeedEventCard
+// ============================================================
 
 function FeedEventCard({ event }: { event: MemoryEvent }) {
   const [expanded, setExpanded] = useState(false);
@@ -287,7 +353,9 @@ function FeedEventCard({ event }: { event: MemoryEvent }) {
   );
 }
 
-// --- Memory Feed Component ---
+// ============================================================
+// Debug Feed: MemoryFeed Component
+// ============================================================
 
 function MemoryFeed() {
   const [events, setEvents] = useState<MemoryEvent[]>([]);
@@ -471,15 +539,405 @@ function MemoryFeed() {
   );
 }
 
-// --- Tab Config ---
+// ============================================================
+// Overview Tab
+// ============================================================
 
-type TabId = "entities" | "debug-feed";
+function OverviewTab() {
+  const [data, setData] = useState<OverviewData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchOverview() {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch("/api/memory/supermemory?view=overview");
+        if (!res.ok) throw new Error(`Failed to fetch overview: ${res.status}`);
+        const json = await res.json();
+        setData(json);
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to load overview"
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchOverview();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+        <span className="ml-2 text-sm text-muted-foreground">
+          Loading overview...
+        </span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-sm text-red-400">{error}</p>
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  return (
+    <div className="space-y-6">
+      {/* Stats card */}
+      <div className="border border-border bg-card rounded-lg p-5">
+        <div className="flex items-center gap-3 mb-1">
+          <Database className="w-5 h-5 text-gold" />
+          <h2 className="font-serif text-lg text-foreground">Stats</h2>
+        </div>
+        <div className="ml-8 mt-2">
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-semibold text-gold tabular-nums">
+              {data.stats.totalMemories}
+            </span>
+            <span className="text-sm text-muted-foreground">
+              total memories
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Profile: What I Know */}
+      <div className="border border-border bg-card rounded-lg p-5">
+        <div className="flex items-center gap-3 mb-3">
+          <User className="w-5 h-5 text-gold" />
+          <h2 className="font-serif text-lg text-foreground">What I Know</h2>
+        </div>
+        {data.profile.static.length === 0 ? (
+          <p className="ml-8 text-sm text-muted-foreground">
+            No static profile facts yet.
+          </p>
+        ) : (
+          <ul className="ml-8 space-y-1.5">
+            {data.profile.static.map((fact, i) => (
+              <li key={i} className="text-sm text-foreground flex gap-2">
+                <span className="text-gold shrink-0 mt-1">&bull;</span>
+                <span>{fact}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Profile: Recent Context */}
+      <div className="border border-border bg-card rounded-lg p-5">
+        <div className="flex items-center gap-3 mb-3">
+          <Clock className="w-5 h-5 text-gold" />
+          <h2 className="font-serif text-lg text-foreground">
+            Recent Context
+          </h2>
+        </div>
+        {data.profile.dynamic.length === 0 ? (
+          <p className="ml-8 text-sm text-muted-foreground">
+            No dynamic context yet.
+          </p>
+        ) : (
+          <ul className="ml-8 space-y-1.5">
+            {data.profile.dynamic.map((fact, i) => (
+              <li key={i} className="text-sm text-foreground flex gap-2">
+                <span className="text-gold shrink-0 mt-1">&bull;</span>
+                <span>{fact}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Memories Tab
+// ============================================================
+
+function MemoriesTab() {
+  const [memoriesData, setMemoriesData] = useState<MemoriesData | null>(null);
+  const [searchResults, setSearchResults] = useState<SearchResult[] | null>(
+    null
+  );
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeSearch, setActiveSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchMemories = useCallback(async (pageNum: number) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/memory/supermemory?view=memories&page=${pageNum}`
+      );
+      if (!res.ok) throw new Error(`Failed to fetch memories: ${res.status}`);
+      const json = await res.json();
+      setMemoriesData(json);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to load memories"
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleSearch = useCallback(
+    async (query: string) => {
+      if (!query.trim()) {
+        setSearchResults(null);
+        setActiveSearch("");
+        fetchMemories(page);
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      setActiveSearch(query);
+      try {
+        const res = await fetch(
+          `/api/memory/search?q=${encodeURIComponent(query)}`
+        );
+        if (!res.ok) throw new Error(`Search failed: ${res.status}`);
+        const json = await res.json();
+        setSearchResults(json.results || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Search failed");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [fetchMemories, page]
+  );
+
+  useEffect(() => {
+    if (!activeSearch) {
+      fetchMemories(page);
+    }
+  }, [page, activeSearch, fetchMemories]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleSearch(searchQuery);
+    }
+  };
+
+  const clearSearch = () => {
+    setSearchQuery("");
+    setSearchResults(null);
+    setActiveSearch("");
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Search bar */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <input
+          type="text"
+          placeholder="Search memories... (press Enter)"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="w-full pl-10 pr-3 py-2 rounded-md border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-gold/50 focus:border-gold/50"
+        />
+      </div>
+
+      {/* Active search indicator */}
+      {activeSearch && (
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            Search results for &ldquo;{activeSearch}&rdquo;
+          </span>
+          <button
+            onClick={clearSearch}
+            className="text-xs text-gold hover:underline"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
+      {/* Loading */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          <span className="ml-2 text-sm text-muted-foreground">
+            {activeSearch ? "Searching..." : "Loading memories..."}
+          </span>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && !loading && (
+        <div className="text-center py-8">
+          <p className="text-sm text-red-400">{error}</p>
+        </div>
+      )}
+
+      {/* Search results view */}
+      {!loading && !error && searchResults !== null && (
+        <>
+          {searchResults.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              No results found for &ldquo;{activeSearch}&rdquo;
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {searchResults.map((result) => (
+                <div
+                  key={result.documentId}
+                  className="border border-border/50 bg-card rounded-lg p-4 hover:border-border transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-sm text-foreground line-clamp-3">
+                      {result.content}
+                    </p>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
+                      {(result.score * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="text-xs text-muted-foreground">
+                      {formatRelativeDate(result.createdAt)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Memory list view */}
+      {!loading && !error && searchResults === null && memoriesData && (
+        <>
+          {memoriesData.memories.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              No memories stored yet.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {memoriesData.memories.map((memory) => (
+                <div
+                  key={memory.id}
+                  className="border border-border/50 bg-card rounded-lg p-4 hover:border-border transition-colors"
+                >
+                  {/* Title + badges row */}
+                  <div className="flex items-start gap-2">
+                    <h3 className="text-sm font-medium text-foreground flex-1 min-w-0 truncate">
+                      {memory.title ||
+                        (memory.content
+                          ? memory.content.slice(0, 60) + "..."
+                          : "Untitled")}
+                    </h3>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                        {memory.type}
+                      </span>
+                      <span
+                        className={cn(
+                          "text-[10px] px-1.5 py-0.5 rounded",
+                          statusColor(memory.status)
+                        )}
+                      >
+                        {memory.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Summary */}
+                  {memory.summary && (
+                    <p className="text-sm text-muted-foreground mt-1.5 line-clamp-2">
+                      {memory.summary.length > 150
+                        ? memory.summary.slice(0, 150) + "..."
+                        : memory.summary}
+                    </p>
+                  )}
+
+                  {/* Date */}
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="text-xs text-muted-foreground">
+                      {formatRelativeDate(memory.createdAt)}
+                    </span>
+                    {memory.containerTags.length > 0 && (
+                      <div className="flex gap-1">
+                        {memory.containerTags.slice(0, 3).map((tag) => (
+                          <span
+                            key={tag}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-gold/10 text-gold/80"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {memoriesData.pagination.totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4 pt-4">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-md border border-border bg-background text-sm text-muted-foreground hover:text-foreground hover:border-gold/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Previous
+              </button>
+              <span className="text-sm text-muted-foreground tabular-nums">
+                Page {memoriesData.pagination.currentPage} of{" "}
+                {memoriesData.pagination.totalPages}
+              </span>
+              <button
+                onClick={() =>
+                  setPage((p) =>
+                    Math.min(memoriesData.pagination.totalPages, p + 1)
+                  )
+                }
+                disabled={page >= memoriesData.pagination.totalPages}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-md border border-border bg-background text-sm text-muted-foreground hover:text-foreground hover:border-gold/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                Next
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// Tab Config
+// ============================================================
+
+type TabId = "overview" | "memories" | "debug-feed";
 
 const TABS: Array<{ id: TabId; label: string; subtitle: string }> = [
   {
-    id: "entities",
-    label: "Entities",
-    subtitle: "Browse and search the knowledge graph",
+    id: "overview",
+    label: "Overview",
+    subtitle: "Memory stats and profile knowledge",
+  },
+  {
+    id: "memories",
+    label: "Memories",
+    subtitle: "Browse and search stored memories",
   },
   {
     id: "debug-feed",
@@ -488,10 +946,12 @@ const TABS: Array<{ id: TabId; label: string; subtitle: string }> = [
   },
 ];
 
-// --- Main Component ---
+// ============================================================
+// Main Component
+// ============================================================
 
-export function MemoryClient({ initialMemory }: MemoryClientProps) {
-  const [activeTab, setActiveTab] = useState<TabId>("entities");
+export function MemoryClient() {
+  const [activeTab, setActiveTab] = useState<TabId>("overview");
   const currentTab = TABS.find((t) => t.id === activeTab)!;
 
   return (
@@ -525,9 +985,8 @@ export function MemoryClient({ initialMemory }: MemoryClientProps) {
 
         {/* Tab content */}
         <div className="p-6">
-          {activeTab === "entities" && (
-            <MemoryBrowser initialMemory={initialMemory} />
-          )}
+          {activeTab === "overview" && <OverviewTab />}
+          {activeTab === "memories" && <MemoriesTab />}
           {activeTab === "debug-feed" && <MemoryFeed />}
         </div>
       </div>
