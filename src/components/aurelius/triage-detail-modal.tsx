@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import DOMPurify from "isomorphic-dompurify";
 import {
   X,
   Mail,
@@ -399,7 +400,7 @@ export function TriageDetailModal({ item, onClose, onReply }: TriageDetailModalP
                     [&_table]:border-collapse [&_td]:p-2 [&_th]:p-2
                     [&_*]:max-w-full
                     [&_:not(a)]:!text-inherit"
-                  dangerouslySetInnerHTML={{ __html: bodyHtml }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(bodyHtml) }}
                 />
               );
             }

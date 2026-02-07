@@ -56,12 +56,14 @@ async function getGmailClient() {
     );
   }
 
+  const scopes = ['https://www.googleapis.com/auth/gmail.modify'];
+  if (process.env.GMAIL_ENABLE_SEND === 'true') {
+    scopes.push('https://www.googleapis.com/auth/gmail.send');
+  }
+
   const auth = new google.auth.GoogleAuth({
     keyFile: SERVICE_ACCOUNT_PATH,
-    scopes: [
-      'https://www.googleapis.com/auth/gmail.modify',
-      // gmail.send added when GMAIL_ENABLE_SEND=true
-    ],
+    scopes,
     clientOptions: {
       subject: IMPERSONATE_EMAIL, // Impersonate this user
     },
@@ -402,9 +404,7 @@ export async function sendEmail(options: {
   bcc?: string;
 }): Promise<string> {
   if (process.env.GMAIL_ENABLE_SEND !== 'true') {
-    // Fall back to draft
-    console.log('[Gmail] GMAIL_ENABLE_SEND not true, creating draft instead');
-    return createDraft(options);
+    throw new Error('GMAIL_ENABLE_SEND is not enabled. Use createDraft() instead.');
   }
 
   const gmail = await getGmailClient();

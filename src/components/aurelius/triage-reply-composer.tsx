@@ -142,11 +142,17 @@ export function TriageReplyComposer({
           return lower !== sender && lower !== self;
         });
 
-      // Deduplicate
-      const uniqueCc = [...new Set(allCc.map((e) => e.toLowerCase()))];
+      // Deduplicate (case-insensitive) but preserve original casing
+      const seen = new Set<string>();
+      const uniqueCc = allCc.filter((e) => {
+        const lower = e.toLowerCase();
+        if (seen.has(lower)) return false;
+        seen.add(lower);
+        return true;
+      });
       if (uniqueCc.length) setCc(uniqueCc.join(", "));
     }
-  }, [item]);
+  }, [item, userEmail]);
 
   // Focus textarea on mount
   useEffect(() => {

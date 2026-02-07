@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[Gmail API] Reply failed:', error);
     return NextResponse.json(
-      { error: 'Reply failed', details: String(error) },
+      { error: 'Reply failed' },
       { status: 500 }
     );
   }
