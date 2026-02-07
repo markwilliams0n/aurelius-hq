@@ -59,6 +59,19 @@ Gmail Connector + Memory System Fixes:
 
 ## Just Completed
 
+**2026-02-07 (Night)**
+
+Triage Enhancements (feature/triage-enhancements → PR #15, merged):
+- **List view** (PER-170): `V` toggle, compact table rows, keyboard nav, multi-select checkboxes, bulk archive with undo
+- **Action Needed** (PER-171): `A` shortcut applies Gmail label, 3-day snooze, resurfaces with amber "Marked for action on X" badge
+- **Gmail card** (PER-172): Rich approval card renderer — To/CC, subject, body preview, editable, draft/send indicator
+- **Linear card** (PER-173): Rich approval card renderer — editable title (auto-focus), description, priority cycle, team/assignee badges
+- **Quick task** (PER-176): `T` shortcut creates pre-filled Linear issue action card from triage item
+- **CC recipients** (PER-140): @rostr.cc recipients on Gmail triage card summary, full To/CC in detail modal
+- **External links** (PER-138): All links open in new tab (ReactMarkdown + DOMPurify)
+- Code review fixes: stale undo closures (ref-based), keyboard isolation (stopImmediatePropagation), bulk undo, label cache with auto-create
+- Code simplification: -58 lines, extracted shared helpers (resolveGmailMessageId, buildRawMessage, EmailOptions)
+
 **2026-02-07 (Evening)**
 
 Cortex Neural Map (feature/config-home → PR #14):
@@ -131,16 +144,16 @@ Memory Debug Mode:
 
 ## In Progress
 
-Cortex page on feature/config-home branch — PR #14 open, ready to merge.
+Nothing — main is clean.
 
 ## Up Next
 
-- [ ] **Gmail approval card rich rendering** (PER-172) — dedicated renderer with To/CC, subject, body preview
-- [ ] **Linear approval card rich rendering** (PER-173) — dedicated renderer with title, description, project, priority
-- [ ] **Action Cards notification tray** (PER-174) — global view of pending cards outside chat
+- [ ] **Triage chat memory → Supermemory** — triage chat `saveFactToMemory` only writes to local DB (entities/facts tables), NOT Supermemory. Facts saved in triage chat can't be recalled from main chat or Telegram. Need to push to Supermemory too.
+- [ ] **Action Cards notification tray** (PER-174) — global view of pending cards outside chat (low priority, deferred)
 - [ ] **Connector-aware memory extraction** — `extractEmailMemory` is used for ALL connectors but the prompt is email-specific. Need connector-aware prompts. Key file: `src/lib/memory/ollama.ts:extractEmailMemory`
 - [ ] Test Gmail sync with real inbox
 - [ ] Add UI components for Gmail-specific features (thread expand/collapse)
+- [ ] **Test triage enhancements** (PER-178) — full manual test plan with sub-issues in Linear
 
 ## Known Issues (Documented)
 
