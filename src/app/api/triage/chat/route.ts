@@ -161,6 +161,8 @@ async function buildAndPersistSlackCard(to: string, message: string) {
       const channel = await resolveChannel(to);
       if (!channel) return { error: `Channel "${to}" not found` };
 
+      // Triage chat is ephemeral (no conversation ID) — cards are returned
+      // inline in the JSON response, not hydrated from DB on refresh.
       return await createCard({
         id: generateCardId(),
         pattern: "approval",

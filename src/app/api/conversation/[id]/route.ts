@@ -29,6 +29,7 @@ export async function GET(
 
   // Count facts saved in this conversation's memories
   const messages = (conversation.messages as Array<{
+    id?: string;
     role: string;
     content: string;
     memories?: Array<{ factId: string; content: string }>;
@@ -44,6 +45,7 @@ export async function GET(
   return NextResponse.json({
     id: conversation.id,
     messages: messages.map((m) => ({
+      id: m.id,
       role: m.role,
       content: m.content,
       memories: m.memories,

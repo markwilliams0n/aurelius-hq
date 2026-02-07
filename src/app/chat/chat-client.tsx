@@ -81,13 +81,16 @@ export function ChatClient() {
         // Hydrate persisted action cards on initial load
         if (data.actionCards?.length > 0 && isInitial) {
           const cardMap = new Map<string, ActionCardData[]>();
-          // Find the last assistant message to attach orphan cards to
+          // Build a set of known message IDs for matching
+          const messageIdSet = new Set(loadedMessages.map((m: Message) => m.id));
           const lastAssistantMsg = [...loadedMessages].reverse().find((m: Message) => m.role === "assistant");
           const fallbackId = lastAssistantMsg?.id || "orphan";
           for (const card of data.actionCards as ActionCardData[]) {
-            // Cards from DB won't match client-generated message IDs,
-            // so attach them to the last assistant message
-            const targetId = fallbackId;
+            // Match card to its original message if the ID is stable,
+            // otherwise fall back to the last assistant message
+            const targetId = card.messageId && messageIdSet.has(card.messageId)
+              ? card.messageId
+              : fallbackId;
             const existing = cardMap.get(targetId) || [];
             existing.push(card);
             cardMap.set(targetId, existing);
@@ -317,6 +320,23 @@ export function ChatClient() {
                   ...prev,
                   factsSaved: prev.factsSaved + data.memories.length,
                 }));
+              } else if (data.type === "assistant_message_id") {
+                // Server provides a stable message ID for card<->message association
+                const oldId = currentAssistantIdRef.current;
+                const newId = data.id as string;
+                currentAssistantIdRef.current = newId;
+                setMessages((prev) =>
+                  prev.map((m) => (m.id === oldId ? { ...m, id: newId } : m))
+                );
+                // Move any cards already attached to old ID
+                setActionCards((prev) => {
+                  const cards = prev.get(oldId);
+                  if (!cards) return prev;
+                  const next = new Map(prev);
+                  next.delete(oldId);
+                  next.set(newId, cards);
+                  return next;
+                });
               } else if (data.type === "conversation") {
                 setConversationId(data.id);
               } else if (data.type === "stats") {
