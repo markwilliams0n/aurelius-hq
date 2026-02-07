@@ -59,6 +59,18 @@ Gmail Connector + Memory System Fixes:
 
 ## Just Completed
 
+**2026-02-07 (Evening)**
+
+Cortex Neural Map (feature/config-home → PR #14):
+- New `/config` page with interactive React Flow graph of all Aurelius systems
+- `system_events` DB table + migration for activity tracking
+- Event logging instrumented across heartbeat, capabilities, config changes
+- Topology API with 5 parallel DB queries for live stats
+- Custom pulse edge animations scaled by traffic volume (neurons firing)
+- Filter toggles, detail panel with config content viewer, stats HUD
+- Ambient particle field, activity-based node glow, live event ticker
+- Also: switched AI model to Kimi K2.5, added trg-linear CLAUDE.md rule
+
 **2026-02-07 (Continued)**
 
 Global Action Card System (feature/global-action-cards → PR #13):
@@ -119,7 +131,7 @@ Memory Debug Mode:
 
 ## In Progress
 
-Nothing active - ready for next task.
+Cortex page on feature/config-home branch — PR #14 open, ready to merge.
 
 ## Up Next
 
