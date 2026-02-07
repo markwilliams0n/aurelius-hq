@@ -229,7 +229,16 @@ What would you like to do?
                       card={card}
                       onAction={(action) => handleCardAction(card.id, action, card.data)}
                     >
-                      <SlackMessageCardContent card={card} />
+                      <SlackMessageCardContent
+                        card={card}
+                        onDataChange={(newData) => {
+                          setActionCards((prev) => {
+                            const next = new Map(prev);
+                            next.set(message.id, { ...card, data: newData });
+                            return next;
+                          });
+                        }}
+                      />
                     </ActionCard>
                   </div>
                 )}

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { sendDirectMessage, sendChannelMessage } from "@/lib/slack/actions";
+import { sendDirectMessage, sendChannelMessage, type SendAs } from "@/lib/slack/actions";
 import type { ActionCardStatus } from "@/lib/types/action-card";
 
 // In-memory store for action card state (replace with DB when ready)
@@ -40,12 +40,13 @@ export async function POST(
       const message = cardData?.message as string | undefined;
       const myUserId = (cardData?.myUserId as string) || "";
       const threadTs = cardData?.threadTs as string | undefined;
+      const sendAs = (cardData?.sendAs as SendAs) || "bot";
 
       if (recipientType && recipientId && message) {
         try {
           const result = recipientType === "dm"
-            ? await sendDirectMessage(recipientId, myUserId, message)
-            : await sendChannelMessage(recipientId, myUserId, message, threadTs);
+            ? await sendDirectMessage(recipientId, myUserId, message, sendAs)
+            : await sendChannelMessage(recipientId, myUserId, message, threadTs, sendAs);
 
           if (result.ok) {
             newStatus = "sent";

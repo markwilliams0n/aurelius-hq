@@ -6,6 +6,7 @@ import { emitMemoryEvent } from "@/lib/memory/events";
 import { upsertEntity } from "@/lib/memory/entities";
 import { createFact } from "@/lib/memory/facts";
 import { resolveUser, resolveChannel, getDirectory } from "@/lib/slack/directory";
+import { canSendAsUser } from "@/lib/slack/actions";
 
 /**
  * Triage chat uses the same context building as main chat,
@@ -169,6 +170,8 @@ async function buildSlackActionCard(to: string, message: string) {
           includeMe: true,
           message,
           myUserId,
+          sendAs: 'user' as const,
+          canSendAsUser: canSendAsUser(),
         },
         actions: ["send", "cancel"],
       };
@@ -193,6 +196,8 @@ async function buildSlackActionCard(to: string, message: string) {
           includeMe: true,
           message,
           myUserId,
+          sendAs: 'user' as const,
+          canSendAsUser: canSendAsUser(),
         },
         actions: ["send", "cancel"],
       };

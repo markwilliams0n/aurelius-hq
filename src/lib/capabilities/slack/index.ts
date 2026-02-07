@@ -1,6 +1,6 @@
 import type { Capability, ToolDefinition, ToolResult } from '../types';
 import { resolveUser, resolveChannel, getDirectory } from '@/lib/slack/directory';
-import { sendDirectMessage, sendChannelMessage } from '@/lib/slack/actions';
+import { sendDirectMessage, sendChannelMessage, canSendAsUser } from '@/lib/slack/actions';
 
 const PROMPT = `# Slack Messaging
 
@@ -105,6 +105,8 @@ async function handleSlackTool(
       message,
       threadTs,
       myUserId,
+      sendAs: 'user' as const,
+      canSendAsUser: canSendAsUser(),
     };
 
     return {
@@ -149,6 +151,8 @@ async function handleSlackTool(
       includeMe: true,
       message,
       myUserId,
+      sendAs: 'user' as const,
+      canSendAsUser: canSendAsUser(),
     };
 
     return {

@@ -31,9 +31,9 @@ type ChatStats = {
 const SHARED_CONVERSATION_ID = "00000000-0000-0000-0000-000000000000"; // Shared between web and Telegram
 
 /** Generic content renderer for action cards — delegates to type-specific components */
-function ActionCardContent({ card }: { card: ActionCardData }) {
+function ActionCardContent({ card, onDataChange }: { card: ActionCardData; onDataChange?: (data: Record<string, unknown>) => void }) {
   if (card.cardType === "slack_message") {
-    return <SlackMessageCardContent card={card} />;
+    return <SlackMessageCardContent card={card} onDataChange={onDataChange} />;
   }
   // Generic fallback: show data as key-value pairs
   const data = card.data;
@@ -513,7 +513,24 @@ export function ChatClient() {
                           card={card}
                           onAction={(action, editedData) => handleActionCardAction(card.id, action, editedData ?? card.data)}
                         >
-                          <ActionCardContent card={card} />
+                          <ActionCardContent
+                            card={card}
+                            onDataChange={(newData) => {
+                              setActionCards((prev) => {
+                                const next = new Map(prev);
+                                for (const [msgId, cards] of next) {
+                                  const idx = cards.findIndex((c) => c.id === card.id);
+                                  if (idx >= 0) {
+                                    const updated = [...cards];
+                                    updated[idx] = { ...updated[idx], data: newData };
+                                    next.set(msgId, updated);
+                                    break;
+                                  }
+                                }
+                                return next;
+                              });
+                            }}
+                          />
                         </ActionCard>
                       </div>
                     ))}
