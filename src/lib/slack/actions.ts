@@ -105,6 +105,13 @@ export async function sendChannelMessage(
   const effectiveMyUserId = myUserId || process.env.SLACK_MY_USER_ID || '';
 
   try {
+    // Auto-join public channels if not already a member
+    try {
+      await web.conversations.join({ channel: channelId });
+    } catch {
+      // Already a member, or private channel (needs manual invite)
+    }
+
     // Append cc mention
     const fullMessage = effectiveMyUserId
       ? `${message}\n\ncc <@${effectiveMyUserId}>`
