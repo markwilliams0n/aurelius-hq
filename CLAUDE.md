@@ -19,6 +19,10 @@ You (Claude) can and should manage local development processes when needed:
 
 When restarting the server, always use specific PIDs (not `pkill -f`).
 
+## Linear Integration
+
+Always use the **trg-linear plugin** (`mcp__plugin_trg-linear_trg-linear__*` tools) for all Linear operations. This plugin authenticates as the **Aurelius agent**, not Mark's personal account. Do not use the `mcp__linear__*` tools unless explicitly instructed — those post as Mark.
+
 ## Session Start
 
 1. **Check `docs/worklog/now.md`** - Current context: what we just did, what's in progress, what's next

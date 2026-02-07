@@ -4,6 +4,7 @@ import { syncLinearNotifications, type LinearSyncResult } from '@/lib/linear';
 import { syncSlackMessages, type SlackSyncResult, startSocketMode, isSocketConfigured } from '@/lib/slack';
 import { syncSlackDirectory } from '@/lib/slack/directory';
 import { createBackup, type BackupResult } from './backup';
+import { logConnectorSync } from '@/lib/system-events';
 
 export type HeartbeatStep = 'backup' | 'granola' | 'gmail' | 'linear' | 'slack';
 export type HeartbeatStepStatus = 'start' | 'done' | 'skip' | 'error';
@@ -113,6 +114,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
       granolaResult = await syncGranolaMeetings();
       if (granolaResult.synced > 0) {
         console.log(`[Heartbeat] Granola: synced ${granolaResult.synced} meetings`);
+        logConnectorSync('granola', granolaResult.synced);
       }
       steps.granola = {
         success: true,
@@ -141,6 +143,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
       gmailResult = await syncGmailMessages();
       if (gmailResult.synced > 0) {
         console.log(`[Heartbeat] Gmail: synced ${gmailResult.synced} emails`);
+        logConnectorSync('gmail', gmailResult.synced);
       }
       steps.gmail = {
         success: true,
@@ -173,6 +176,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
       linearResult = await syncLinearNotifications();
       if (linearResult.synced > 0) {
         console.log(`[Heartbeat] Linear: synced ${linearResult.synced} notifications`);
+        logConnectorSync('linear', linearResult.synced);
       }
       steps.linear = {
         success: !linearResult.error,
@@ -217,6 +221,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
         slackResult = await syncSlackMessages();
         if (slackResult.synced > 0) {
           console.log(`[Heartbeat] Slack: synced ${slackResult.synced} messages`);
+          logConnectorSync('slack', slackResult.synced);
         }
         steps.slack = {
           success: !slackResult.error,
