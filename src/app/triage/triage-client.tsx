@@ -12,6 +12,9 @@ import { TriageChat } from "@/components/aurelius/triage-chat";
 import { SuggestedTasksBox } from "@/components/aurelius/suggested-tasks-box";
 import { TriageSnoozeMenu } from "@/components/aurelius/triage-snooze-menu";
 import { TaskCreatorPanel } from "@/components/aurelius/task-creator-panel";
+import { ActionCard } from "@/components/aurelius/action-card";
+import { CardContent } from "@/components/aurelius/cards/card-content";
+import type { ActionCardData } from "@/lib/types/action-card";
 import { toast } from "sonner";
 import {
   MessageSquare,
@@ -26,7 +29,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type ViewMode = "triage" | "action" | "reply" | "detail" | "chat" | "snooze" | "create-task";
+type ViewMode = "triage" | "action" | "reply" | "detail" | "chat" | "snooze" | "create-task" | "quick-task";
 type ConnectorFilter = "all" | "gmail" | "slack" | "linear" | "granola";
 type TriageView = "card" | "list";
 
@@ -84,6 +87,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
   const [triageView, setTriageView] = useState<TriageView>("card");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [returnToList, setReturnToList] = useState(false);
+  const [quickTaskCard, setQuickTaskCard] = useState<ActionCardData | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
   const sidebarWidth = isSidebarExpanded ? 480 : 320;
@@ -634,7 +638,20 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           break;
         case "t":
           e.preventDefault();
-          if (currentItem) setViewMode("create-task");
+          if (currentItem) {
+            // Create a pre-filled Linear issue action card
+            fetch(`/api/triage/${currentItem.id}/quick-task`, { method: "POST" })
+              .then((res) => res.json())
+              .then((data) => {
+                if (data.card) {
+                  setQuickTaskCard(data.card);
+                  setViewMode("quick-task");
+                } else {
+                  toast.error(data.error || "Failed to create task card");
+                }
+              })
+              .catch(() => toast.error("Failed to create task card"));
+          }
           break;
         case "a":
           e.preventDefault();
@@ -948,6 +965,92 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           onSnooze={handleSnooze}
           onClose={handleCloseOverlay}
         />
+      )}
+
+      {/* Quick task action card overlay */}
+      {viewMode === "quick-task" && quickTaskCard && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-lg">
+            <ActionCard
+              card={quickTaskCard}
+              onAction={async (actionName) => {
+                if (actionName === "send" || actionName === "confirm") {
+                  // Dispatch to the action card API with current data
+                  try {
+                    const res = await fetch(`/api/action-card/${quickTaskCard.id}`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        action: actionName,
+                        data: quickTaskCard.data,
+                      }),
+                    });
+                    const result = await res.json();
+                    if (result.status === "confirmed") {
+                      toast.success(result.successMessage || "Task created!", {
+                        action: result.result?.resultUrl ? {
+                          label: "Open in Linear",
+                          onClick: () => window.open(result.result.resultUrl, "_blank"),
+                        } : undefined,
+                      });
+                    } else {
+                      toast.error(result.result?.error || "Failed to create task");
+                    }
+                  } catch {
+                    toast.error("Failed to create task");
+                  }
+                  setQuickTaskCard(null);
+                  handleCloseOverlay();
+                } else if (actionName === "cancel" || actionName === "dismiss") {
+                  setQuickTaskCard(null);
+                  handleCloseOverlay();
+                }
+              }}
+            >
+              <CardContent
+                card={quickTaskCard}
+                onDataChange={(newData) => {
+                  setQuickTaskCard((prev) =>
+                    prev ? { ...prev, data: newData } : null
+                  );
+                }}
+                onAction={async (actionName, data) => {
+                  if (actionName === "send" || actionName === "confirm") {
+                    const cardData = data ?? quickTaskCard.data;
+                    try {
+                      const res = await fetch(`/api/action-card/${quickTaskCard.id}`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          action: actionName,
+                          data: cardData,
+                        }),
+                      });
+                      const result = await res.json();
+                      if (result.status === "confirmed") {
+                        toast.success(result.successMessage || "Task created!", {
+                          action: result.result?.resultUrl ? {
+                            label: "Open in Linear",
+                            onClick: () => window.open(result.result.resultUrl, "_blank"),
+                          } : undefined,
+                        });
+                      } else {
+                        toast.error(result.result?.error || "Failed to create task");
+                      }
+                    } catch {
+                      toast.error("Failed to create task");
+                    }
+                    setQuickTaskCard(null);
+                    handleCloseOverlay();
+                  } else if (actionName === "cancel" || actionName === "dismiss") {
+                    setQuickTaskCard(null);
+                    handleCloseOverlay();
+                  }
+                }}
+              />
+            </ActionCard>
+          </div>
+        </div>
       )}
     </AppShell>
   );
