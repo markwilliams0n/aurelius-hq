@@ -57,6 +57,13 @@
       "when": 1770397720599,
       "tag": "0007_goofy_rhino",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1770428867317,
+      "tag": "0008_hard_miracleman",
+      "breakpoints": true
     }
   ]
 }
