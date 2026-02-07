@@ -78,6 +78,13 @@
       "when": 1770496323691,
       "tag": "0010_system-events",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1770506643910,
+      "tag": "0011_magenta_hellcat",
+      "breakpoints": true
     }
   ]
 }
