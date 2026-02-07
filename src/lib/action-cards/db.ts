@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { actionCards } from "@/lib/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import type { ActionCardData, CardStatus } from "@/lib/types/action-card";
 import type { NewActionCard } from "@/lib/db/schema/action-cards";
 

@@ -1,7 +1,5 @@
-import type { CardStatus } from "@/lib/types/action-card";
-
 export type CardHandlerResult = {
-  status: CardStatus;
+  status: "confirmed" | "error";
   resultUrl?: string;
   error?: string;
 };
@@ -39,7 +37,7 @@ export async function dispatchCardAction(
   handlerId: string | null | undefined,
   action: string,
   data: Record<string, unknown>
-): Promise<{ status: CardStatus; result?: Record<string, unknown>; successMessage?: string }> {
+): Promise<{ status: "pending" | "confirmed" | "dismissed" | "error"; result?: Record<string, unknown>; successMessage?: string }> {
   // Generic status-only actions
   if (action === "cancel" || action === "dismiss") {
     return { status: "dismissed" };
