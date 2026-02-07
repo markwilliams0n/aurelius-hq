@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { ActionCardData } from "@/lib/types/action-card";
 import { cn } from "@/lib/utils";
 
@@ -11,15 +13,18 @@ interface ConfigCardContentProps {
 
 /**
  * Config pattern: "Here's state you can view or change."
- * Key-value display with inline editing in pending state.
+ * Renders config content as markdown with click-to-edit in pending state.
  */
 export function ConfigCardContent({ card, onDataChange }: ConfigCardContentProps) {
   const isPending = card.status === "pending";
   const entries = card.data.entries as Array<{ key: string; value: string; editable?: boolean }> | undefined;
+  const content = card.data.content as string | undefined;
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [isEditingContent, setIsEditingContent] = useState(false);
+  const [editContent, setEditContent] = useState("");
 
-  // Structured entries mode
+  // Structured entries mode (key-value configs)
   if (entries) {
     return (
       <div className="space-y-1 text-sm">
@@ -68,10 +73,72 @@ export function ConfigCardContent({ card, onDataChange }: ConfigCardContentProps
     );
   }
 
-  // Fallback: raw data display
+  // Content mode (markdown configs like capability prompts)
+  if (content !== undefined) {
+    if (isEditingContent) {
+      return (
+        <div className="space-y-2">
+          <textarea
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            className="w-full min-h-[200px] bg-muted/50 border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-gold/50 resize-y"
+            autoFocus
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                onDataChange?.({ ...card.data, content: editContent });
+                setIsEditingContent(false);
+              }}
+              className="text-xs px-2 py-1 rounded bg-gold/20 text-gold hover:bg-gold/30 transition-colors"
+            >
+              Done editing
+            </button>
+            <button
+              onClick={() => setIsEditingContent(false)}
+              className="text-xs px-2 py-1 rounded text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        className={cn(
+          "chat-prose text-sm",
+          isPending && "cursor-pointer hover:ring-1 hover:ring-gold/30 rounded-md p-1 -m-1 transition-all"
+        )}
+        onClick={() => {
+          if (isPending) {
+            setEditContent(content || "");
+            setIsEditingContent(true);
+          }
+        }}
+        title={isPending ? "Click to edit" : undefined}
+      >
+        {content ? (
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+        ) : (
+          <span className="text-muted-foreground italic">No content set. Click to add.</span>
+        )}
+      </div>
+    );
+  }
+
+  // Fallback: raw data display (filter out metadata keys)
+  const metaKeys = new Set(["key", "description", "version"]);
+  const displayEntries = Object.entries(card.data).filter(([k]) => !metaKeys.has(k));
+
+  if (displayEntries.length === 0) {
+    return <p className="text-sm text-muted-foreground italic">No configuration data.</p>;
+  }
+
   return (
     <div className="space-y-1 text-sm">
-      {Object.entries(card.data).map(([key, value]) => (
+      {displayEntries.map(([key, value]) => (
         <p key={key}>
           <span className="text-muted-foreground">{key}: </span>
           <span className="text-foreground">{String(value)}</span>

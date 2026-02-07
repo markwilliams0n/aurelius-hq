@@ -95,9 +95,13 @@ export async function handleConfigTool(
       const description = CONFIG_DESCRIPTIONS[key];
       const content = config?.content || "";
 
-      // Parse content into editable entries (line-based key: value format)
+      // Detect simple key-value configs (e.g., "setting: value" per line).
+      // Must not contain markdown indicators like #, -, *, > or blank lines.
       const lines = content.split("\n").filter((l: string) => l.trim());
-      const isKeyValueFormat = lines.length > 0 && lines.every((l: string) => l.includes(":"));
+      const simpleKvPattern = /^[a-zA-Z0-9_\s]+:\s*.+$/;
+      const isKeyValueFormat = lines.length > 0
+        && lines.length <= 20
+        && lines.every((l: string) => simpleKvPattern.test(l.trim()));
 
       const cardData: Record<string, unknown> = {
         key,
