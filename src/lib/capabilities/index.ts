@@ -11,6 +11,7 @@
 import type { Capability, ToolDefinition, ToolResult } from './types';
 import { getConfig, updateConfig } from '@/lib/config';
 import type { ConfigKey } from '@/lib/config';
+import { logCapabilityUse } from '@/lib/system-events';
 
 // Import capabilities — add new ones here as they're created
 import { configCapability } from './config';
@@ -82,7 +83,10 @@ export async function handleToolCall(
 ): Promise<ToolResult> {
   for (const cap of ALL_CAPABILITIES) {
     const result = await cap.handleTool(toolName, toolInput, conversationId);
-    if (result !== null) return result;
+    if (result !== null) {
+      logCapabilityUse(cap.name, toolName);
+      return result;
+    }
   }
   return { result: JSON.stringify({ error: `Unknown tool: ${toolName}` }) };
 }

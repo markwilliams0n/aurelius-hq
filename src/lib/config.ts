@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { configs, configKeyEnum, pendingConfigChanges } from "@/lib/db/schema";
 import { eq, desc, and } from "drizzle-orm";
+import { logConfigChange } from "@/lib/system-events";
 
 export type ConfigKey = (typeof configKeyEnum.enumValues)[number];
 
@@ -58,6 +59,8 @@ export async function updateConfig(
       createdBy,
     })
     .returning();
+
+  logConfigChange(key, createdBy);
 
   return newConfig;
 }
