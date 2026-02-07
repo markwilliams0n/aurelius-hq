@@ -7,12 +7,15 @@ import { emitMemoryEvent } from "@/lib/memory/events";
 import { db } from "@/lib/db";
 import { conversations } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { createCard, generateCardId } from "@/lib/action-cards/db";
+import type { CardPattern } from "@/lib/types/action-card";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// Stored message type (with timestamp for DB)
+// Stored message type (with timestamp and stable ID for DB)
 type StoredMessage = {
+  id?: string; // stable ID for card<->message association
   role: "user" | "assistant";
   content: string;
   timestamp: string;
@@ -70,9 +73,20 @@ export async function POST(request: NextRequest) {
   let fullResponse = "";
   let pendingChangeId: string | null = null;
 
+  // Generate stable IDs for this exchange (used to associate cards with messages)
+  const userMessageId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const assistantMessageId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
   const stream = new ReadableStream({
     async start(controller) {
       try {
+        // Tell the client which assistant message ID to use for this response
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({ type: "assistant_message_id", id: assistantMessageId })}\n\n`
+          )
+        );
+
         // Stream the response
         for await (const event of chatStreamWithTools(
           aiMessages,
@@ -98,16 +112,27 @@ export async function POST(request: NextRequest) {
                 `data: ${JSON.stringify({ type: "tool_result", toolName: event.toolName, result: event.result })}\n\n`
               )
             );
-            // Check if tool result contains an action card to emit as separate SSE event
+            // Check if tool result contains an action card — persist to DB and emit
             try {
               const parsed = JSON.parse(event.result);
               if (parsed.action_card) {
-                const cardId = `card-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+                const cardId = generateCardId();
+                const ac = parsed.action_card;
+                const card = await createCard({
+                  id: cardId,
+                  messageId: assistantMessageId,
+                  conversationId: conversationId || undefined,
+                  pattern: (ac.pattern || "approval") as CardPattern,
+                  status: "pending",
+                  title: ac.title || "Action",
+                  data: ac.data || {},
+                  handler: ac.handler || null,
+                });
                 controller.enqueue(
                   encoder.encode(
                     `data: ${JSON.stringify({
                       type: "action_card",
-                      card: { id: cardId, ...parsed.action_card },
+                      card,
                     })}\n\n`
                   )
                 );
@@ -125,15 +150,17 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Build stored messages with timestamps
+        // Build stored messages with timestamps and stable IDs
         const newStoredMessages: StoredMessage[] = [
           ...storedHistory,
           {
+            id: userMessageId,
             role: "user",
             content: message,
             timestamp: new Date().toISOString(),
           },
           {
+            id: assistantMessageId,
             role: "assistant",
             content: fullResponse,
             timestamp: new Date().toISOString(),

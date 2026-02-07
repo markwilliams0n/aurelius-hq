@@ -64,6 +64,13 @@
       "when": 1770428867317,
       "tag": "0008_hard_miracleman",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1770491577926,
+      "tag": "0009_nappy_pyro",
+      "breakpoints": true
     }
   ]
 }
