@@ -265,6 +265,45 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     setViewMode("snooze");
   }, [currentItem]);
 
+  // Action Needed (a) - 3-day snooze + Gmail label, swipe animation + optimistic
+  const handleActionNeeded = useCallback((targetItem?: TriageItem) => {
+    const item = targetItem || currentItem;
+    if (!item) return;
+
+    if (item.connector !== "gmail") {
+      toast.info("Action Needed is only available for Gmail items");
+      return;
+    }
+
+    setAnimatingOut("right");
+    setLastAction({ type: "action-needed", itemId: item.id, item });
+
+    // Fire API calls in background immediately
+    fetch(`/api/triage/${item.id}/tasks`, { method: "DELETE" }).catch(() => {});
+    fetch(`/api/triage/${item.id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "action-needed" }),
+    }).catch((error) => {
+      console.error("Failed to mark action needed:", error);
+      toast.error("Failed to mark for action - item restored");
+      setItems((prev) => [item, ...prev]);
+    });
+
+    // Remove from list after brief animation
+    setTimeout(() => {
+      setItems((prev) => prev.filter((i) => i.id !== item.id));
+      setAnimatingOut(null);
+    }, 150);
+
+    toast.success("Marked for action (3 days)", {
+      action: {
+        label: "Undo",
+        onClick: () => handleUndo(),
+      },
+    });
+  }, [currentItem]);
+
   // Spam action (x) - swipe animation + optimistic
   const handleSpam = useCallback(() => {
     if (!currentItem) return;
@@ -597,6 +636,10 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           e.preventDefault();
           if (currentItem) setViewMode("create-task");
           break;
+        case "a":
+          e.preventDefault();
+          handleActionNeeded();
+          break;
         case "l":
         case "L":
           // Open in Linear (if Linear item with URL)
@@ -640,6 +683,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     handleOpenChat,
     handleOpenSnooze,
     handleSpam,
+    handleActionNeeded,
     handleCloseOverlay,
     handleUndo,
   ]);
@@ -786,6 +830,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
             onClearSelection={handleClearSelection}
             onBulkArchive={handleBulkArchive}
             onOpenItem={handleOpenListItem}
+            onActionNeeded={handleActionNeeded}
           />
         )}
 
@@ -923,6 +968,8 @@ function getActionMessage(action: string): string {
       return "Tag added";
     case "actioned":
       return "Marked as done";
+    case "action-needed":
+      return "Marked for action (3 days)";
     default:
       return "Action completed";
   }

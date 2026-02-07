@@ -450,6 +450,25 @@ export async function getThread(threadId: string): Promise<ParsedEmail[]> {
 }
 
 /**
+ * Add a label to a Gmail message by label name.
+ * Looks up the label ID from the name, then applies it.
+ */
+export async function addLabel(messageId: string, labelName: string): Promise<void> {
+  const gmail = await getGmailClient();
+
+  // Find label ID by name
+  const labels = await gmail.users.labels.list({ userId: 'me' });
+  const label = labels.data.labels?.find(l => l.name === labelName);
+  if (!label?.id) throw new Error(`Label "${labelName}" not found`);
+
+  await gmail.users.messages.modify({
+    userId: 'me',
+    id: messageId,
+    requestBody: { addLabelIds: [label.id] },
+  });
+}
+
+/**
  * Get Gravatar URL for email
  */
 export function getGravatarUrl(email: string, size: number = 80): string {

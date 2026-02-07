@@ -18,6 +18,7 @@ export interface TriageListViewProps {
   onClearSelection: () => void;
   onBulkArchive: () => void;
   onOpenItem: (id: string) => void;
+  onActionNeeded?: (item: TriageItem) => void;
 }
 
 export function TriageListView({
@@ -28,6 +29,7 @@ export function TriageListView({
   onClearSelection,
   onBulkArchive,
   onOpenItem,
+  onActionNeeded,
 }: TriageListViewProps) {
   const [focusedIndex, setFocusedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -80,6 +82,12 @@ export function TriageListView({
             onOpenItem(items[focusedIndex].id);
           }
           break;
+        case "a":
+          if (!e.shiftKey && onActionNeeded && items[focusedIndex]) {
+            e.preventDefault();
+            onActionNeeded(items[focusedIndex]);
+          }
+          break;
         case "A":
           if (e.shiftKey) {
             e.preventDefault();
@@ -111,6 +119,7 @@ export function TriageListView({
     onClearSelection,
     onBulkArchive,
     onOpenItem,
+    onActionNeeded,
   ]);
 
   const allSelected = items.length > 0 && selectedIds.size === items.length;
@@ -271,6 +280,7 @@ export function TriageListView({
           <ListKeyHint keyName="Up/Down" label="Navigate" />
           <ListKeyHint keyName="Space" label="Select" />
           <ListKeyHint keyName="Enter" label="Open" />
+          <ListKeyHint keyName="a" label="Action Needed" />
           <ListKeyHint keyName="Shift+A" label="Select all" />
           <ListKeyHint keyName="Del" label="Archive selected" />
           <ListKeyHint keyName="v" label="Card view" />

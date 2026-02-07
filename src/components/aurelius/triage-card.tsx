@@ -60,6 +60,8 @@ export type TriageItem = {
     threadId?: string;
     messageCount?: number;
     attachments?: Array<{ filename: string; mimeType: string; size: number }>;
+    // Action needed tracking
+    actionNeededDate?: string;
     // Recipients
     recipients?: {
       to: Array<{ email: string; name?: string }>;
@@ -244,6 +246,14 @@ export const TriageCard = forwardRef<HTMLDivElement, TriageCardProps>(
             </div>
           )}
 
+          {/* Action needed badge */}
+          {item.enrichment?.actionNeededDate && (
+            <div className="flex items-center gap-1 text-xs text-amber-400 mb-2">
+              <Clock className="w-3 h-3" />
+              Marked for action on {new Date(item.enrichment.actionNeededDate).toLocaleDateString()}
+            </div>
+          )}
+
           {/* User tags */}
           {item.tags.length > 0 && (
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -346,6 +356,9 @@ export const TriageCard = forwardRef<HTMLDivElement, TriageCardProps>(
               <KeyHint keyName="←" label="Archive" />
               <KeyHint keyName="↑" label="Summary" />
               <KeyHint keyName="s" label="Snooze" />
+              {item.connector === "gmail" && (
+                <KeyHint keyName="a" label="Action" />
+              )}
               {item.connector === "gmail" && (
                 <KeyHint keyName="x" label="Spam" />
               )}

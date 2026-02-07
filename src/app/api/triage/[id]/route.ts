@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { inboxItems } from "@/lib/db/schema";
 import { eq, or } from "drizzle-orm";
-import { syncArchiveToGmail, syncSpamToGmail } from "@/lib/gmail/actions";
+import { syncArchiveToGmail, syncSpamToGmail, markActionNeeded } from "@/lib/gmail/actions";
 import { archiveNotification } from "@/lib/linear";
 import { logActivity } from "@/lib/activity";
 
@@ -147,6 +147,31 @@ export async function POST(
       }
       break;
 
+    case "action-needed": {
+      const actionSnoozeUntil = new Date();
+      actionSnoozeUntil.setDate(actionSnoozeUntil.getDate() + 3);
+
+      // Merge actionNeededDate into existing enrichment
+      const currentEnrichment = (item.enrichment as Record<string, unknown>) || {};
+
+      updates.status = "snoozed";
+      updates.snoozedUntil = actionSnoozeUntil;
+      updates.enrichment = {
+        ...currentEnrichment,
+        actionNeededDate: new Date().toISOString(),
+      };
+
+      // Apply Gmail label in background (don't await)
+      if (item.connector === "gmail") {
+        backgroundTasks.push(
+          markActionNeeded(item.id).catch((err) => {
+            console.error("[Action Needed] Gmail label failed:", err);
+          })
+        );
+      }
+      break;
+    }
+
     case "restore":
       updates.status = "new";
       updates.snoozedUntil = null;
@@ -171,6 +196,7 @@ export async function POST(
     archive: `Archived: ${item.subject}`,
     snooze: `Snoozed: ${item.subject}`,
     spam: `Marked as spam: ${item.subject}`,
+    "action-needed": `Marked for action: ${item.subject}`,
     restore: `Restored: ${item.subject}`,
     flag: `Flagged: ${item.subject}`,
     actioned: `Marked done: ${item.subject}`,
