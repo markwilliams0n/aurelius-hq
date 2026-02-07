@@ -149,4 +149,5 @@ export const CONFIG_DESCRIPTIONS: Record<ConfigKey, string> = {
   processes: "Automated process definitions and schedules (reserved for future use).",
   "capability:tasks": "Instructions for the Tasks capability — how the agent manages tasks via Linear.",
   "capability:config": "Instructions for the Configuration capability — how the agent manages its own config.",
+  "prompt:email_draft": "Prompt template for AI-generated email draft replies. Controls tone, style, and formatting of drafts.",
 };

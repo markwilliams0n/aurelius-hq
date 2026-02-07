@@ -1,0 +1,1 @@
+ALTER TYPE "public"."config_key" ADD VALUE 'prompt:email_draft';
