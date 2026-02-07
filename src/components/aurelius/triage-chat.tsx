@@ -3,7 +3,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { X, Send, Brain, Clock, CheckCircle, Loader2 } from "lucide-react";
 import { TriageItem } from "./triage-card";
+import { ActionCard } from "./action-card";
+import { SlackMessageCardContent } from "./cards/slack-message-card";
+import type { ActionCardData } from "@/lib/types/action-card";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface TriageChatProps {
   item: TriageItem;
@@ -22,6 +26,7 @@ export function TriageChat({ item, onClose, onAction }: TriageChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [actionCards, setActionCards] = useState<Map<string, ActionCardData>>(new Map());
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -104,6 +109,12 @@ What would you like to do?
       if (data.action && onAction) {
         onAction(data.action, data.actionData);
       }
+
+      // If the response includes an action card (e.g. Slack message), display it
+      if (data.actionData?.actionCard && !data.actionData.actionCard.error) {
+        const card = data.actionData.actionCard as ActionCardData;
+        setActionCards((prev) => new Map(prev).set(assistantMessage.id, card));
+      }
     } catch (error) {
       console.error("Chat error:", error);
       const errorMessage: ChatMessage = {
@@ -117,6 +128,42 @@ What would you like to do?
       setIsLoading(false);
     }
   }, [input, isLoading, item, messages, onAction]);
+
+  const handleCardAction = useCallback(
+    async (cardId: string, actionName: string, cardData: Record<string, unknown>) => {
+      try {
+        const response = await fetch(`/api/action-card/${cardId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: actionName, data: cardData }),
+        });
+        if (!response.ok) throw new Error("Action failed");
+        const result = await response.json();
+
+        // Update the card in state
+        setActionCards((prev) => {
+          const next = new Map(prev);
+          for (const [msgId, card] of next) {
+            if (card.id === cardId) {
+              next.set(msgId, { ...card, status: result.status, resultUrl: result.resultUrl, error: result.error });
+              break;
+            }
+          }
+          return next;
+        });
+
+        if (result.status === "sent") {
+          toast.success("Slack message sent!");
+        } else if (result.status === "error") {
+          toast.error(result.error || "Failed to send");
+        }
+      } catch (error) {
+        console.error("Card action failed:", error);
+        toast.error("Failed to send");
+      }
+    },
+    []
+  );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -155,26 +202,50 @@ What would you like to do?
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={cn(
-                "flex",
-                message.role === "user" ? "justify-end" : "justify-start"
-              )}
-            >
-              <div
-                className={cn(
-                  "max-w-[80%] rounded-lg px-4 py-2 text-sm",
-                  message.role === "user"
-                    ? "bg-gold text-background"
-                    : "bg-secondary border border-border"
+          {messages.map((message) => {
+            const card = actionCards.get(message.id);
+            return (
+              <div key={message.id}>
+                <div
+                  className={cn(
+                    "flex",
+                    message.role === "user" ? "justify-end" : "justify-start"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "max-w-[80%] rounded-lg px-4 py-2 text-sm",
+                      message.role === "user"
+                        ? "bg-gold text-background"
+                        : "bg-secondary border border-border"
+                    )}
+                  >
+                    <div className="whitespace-pre-wrap">{message.content}</div>
+                  </div>
+                </div>
+                {card && (
+                  <div className="mt-2 max-w-[80%]">
+                    <ActionCard
+                      card={card}
+                      onAction={(action, editedData) => handleCardAction(card.id, action, editedData ?? card.data)}
+                    >
+                      <SlackMessageCardContent
+                        card={card}
+                        onDataChange={(newData) => {
+                          setActionCards((prev) => {
+                            const next = new Map(prev);
+                            next.set(message.id, { ...card, data: newData });
+                            return next;
+                          });
+                        }}
+                        onAction={(action, data) => handleCardAction(card.id, action, data ?? card.data)}
+                      />
+                    </ActionCard>
+                  </div>
                 )}
-              >
-                <div className="whitespace-pre-wrap">{message.content}</div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {isLoading && (
             <div className="flex justify-start">
               <div className="bg-secondary border border-border rounded-lg px-4 py-2">

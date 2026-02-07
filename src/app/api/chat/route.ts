@@ -98,6 +98,23 @@ export async function POST(request: NextRequest) {
                 `data: ${JSON.stringify({ type: "tool_result", toolName: event.toolName, result: event.result })}\n\n`
               )
             );
+            // Check if tool result contains an action card to emit as separate SSE event
+            try {
+              const parsed = JSON.parse(event.result);
+              if (parsed.action_card) {
+                const cardId = `card-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify({
+                      type: "action_card",
+                      card: { id: cardId, ...parsed.action_card },
+                    })}\n\n`
+                  )
+                );
+              }
+            } catch {
+              // Not JSON or no action_card — that's fine
+            }
           } else if (event.type === "pending_change") {
             pendingChangeId = event.changeId;
             controller.enqueue(

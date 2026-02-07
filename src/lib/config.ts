@@ -150,4 +150,6 @@ export const CONFIG_DESCRIPTIONS: Record<ConfigKey, string> = {
   "capability:tasks": "Instructions for the Tasks capability — how the agent manages tasks via Linear.",
   "capability:config": "Instructions for the Configuration capability — how the agent manages its own config.",
   "prompt:email_draft": "Prompt template for AI-generated email draft replies. Controls tone, style, and formatting of drafts.",
+  "capability:slack": "Instructions for the Slack capability — how the agent sends messages via Slack.",
+  "slack:directory": "Cached Slack workspace directory (users and channels). Auto-refreshed daily by heartbeat.",
 };

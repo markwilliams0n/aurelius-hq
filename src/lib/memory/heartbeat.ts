@@ -2,6 +2,7 @@ import { syncGranolaMeetings, type GranolaSyncResult } from '@/lib/granola';
 import { syncGmailMessages, type GmailSyncResult } from '@/lib/gmail';
 import { syncLinearNotifications, type LinearSyncResult } from '@/lib/linear';
 import { syncSlackMessages, type SlackSyncResult, startSocketMode, isSocketConfigured } from '@/lib/slack';
+import { syncSlackDirectory } from '@/lib/slack/directory';
 import { createBackup, type BackupResult } from './backup';
 
 export type HeartbeatStep = 'backup' | 'granola' | 'gmail' | 'linear' | 'slack';
@@ -201,6 +202,12 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
       if (isSocketConfigured()) {
         await startSocketMode();
         console.log('[Heartbeat] Slack Socket Mode connected');
+        // Refresh workspace directory cache (skips if <24h old)
+        try {
+          await syncSlackDirectory();
+        } catch (dirErr) {
+          console.warn('[Heartbeat] Slack directory sync failed:', dirErr);
+        }
         steps.slack = {
           success: true,
           durationMs: Date.now() - slackStart,

@@ -1,6 +1,8 @@
 import { AureliusAvatar } from "./aurelius-avatar";
 import { UserAvatar } from "./user-avatar";
 import { ThinkingWaves } from "./thinking-waves";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 type Message = {
   role: "user" | "assistant";
@@ -63,7 +65,15 @@ export function ChatMessage({ message, isStreaming = false, hasError = false }: 
                 : "bg-secondary text-foreground"
             }`}
           >
-            <p className="whitespace-pre-wrap">{displayContent}</p>
+            {isUser ? (
+              <p className="whitespace-pre-wrap">{displayContent}</p>
+            ) : (
+              <div className="chat-prose">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {displayContent}
+                </ReactMarkdown>
+              </div>
+            )}
           </div>
         </div>
       )}
