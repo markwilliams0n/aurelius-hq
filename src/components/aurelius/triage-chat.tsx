@@ -238,6 +238,7 @@ What would you like to do?
                             return next;
                           });
                         }}
+                        onAction={(action, data) => handleCardAction(card.id, action, data ?? card.data)}
                       />
                     </ActionCard>
                   </div>

@@ -31,9 +31,9 @@ type ChatStats = {
 const SHARED_CONVERSATION_ID = "00000000-0000-0000-0000-000000000000"; // Shared between web and Telegram
 
 /** Generic content renderer for action cards — delegates to type-specific components */
-function ActionCardContent({ card, onDataChange }: { card: ActionCardData; onDataChange?: (data: Record<string, unknown>) => void }) {
+function ActionCardContent({ card, onDataChange, onAction }: { card: ActionCardData; onDataChange?: (data: Record<string, unknown>) => void; onAction?: (action: string, data?: Record<string, unknown>) => void }) {
   if (card.cardType === "slack_message") {
-    return <SlackMessageCardContent card={card} onDataChange={onDataChange} />;
+    return <SlackMessageCardContent card={card} onDataChange={onDataChange} onAction={onAction} />;
   }
   // Generic fallback: show data as key-value pairs
   const data = card.data;
@@ -530,6 +530,7 @@ export function ChatClient() {
                                 return next;
                               });
                             }}
+                            onAction={(action, data) => handleActionCardAction(card.id, action, data ?? card.data)}
                           />
                         </ActionCard>
                       </div>
