@@ -433,22 +433,50 @@ export async function getThread(threadId: string): Promise<ParsedEmail[]> {
   return messages.map(msg => parseMessage(msg as GmailMessage));
 }
 
+// Module-level label cache (labels rarely change)
+const labelCache: Map<string, string> = new Map();
+const LABEL_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+let labelCacheTime = 0;
+
 /**
  * Add a label to a Gmail message by label name.
- * Looks up the label ID from the name, then applies it.
+ * Looks up the label ID from a cached list, then applies it.
+ * Auto-creates the label if it doesn't exist.
  */
 export async function addLabel(messageId: string, labelName: string): Promise<void> {
   const gmail = await getGmailClient();
 
-  // Find label ID by name
-  const labels = await gmail.users.labels.list({ userId: 'me' });
-  const label = labels.data.labels?.find(l => l.name === labelName);
-  if (!label?.id) throw new Error(`Label "${labelName}" not found`);
+  let labelId = labelCache.get(labelName);
+
+  // Refresh cache if stale or miss
+  if (!labelId || Date.now() - labelCacheTime > LABEL_CACHE_TTL) {
+    const labels = await gmail.users.labels.list({ userId: 'me' });
+    labelCache.clear();
+    labelCacheTime = Date.now();
+    for (const l of labels.data.labels || []) {
+      if (l.name && l.id) labelCache.set(l.name, l.id);
+    }
+    labelId = labelCache.get(labelName);
+  }
+
+  // Auto-create the label if it doesn't exist
+  if (!labelId) {
+    const created = await gmail.users.labels.create({
+      userId: 'me',
+      requestBody: {
+        name: labelName,
+        labelListVisibility: 'labelShow',
+        messageListVisibility: 'show',
+      },
+    });
+    labelId = created.data.id!;
+    labelCache.set(labelName, labelId);
+  }
 
   await gmail.users.messages.modify({
     userId: 'me',
     id: messageId,
-    requestBody: { addLabelIds: [label.id] },
+    requestBody: { addLabelIds: [labelId] },
   });
 }
 

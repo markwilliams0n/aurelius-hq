@@ -65,20 +65,24 @@ export function TriageListView({
       switch (e.key) {
         case "ArrowUp":
           e.preventDefault();
+          e.stopImmediatePropagation();
           setFocusedIndex((prev) => Math.max(0, prev - 1));
           break;
         case "ArrowDown":
           e.preventDefault();
+          e.stopImmediatePropagation();
           setFocusedIndex((prev) => Math.min(items.length - 1, prev + 1));
           break;
         case " ":
           e.preventDefault();
+          e.stopImmediatePropagation();
           if (items[focusedIndex]) {
             onToggleSelect(items[focusedIndex].id);
           }
           break;
         case "Enter":
           e.preventDefault();
+          e.stopImmediatePropagation();
           if (items[focusedIndex]) {
             onOpenItem(items[focusedIndex].id);
           }
@@ -86,6 +90,7 @@ export function TriageListView({
         case "a":
           if (!e.shiftKey && items[focusedIndex]) {
             e.preventDefault();
+            e.stopImmediatePropagation();
             if (items[focusedIndex].connector !== "gmail") {
               toast.info("Action Needed is only available for Gmail items");
             } else if (onActionNeeded) {
@@ -96,6 +101,7 @@ export function TriageListView({
         case "A":
           if (e.shiftKey) {
             e.preventDefault();
+            e.stopImmediatePropagation();
             if (selectedIds.size === items.length) {
               onClearSelection();
             } else {
@@ -107,6 +113,7 @@ export function TriageListView({
         case "Delete":
           if (selectedIds.size > 0) {
             e.preventDefault();
+            e.stopImmediatePropagation();
             onBulkArchive();
           }
           break;
@@ -128,6 +135,7 @@ export function TriageListView({
   ]);
 
   const allSelected = items.length > 0 && selectedIds.size === items.length;
+  const hasGmailItems = items.some((i) => i.connector === "gmail");
 
   return (
     <div ref={listRef} className="flex-1 flex flex-col overflow-hidden">
@@ -285,7 +293,7 @@ export function TriageListView({
           <ListKeyHint keyName="Up/Down" label="Navigate" />
           <ListKeyHint keyName="Space" label="Select" />
           <ListKeyHint keyName="Enter" label="Open" />
-          <ListKeyHint keyName="a" label="Action Needed" />
+          {hasGmailItems && <ListKeyHint keyName="a" label="Action Needed" />}
           <ListKeyHint keyName="Shift+A" label="Select all" />
           <ListKeyHint keyName="Del" label="Archive selected" />
           <ListKeyHint keyName="v" label="Card view" />

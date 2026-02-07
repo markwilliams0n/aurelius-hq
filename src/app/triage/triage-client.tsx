@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Dispatch, SetStateAction } from "react";
 import { AppShell } from "@/components/aurelius/app-shell";
 import { TriageCard, TriageItem } from "@/components/aurelius/triage-card";
 import { TriageListView } from "@/components/aurelius/triage-list-view";
@@ -89,6 +89,13 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
   const [returnToList, setReturnToList] = useState(false);
   const [quickTaskCard, setQuickTaskCard] = useState<ActionCardData | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  const lastActionRef = useRef<{ type: string; itemId: string; item: TriageItem } | null>(null);
+  const bulkUndoRef = useRef<TriageItem[]>([]);
+
+  // Keep ref in sync with state (state for re-renders, ref for closures)
+  useEffect(() => {
+    lastActionRef.current = lastAction;
+  }, [lastAction]);
 
   const sidebarWidth = isSidebarExpanded ? 480 : 320;
 
@@ -418,33 +425,52 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
 
   // Undo last action - instant, brings item back on screen
   const handleUndo = useCallback(() => {
-    if (!lastAction) return;
+    const action = lastActionRef.current;
+    if (!action) return;
 
-    let itemToRestore = lastAction.item;
+    if (action.type === "bulk-archive") {
+      const itemsToRestore = bulkUndoRef.current;
+      setItems((prev) => [...itemsToRestore, ...prev]);
+      setCurrentIndex(0);
 
-    // If undoing action-needed, clear the actionNeededDate from enrichment
-    if (lastAction.type === "action-needed" && itemToRestore.enrichment) {
-      const { actionNeededDate, ...restEnrichment } = itemToRestore.enrichment as Record<string, unknown>;
-      itemToRestore = { ...itemToRestore, enrichment: restEnrichment };
+      // Restore all via API
+      itemsToRestore.forEach((item) => {
+        fetch(`/api/triage/${item.id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "restore" }),
+        }).catch(console.error);
+      });
+
+      bulkUndoRef.current = [];
+    } else {
+      let itemToRestore = action.item;
+
+      // If undoing action-needed, clear the actionNeededDate from enrichment
+      if (action.type === "action-needed" && itemToRestore.enrichment) {
+        const { actionNeededDate, ...restEnrichment } = itemToRestore.enrichment as Record<string, unknown>;
+        itemToRestore = { ...itemToRestore, enrichment: restEnrichment };
+      }
+
+      // Immediately add item back to front and reset index to show it
+      setItems((prev) => [itemToRestore, ...prev]);
+      setCurrentIndex(0);
+
+      // Fire restore API in background, pass previousAction so server can clean up enrichment
+      fetch(`/api/triage/${action.itemId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "restore", previousAction: action.type }),
+      }).catch((error) => {
+        console.error("Failed to restore:", error);
+        toast.error("Failed to restore on server");
+      });
     }
 
-    // Immediately add item back to front and reset index to show it
-    setItems((prev) => [itemToRestore, ...prev]);
-    setCurrentIndex(0);
     setLastAction(null);
-
-    // Fire restore API in background, pass previousAction so server can clean up enrichment
-    fetch(`/api/triage/${lastAction.itemId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "restore", previousAction: lastAction.type }),
-    }).catch((error) => {
-      console.error("Failed to restore:", error);
-      toast.error("Failed to restore on server");
-    });
-
+    lastActionRef.current = null;
     toast.success("Restored");
-  }, [lastAction]);
+  }, []);
 
   // Sync all connectors (fire-and-forget, poll for completion)
   const handleSync = useCallback(async () => {
@@ -481,30 +507,34 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     if (selectedIds.size === 0) return;
 
     const idsToArchive = Array.from(selectedIds);
+    const itemsToArchive = items.filter((i) => selectedIds.has(i.id));
     const count = idsToArchive.length;
+
+    // Store for undo
+    setLastAction({ type: "bulk-archive", itemId: idsToArchive[0], item: itemsToArchive[0] });
+    bulkUndoRef.current = itemsToArchive;
 
     // Optimistically remove items
     setItems((prev) => prev.filter((i) => !selectedIds.has(i.id)));
     setSelectedIds(new Set());
 
-    // Fire archive API calls in parallel
-    await Promise.all(
-      idsToArchive.map(async (id) => {
-        try {
-          await fetch(`/api/triage/${id}/tasks`, { method: "DELETE" });
-          await fetch(`/api/triage/${id}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "archive" }),
-          });
-        } catch (error) {
-          console.error(`Failed to archive ${id}:`, error);
-        }
-      })
-    );
+    // Fire archive API calls (fire-and-forget)
+    idsToArchive.forEach((id) => {
+      fetch(`/api/triage/${id}/tasks`, { method: "DELETE" }).catch(() => {});
+      fetch(`/api/triage/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "archive" }),
+      }).catch(console.error);
+    });
 
-    toast.success(`Archived ${count} item${count === 1 ? "" : "s"}`);
-  }, [selectedIds]);
+    toast.success(`Archived ${count} item${count === 1 ? "" : "s"}`, {
+      action: {
+        label: "Undo",
+        onClick: () => handleUndo(),
+      },
+    });
+  }, [selectedIds, items, handleUndo]);
 
   // List view: toggle select
   const handleToggleSelect = useCallback((id: string) => {
@@ -1013,7 +1043,7 @@ function QuickTaskOverlay({
   onClose,
 }: {
   card: ActionCardData;
-  onCardChange: (updater: (prev: ActionCardData | null) => ActionCardData | null) => void;
+  onCardChange: Dispatch<SetStateAction<ActionCardData | null>>;
   onClose: () => void;
 }) {
   const handleAction = useCallback(async (actionName: string, editedData?: Record<string, unknown>) => {
