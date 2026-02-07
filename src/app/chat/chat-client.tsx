@@ -8,7 +8,7 @@ import { AppShell } from "@/components/aurelius/app-shell";
 import { ChatMemoryPanel } from "@/components/aurelius/chat-memory-panel";
 import { ToolPanel, PanelContent } from "@/components/aurelius/tool-panel";
 import { ActionCard } from "@/components/aurelius/action-card";
-import { SlackMessageCardContent } from "@/components/aurelius/cards/slack-message-card";
+import { CardContent } from "@/components/aurelius/cards/card-content";
 import type { ActionCardData } from "@/lib/types/action-card";
 import { FileText } from "lucide-react";
 import { toast } from "sonner";
@@ -30,25 +30,6 @@ type ChatStats = {
 
 const SHARED_CONVERSATION_ID = "00000000-0000-0000-0000-000000000000"; // Shared between web and Telegram
 
-/** Generic content renderer for action cards — delegates to handler-specific components */
-function ActionCardContent({ card, onDataChange, onAction }: { card: ActionCardData; onDataChange?: (data: Record<string, unknown>) => void; onAction?: (action: string, data?: Record<string, unknown>) => void }) {
-  // Route to handler-specific renderers
-  if (card.handler?.startsWith("slack:")) {
-    return <SlackMessageCardContent card={card} onDataChange={onDataChange} onAction={onAction} />;
-  }
-  // Generic fallback: show data as key-value pairs
-  const data = card.data;
-  return (
-    <div className="space-y-1 text-sm">
-      {Object.entries(data).map(([key, value]) => (
-        <p key={key}>
-          <span className="text-muted-foreground">{key}: </span>
-          <span>{String(value)}</span>
-        </p>
-      ))}
-    </div>
-  );
-}
 
 export function ChatClient() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -514,7 +495,7 @@ export function ChatClient() {
                           card={card}
                           onAction={(action, editedData) => handleActionCardAction(card.id, action, editedData ?? card.data)}
                         >
-                          <ActionCardContent
+                          <CardContent
                             card={card}
                             onDataChange={(newData) => {
                               setActionCards((prev) => {

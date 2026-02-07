@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { X, Send, Brain, Clock, CheckCircle, Loader2 } from "lucide-react";
 import { TriageItem } from "./triage-card";
 import { ActionCard } from "./action-card";
-import { SlackMessageCardContent } from "./cards/slack-message-card";
+import { CardContent } from "./cards/card-content";
 import type { ActionCardData } from "@/lib/types/action-card";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -229,7 +229,7 @@ What would you like to do?
                       card={card}
                       onAction={(action, editedData) => handleCardAction(card.id, action, editedData ?? card.data)}
                     >
-                      <SlackMessageCardContent
+                      <CardContent
                         card={card}
                         onDataChange={(newData) => {
                           setActionCards((prev) => {
