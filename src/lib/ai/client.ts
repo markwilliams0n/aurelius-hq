@@ -29,10 +29,10 @@ type MessageWithTools = Message | {
 
 // Default model - exported so it can be referenced in prompts
 export const DEFAULT_MODEL =
-  process.env.OPENROUTER_DEFAULT_MODEL || "moonshotai/kimi-k2";
+  process.env.OPENROUTER_DEFAULT_MODEL || "moonshotai/kimi-k2.5";
 
-// Model that supports tool use (Claude is reliable for this)
-const TOOL_MODEL = "anthropic/claude-sonnet-4";
+// Model for tool use - same as default unless overridden
+const TOOL_MODEL = process.env.OPENROUTER_TOOL_MODEL || DEFAULT_MODEL;
 
 // Max tool call iterations to prevent infinite loops
 const MAX_TOOL_ITERATIONS = 5;
