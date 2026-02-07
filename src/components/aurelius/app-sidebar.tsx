@@ -11,6 +11,7 @@ import {
   Activity,
   Inbox,
   CheckSquare,
+  Settings,
   Sun,
   Moon,
   Monitor,
@@ -24,6 +25,7 @@ const navItems = [
   { href: "/tasks", icon: CheckSquare, label: "Tasks" },
   { href: "/memory", icon: Brain, label: "Memory" },
   { href: "/system", icon: Activity, label: "System" },
+  { href: "/config", icon: Settings, label: "Cortex" },
 ];
 
 export function AppSidebar() {
