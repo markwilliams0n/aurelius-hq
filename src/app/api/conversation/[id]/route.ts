@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { conversations } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { DEFAULT_MODEL } from "@/lib/ai/client";
+import { getCardsByConversation } from "@/lib/action-cards/db";
 
 export async function GET(
   request: NextRequest,
@@ -37,6 +38,9 @@ export async function GET(
     return count + (msg.memories?.length || 0);
   }, 0);
 
+  // Load persisted action cards for this conversation
+  const actionCards = await getCardsByConversation(id);
+
   return NextResponse.json({
     id: conversation.id,
     messages: messages.map((m) => ({
@@ -46,6 +50,7 @@ export async function GET(
     })),
     model: DEFAULT_MODEL,
     factsSaved,
+    actionCards,
   });
 }
 

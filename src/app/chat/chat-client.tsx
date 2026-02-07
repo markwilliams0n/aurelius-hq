@@ -77,6 +77,23 @@ export function ChatClient() {
           model: data.model || prev.model,
           factsSaved: data.factsSaved || 0,
         }));
+
+        // Hydrate persisted action cards on initial load
+        if (data.actionCards?.length > 0 && isInitial) {
+          const cardMap = new Map<string, ActionCardData[]>();
+          // Find the last assistant message to attach orphan cards to
+          const lastAssistantMsg = [...loadedMessages].reverse().find((m: Message) => m.role === "assistant");
+          const fallbackId = lastAssistantMsg?.id || "orphan";
+          for (const card of data.actionCards as ActionCardData[]) {
+            // Cards from DB won't match client-generated message IDs,
+            // so attach them to the last assistant message
+            const targetId = fallbackId;
+            const existing = cardMap.get(targetId) || [];
+            existing.push(card);
+            cardMap.set(targetId, existing);
+          }
+          setActionCards(cardMap);
+        }
       }
     } catch (error) {
       console.error("Failed to load conversation:", error);
