@@ -227,7 +227,7 @@ What would you like to do?
                   <div className="mt-2 max-w-[80%]">
                     <ActionCard
                       card={card}
-                      onAction={(action) => handleCardAction(card.id, action, card.data)}
+                      onAction={(action, editedData) => handleCardAction(card.id, action, editedData ?? card.data)}
                     >
                       <SlackMessageCardContent
                         card={card}

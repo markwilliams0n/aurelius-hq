@@ -3,12 +3,6 @@ import { getSession } from "@/lib/auth";
 import { sendDirectMessage, sendChannelMessage, type SendAs } from "@/lib/slack/actions";
 import type { ActionCardStatus } from "@/lib/types/action-card";
 
-// In-memory store for action card state (replace with DB when ready)
-const actionCardStore = new Map<
-  string,
-  { status: ActionCardStatus; data?: Record<string, unknown>; resultUrl?: string }
->();
-
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -96,34 +90,9 @@ export async function POST(
       break;
   }
 
-  actionCardStore.set(id, {
-    status: newStatus,
-    data: data ?? undefined,
-    resultUrl,
-  });
-
   return NextResponse.json({
     success: true,
     status: newStatus,
     resultUrl,
   });
-}
-
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { id } = await params;
-  const stored = actionCardStore.get(id);
-
-  if (!stored) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  return NextResponse.json(stored);
 }
