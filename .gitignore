@@ -53,5 +53,8 @@ next-env.d.ts
 /memory/
 /backups/
 
+# vault file storage
+/data/vault/
+
 # git worktrees
 .worktrees/
