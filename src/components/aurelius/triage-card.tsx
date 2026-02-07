@@ -60,6 +60,12 @@ export type TriageItem = {
     threadId?: string;
     messageCount?: number;
     attachments?: Array<{ filename: string; mimeType: string; size: number }>;
+    // Recipients
+    recipients?: {
+      to: Array<{ email: string; name?: string }>;
+      cc: Array<{ email: string; name?: string }>;
+      internal: Array<{ email: string; name?: string }>;
+    };
   } | null;
 };
 
@@ -140,6 +146,7 @@ export const TriageCard = forwardRef<HTMLDivElement, TriageCardProps>(
     const senderTags = item.enrichment?.senderTags || [];
     const isSuspicious = item.enrichment?.isSuspicious;
     const phishingIndicators = item.enrichment?.phishingIndicators || [];
+    const internalRecipients = item.enrichment?.recipients?.internal || [];
 
     return (
       <div
@@ -213,6 +220,16 @@ export const TriageCard = forwardRef<HTMLDivElement, TriageCardProps>(
                   Suspicious
                 </span>
               )}
+            </div>
+          )}
+
+          {/* Internal recipients (@rostr.cc) */}
+          {internalRecipients.length > 0 && (
+            <div className="flex items-center gap-1 text-xs text-green-400 mb-2">
+              <Users className="w-3 h-3" />
+              <span>
+                {internalRecipients.map(r => r.email.replace('@rostr.cc', '')).join(', ')}
+              </span>
             </div>
           )}
 

@@ -111,6 +111,13 @@ export interface GmailEnrichment {
 
   // Attachments
   attachments?: GmailAttachment[];
+
+  // Recipients (To/CC with internal filter)
+  recipients?: {
+    to: Array<{ email: string; name?: string }>;
+    cc: Array<{ email: string; name?: string }>;
+    internal: Array<{ email: string; name?: string }>;
+  };
 }
 
 // Sync result

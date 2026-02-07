@@ -203,6 +203,12 @@ function transformToInboxItem(email: ParsedEmail, summary?: string) {
     email.body
   );
 
+  // Extract recipients with internal filter
+  const allRecipients = [...email.to, ...email.cc];
+  const internalRecipients = allRecipients.filter(r =>
+    r.email.toLowerCase().endsWith('@rostr.cc')
+  );
+
   const enrichment: GmailEnrichment = {
     senderTags,
     threadId: email.threadId,
@@ -211,6 +217,11 @@ function transformToInboxItem(email: ParsedEmail, summary?: string) {
     isSuspicious: phishing.isSuspicious,
     phishingIndicators: phishing.indicators.length > 0 ? phishing.indicators : undefined,
     summary, // Add AI summary to enrichment
+    recipients: {
+      to: email.to,
+      cc: email.cc,
+      internal: internalRecipients,
+    },
   };
 
   return {

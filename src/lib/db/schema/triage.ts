@@ -87,6 +87,12 @@ export const inboxItems = pgTable(
         assignee?: string;
         dueDate?: string;
       }>;
+      // Recipients (Gmail-specific)
+      recipients?: {
+        to: Array<{ email: string; name?: string }>;
+        cc: Array<{ email: string; name?: string }>;
+        internal: Array<{ email: string; name?: string }>;
+      };
       // Extracted memory ready for review
       extractedMemory?: {
         entities?: Array<{

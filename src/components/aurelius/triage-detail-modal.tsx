@@ -232,6 +232,57 @@ export function TriageDetailModal({ item, onClose, onReply }: TriageDetailModalP
           </div>
         </div>
 
+        {/* Recipients (To/CC) */}
+        {item.enrichment?.recipients && (
+          <div className="px-6 py-3 border-b border-border bg-background/30 shrink-0">
+            <div className="space-y-1.5">
+              {/* To */}
+              {item.enrichment.recipients.to.length > 0 && (
+                <div className="flex items-start gap-2 text-sm">
+                  <span className="text-muted-foreground shrink-0 w-8 text-right">To:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {item.enrichment.recipients.to.map((r, i) => (
+                      <span
+                        key={i}
+                        className={cn(
+                          "px-2 py-0.5 rounded-full text-xs",
+                          r.email.endsWith('@rostr.cc')
+                            ? "bg-green-500/20 text-green-400"
+                            : "bg-secondary text-muted-foreground"
+                        )}
+                      >
+                        {r.name || r.email}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* CC */}
+              {item.enrichment.recipients.cc.length > 0 && (
+                <div className="flex items-start gap-2 text-sm">
+                  <span className="text-muted-foreground shrink-0 w-8 text-right">CC:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {item.enrichment.recipients.cc.map((r, i) => (
+                      <span
+                        key={i}
+                        className={cn(
+                          "px-2 py-0.5 rounded-full text-xs",
+                          r.email.endsWith('@rostr.cc')
+                            ? "bg-green-500/20 text-green-400"
+                            : "bg-secondary text-muted-foreground"
+                        )}
+                      >
+                        {r.name || r.email}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Subject */}
         <div className="px-6 py-4 border-b border-border shrink-0">
           <h2 className="text-lg font-semibold">{item.subject}</h2>
