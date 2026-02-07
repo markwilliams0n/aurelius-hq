@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Check, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";

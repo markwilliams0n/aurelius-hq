@@ -675,11 +675,6 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           }
           break;
         case "u":
-          if (e.metaKey || e.ctrlKey) {
-            e.preventDefault();
-            handleUndo();
-          }
-          break;
         case "z":
           if (e.metaKey || e.ctrlKey) {
             e.preventDefault();

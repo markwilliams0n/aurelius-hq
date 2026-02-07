@@ -1,37 +1,11 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
 import { inboxItems } from "@/lib/db/schema";
-import { eq, or } from "drizzle-orm";
 import { generateCardId, createCard } from "@/lib/action-cards/db";
 import { fetchViewerContext, getOwnerUserId } from "@/lib/linear/issues";
+import { findInboxItem } from "@/lib/gmail/queries";
 
 // Side-effect import: registers the linear:create-issue handler
 import "@/lib/action-cards/handlers/linear";
-
-// Check if string is a valid UUID
-function isUUID(str: string): boolean {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(str);
-}
-
-// Find item by id (UUID) or externalId (string)
-async function findItem(id: string) {
-  if (isUUID(id)) {
-    const items = await db
-      .select()
-      .from(inboxItems)
-      .where(or(eq(inboxItems.id, id), eq(inboxItems.externalId, id)))
-      .limit(1);
-    return items[0];
-  } else {
-    const items = await db
-      .select()
-      .from(inboxItems)
-      .where(eq(inboxItems.externalId, id))
-      .limit(1);
-    return items[0];
-  }
-}
 
 /**
  * Build a description pre-filled with triage context.
@@ -73,7 +47,7 @@ export async function POST(
     const { id } = await params;
 
     // 1. Find the triage item
-    const item = await findItem(id);
+    const item = await findInboxItem(id);
     if (!item) {
       return NextResponse.json({ error: "Item not found" }, { status: 404 });
     }

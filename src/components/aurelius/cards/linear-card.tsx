@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { ActionCardData } from "@/lib/types/action-card";
-import { LayoutList, AlertTriangle, User, Users, ChevronDown, ChevronUp } from "lucide-react";
+import { AlertTriangle, User, Users, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
