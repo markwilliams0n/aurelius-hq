@@ -76,7 +76,7 @@ interface TriageCardProps {
 }
 
 // Priority badge colors and icons
-const PRIORITY_CONFIG = {
+export const PRIORITY_CONFIG = {
   urgent: {
     icon: Zap,
     label: "Urgent",
@@ -100,7 +100,7 @@ const PRIORITY_CONFIG = {
 };
 
 // Connector icons and colors
-const CONNECTOR_CONFIG = {
+export const CONNECTOR_CONFIG = {
   gmail: { icon: Mail, label: "Gmail", color: "text-red-400", bgColor: "bg-red-500/20", borderColor: "border-red-500/30" },
   slack: { icon: MessageSquare, label: "Slack", color: "text-purple-400", bgColor: "bg-purple-500/20", borderColor: "border-purple-500/30" },
   linear: { icon: LayoutList, label: "Linear", color: "text-indigo-400", bgColor: "bg-indigo-500/20", borderColor: "border-indigo-500/30" },
@@ -378,7 +378,7 @@ function KeyHint({ keyName, label }: { keyName: string; label: string }) {
 }
 
 // Format time ago
-function formatTimeAgo(date: Date): string {
+export function formatTimeAgo(date: Date): string {
   const now = new Date();
   const diff = now.getTime() - date.getTime();
   const minutes = Math.floor(diff / 60000);

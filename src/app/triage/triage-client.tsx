@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { AppShell } from "@/components/aurelius/app-shell";
 import { TriageCard, TriageItem } from "@/components/aurelius/triage-card";
+import { TriageListView } from "@/components/aurelius/triage-list-view";
 import { TriageActionMenu } from "@/components/aurelius/triage-action-menu";
 import { TriageReplyComposer } from "@/components/aurelius/triage-reply-composer";
 import { TriageSidebar } from "@/components/aurelius/triage-sidebar";
@@ -20,11 +21,14 @@ import {
   Filter,
   CalendarDays,
   RefreshCw,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ViewMode = "triage" | "action" | "reply" | "detail" | "chat" | "snooze" | "create-task";
 type ConnectorFilter = "all" | "gmail" | "slack" | "linear" | "granola";
+type TriageView = "card" | "list";
 
 // Define which actions are available for each connector
 const CONNECTOR_ACTIONS: Record<string, {
@@ -77,6 +81,9 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
   const [animatingOut, setAnimatingOut] = useState<"left" | "right" | "up" | null>(null);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [triageView, setTriageView] = useState<TriageView>("card");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [returnToList, setReturnToList] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
   const sidebarWidth = isSidebarExpanded ? 480 : 320;
@@ -420,6 +427,69 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     await fetchItems({ skipCache: true });
   }, [isSyncing, fetchItems]);
 
+  // Bulk archive selected items (list view)
+  const handleBulkArchive = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+
+    const idsToArchive = Array.from(selectedIds);
+    const count = idsToArchive.length;
+
+    // Optimistically remove items
+    setItems((prev) => prev.filter((i) => !selectedIds.has(i.id)));
+    setSelectedIds(new Set());
+
+    // Fire archive API calls in parallel
+    await Promise.all(
+      idsToArchive.map(async (id) => {
+        try {
+          await fetch(`/api/triage/${id}/tasks`, { method: "DELETE" });
+          await fetch(`/api/triage/${id}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "archive" }),
+          });
+        } catch (error) {
+          console.error(`Failed to archive ${id}:`, error);
+        }
+      })
+    );
+
+    toast.success(`Archived ${count} item${count === 1 ? "" : "s"}`);
+  }, [selectedIds]);
+
+  // List view: toggle select
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  // List view: select all filtered items
+  const handleSelectAll = useCallback(() => {
+    setSelectedIds(new Set(filteredItems.map((i) => i.id)));
+  }, [filteredItems]);
+
+  // List view: clear selection
+  const handleClearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  // List view: open an item (switch to card view for that item)
+  const handleOpenListItem = useCallback((id: string) => {
+    const index = filteredItems.findIndex((i) => i.id === id);
+    if (index >= 0) {
+      setCurrentIndex(index);
+      setReturnToList(true);
+      setTriageView("card");
+    }
+  }, [filteredItems]);
+
   // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -434,7 +504,20 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
       // Handle escape
       if (e.key === "Escape") {
         if (viewMode !== "triage") {
+          // If returning to list from card detail view
+          if (returnToList) {
+            setReturnToList(false);
+            setTriageView("list");
+            setViewMode("triage");
+            return;
+          }
           handleCloseOverlay();
+          return;
+        }
+        // In base triage mode with card view opened from list
+        if (returnToList && triageView === "card") {
+          setReturnToList(false);
+          setTriageView("list");
           return;
         }
       }
@@ -461,8 +544,17 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
         return;
       }
 
-      // Only handle arrows in triage mode
-      if (viewMode !== "triage") return;
+      // Toggle view with 'v' (works in base triage mode, both card and list)
+      if (e.key === "v" && viewMode === "triage") {
+        e.preventDefault();
+        setTriageView((prev) => (prev === "card" ? "list" : "card"));
+        setSelectedIds(new Set());
+        setReturnToList(false);
+        return;
+      }
+
+      // Only handle card-mode arrows in triage mode
+      if (viewMode !== "triage" || triageView === "list") return;
 
       switch (e.key) {
         case "ArrowLeft":
@@ -535,6 +627,8 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     viewMode,
+    triageView,
+    returnToList,
     currentItem,
     connectorFilter,
     handleArchive,
@@ -590,15 +684,45 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
                 </span>
               )}
             </div>
-            <button
-              onClick={handleSync}
-              disabled={isSyncing}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
-              title="Sync all connectors"
-            >
-              <RefreshCw className={cn("w-3.5 h-3.5", isSyncing && "animate-spin")} />
-              {isSyncing ? "Syncing..." : "Sync"}
-            </button>
+            <div className="flex items-center gap-2">
+              {/* View toggle */}
+              <div className="flex items-center rounded-lg border border-border overflow-hidden">
+                <button
+                  onClick={() => { setTriageView("card"); setSelectedIds(new Set()); setReturnToList(false); }}
+                  className={cn(
+                    "flex items-center gap-1 px-2.5 py-1.5 text-xs transition-colors",
+                    triageView === "card"
+                      ? "bg-gold/20 text-gold"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  )}
+                  title="Card view (v)"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => { setTriageView("list"); setReturnToList(false); }}
+                  className={cn(
+                    "flex items-center gap-1 px-2.5 py-1.5 text-xs transition-colors",
+                    triageView === "list"
+                      ? "bg-gold/20 text-gold"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  )}
+                  title="List view (v)"
+                >
+                  <List className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <button
+                onClick={handleSync}
+                disabled={isSyncing}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
+                title="Sync all connectors"
+              >
+                <RefreshCw className={cn("w-3.5 h-3.5", isSyncing && "animate-spin")} />
+                {isSyncing ? "Syncing..." : "Sync"}
+              </button>
+            </div>
           </div>
 
           {/* Connector filters */}
@@ -652,8 +776,21 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           </div>
         )}
 
+        {/* List view */}
+        {!isLoading && hasItems && triageView === "list" && (
+          <TriageListView
+            items={filteredItems}
+            selectedIds={selectedIds}
+            onToggleSelect={handleToggleSelect}
+            onSelectAll={handleSelectAll}
+            onClearSelection={handleClearSelection}
+            onBulkArchive={handleBulkArchive}
+            onOpenItem={handleOpenListItem}
+          />
+        )}
+
         {/* Card area */}
-        {!isLoading && hasItems && (
+        {!isLoading && hasItems && triageView === "card" && (
         <div className="flex-1 flex items-start justify-center pt-12 p-6 relative overflow-y-auto">
           {/* Card stack effect - show next cards behind */}
           {filteredItems.slice(currentIndex + 1, currentIndex + 3).map((item, idx) => (
