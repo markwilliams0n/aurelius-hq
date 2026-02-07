@@ -61,7 +61,7 @@ let triageCache: {
 
 const CACHE_STALE_MS = 5 * 60 * 1000; // 5 minutes
 
-export function TriageClient() {
+export function TriageClient({ userEmail }: { userEmail?: string }) {
   const [items, setItems] = useState<TriageItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -558,6 +558,20 @@ export function TriageClient() {
             stats={stats}
             isExpanded={isSidebarExpanded}
             onToggleExpand={() => setIsSidebarExpanded(!isSidebarExpanded)}
+            onUndo={async (_activityId, _action, itemId) => {
+              try {
+                await fetch(`/api/triage/${itemId}`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ action: "restore" }),
+                });
+                await fetchItems({ skipCache: true });
+                toast.success("Restored");
+              } catch (error) {
+                console.error("Failed to undo:", error);
+                toast.error("Failed to undo");
+              }
+            }}
           />
         ) : undefined
       }
@@ -695,9 +709,13 @@ export function TriageClient() {
       {viewMode === "reply" && currentItem && (
         <TriageReplyComposer
           item={currentItem}
-          onSend={(message) => {
-            // In production, this would send the reply
-            toast.success("Reply sent (simulated)");
+          userEmail={userEmail}
+          onComplete={(result) => {
+            if (result.wasDraft) {
+              toast.success("Draft saved in Gmail");
+            } else {
+              toast.success("Email sent");
+            }
             handleActionComplete("actioned");
           }}
           onClose={handleCloseOverlay}
@@ -706,7 +724,11 @@ export function TriageClient() {
 
       {/* Detail modal */}
       {viewMode === "detail" && currentItem && (
-        <TriageDetailModal item={currentItem} onClose={handleCloseOverlay} />
+        <TriageDetailModal
+          item={currentItem}
+          onClose={handleCloseOverlay}
+          onReply={() => setViewMode("reply")}
+        />
       )}
 
       {/* Chat overlay */}

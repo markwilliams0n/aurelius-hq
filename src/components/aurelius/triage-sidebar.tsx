@@ -282,7 +282,7 @@ function ActivityList({
         const status = activity.metadata?.status;
         const ConnectorIcon = connectorIcons[connector] || Mail;
         const ActionIcon = actionIcons[action] || CheckCircle;
-        const canUndo = ["archive", "spam", "snooze"].includes(action) && status !== "processing";
+        const canUndo = ["archive", "spam", "snooze", "actioned"].includes(action) && status !== "processing";
 
         return (
           <div key={activity.id} className="px-4 py-2">

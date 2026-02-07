@@ -224,6 +224,7 @@ function transformToInboxItem(email: ParsedEmail, summary?: string) {
     content: contentParts.join('\n'),
     rawPayload: {
       messageId: email.messageId,
+      rfc822MessageId: email.rfc822MessageId,
       threadId: email.threadId,
       to: email.to,
       cc: email.cc,

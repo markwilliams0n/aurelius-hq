@@ -4,26 +4,19 @@
  * Handles Gmail-specific triage actions that sync back to Gmail.
  */
 
-import { db } from '@/lib/db';
-import { inboxItems } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
 import {
   archiveEmail,
   markAsSpam,
   createDraft,
   sendEmail,
 } from './client';
+import { findInboxItem } from './queries';
 
 /**
  * Archive in Gmail when archived in triage
  */
 export async function syncArchiveToGmail(itemId: string): Promise<void> {
-  // Get the item to find the message ID
-  const [item] = await db
-    .select()
-    .from(inboxItems)
-    .where(eq(inboxItems.id, itemId))
-    .limit(1);
+  const item = await findInboxItem(itemId);
 
   if (!item || item.connector !== 'gmail') {
     return;
@@ -48,11 +41,7 @@ export async function syncArchiveToGmail(itemId: string): Promise<void> {
  * Mark as spam in Gmail
  */
 export async function syncSpamToGmail(itemId: string): Promise<void> {
-  const [item] = await db
-    .select()
-    .from(inboxItems)
-    .where(eq(inboxItems.id, itemId))
-    .limit(1);
+  const item = await findInboxItem(itemId);
 
   if (!item || item.connector !== 'gmail') {
     return;
@@ -79,13 +68,15 @@ export async function syncSpamToGmail(itemId: string): Promise<void> {
 export async function replyToEmail(
   itemId: string,
   body: string,
-  options?: { replyAll?: boolean; forceDraft?: boolean }
+  options?: {
+    replyAll?: boolean;
+    forceDraft?: boolean;
+    to?: string;
+    cc?: string;
+    bcc?: string;
+  }
 ): Promise<{ draftId?: string; messageId?: string; wasDraft: boolean }> {
-  const [item] = await db
-    .select()
-    .from(inboxItems)
-    .where(eq(inboxItems.id, itemId))
-    .limit(1);
+  const item = await findInboxItem(itemId);
 
   if (!item || item.connector !== 'gmail') {
     throw new Error('Item not found or not a Gmail item');
@@ -93,8 +84,10 @@ export async function replyToEmail(
 
   const rawPayload = item.rawPayload as Record<string, unknown>;
   const threadId = rawPayload?.threadId as string | undefined;
-  const messageId = rawPayload?.messageId as string | undefined;
-  const to = item.sender; // Reply to sender
+  const rfc822MessageId = rawPayload?.rfc822MessageId as string | undefined;
+  const to = options?.to || item.sender;
+  const cc = options?.cc || undefined;
+  const bcc = options?.bcc || undefined;
   const subject = item.subject.startsWith('Re:') ? item.subject : `Re: ${item.subject}`;
 
   if (!threadId) {
@@ -110,7 +103,9 @@ export async function replyToEmail(
       to,
       subject,
       body,
-      inReplyTo: messageId,
+      inReplyTo: rfc822MessageId,
+      cc,
+      bcc,
     });
     return { draftId, wasDraft: true };
   } else {
@@ -119,7 +114,9 @@ export async function replyToEmail(
       to,
       subject,
       body,
-      inReplyTo: messageId,
+      inReplyTo: rfc822MessageId,
+      cc,
+      bcc,
     });
     return { messageId: sentMessageId, wasDraft: false };
   }
@@ -129,11 +126,7 @@ export async function replyToEmail(
  * Get unsubscribe URL for an item
  */
 export async function getUnsubscribeUrl(itemId: string): Promise<string | null> {
-  const [item] = await db
-    .select()
-    .from(inboxItems)
-    .where(eq(inboxItems.id, itemId))
-    .limit(1);
+  const item = await findInboxItem(itemId);
 
   if (!item || item.connector !== 'gmail') {
     return null;

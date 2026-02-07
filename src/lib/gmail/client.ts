@@ -56,12 +56,14 @@ async function getGmailClient() {
     );
   }
 
+  const scopes = ['https://www.googleapis.com/auth/gmail.modify'];
+  if (process.env.GMAIL_ENABLE_SEND === 'true') {
+    scopes.push('https://www.googleapis.com/auth/gmail.send');
+  }
+
   const auth = new google.auth.GoogleAuth({
     keyFile: SERVICE_ACCOUNT_PATH,
-    scopes: [
-      'https://www.googleapis.com/auth/gmail.modify',
-      // gmail.send added when GMAIL_ENABLE_SEND=true
-    ],
+    scopes,
     clientOptions: {
       subject: IMPERSONATE_EMAIL, // Impersonate this user
     },
@@ -216,6 +218,7 @@ function parseMessage(message: GmailMessage): ParsedEmail {
 
   return {
     messageId: message.id,
+    rfc822MessageId: getHeader(headers, 'Message-ID') || getHeader(headers, 'Message-Id'),
     threadId: message.threadId,
     from,
     to,
@@ -343,6 +346,11 @@ export async function markAsSpam(messageId: string): Promise<void> {
   });
 }
 
+/** Strip CRLF and null bytes from header values to prevent header injection */
+function sanitizeHeader(value: string): string {
+  return value.replace(/[\r\n\0]/g, '');
+}
+
 /**
  * Create a draft reply
  */
@@ -352,19 +360,22 @@ export async function createDraft(options: {
   subject: string;
   body: string;
   inReplyTo?: string;
+  cc?: string;
+  bcc?: string;
 }): Promise<string> {
   const gmail = await getGmailClient();
 
-  const message = [
-    `To: ${options.to}`,
-    `Subject: ${options.subject}`,
-    options.inReplyTo ? `In-Reply-To: ${options.inReplyTo}` : '',
-    options.inReplyTo ? `References: ${options.inReplyTo}` : '',
+  const headers = [
+    `To: ${sanitizeHeader(options.to)}`,
+    options.cc ? `Cc: ${sanitizeHeader(options.cc)}` : '',
+    options.bcc ? `Bcc: ${sanitizeHeader(options.bcc)}` : '',
+    `Subject: ${sanitizeHeader(options.subject)}`,
+    options.inReplyTo ? `In-Reply-To: ${sanitizeHeader(options.inReplyTo)}` : '',
+    options.inReplyTo ? `References: ${sanitizeHeader(options.inReplyTo)}` : '',
     'Content-Type: text/plain; charset=utf-8',
-    '',
-    options.body,
   ].filter(Boolean).join('\r\n');
 
+  const message = headers + '\r\n\r\n' + options.body;
   const encodedMessage = Buffer.from(message).toString('base64url');
 
   const response = await gmail.users.drafts.create({
@@ -389,25 +400,26 @@ export async function sendEmail(options: {
   subject: string;
   body: string;
   inReplyTo?: string;
+  cc?: string;
+  bcc?: string;
 }): Promise<string> {
   if (process.env.GMAIL_ENABLE_SEND !== 'true') {
-    // Fall back to draft
-    console.log('[Gmail] GMAIL_ENABLE_SEND not true, creating draft instead');
-    return createDraft(options);
+    throw new Error('GMAIL_ENABLE_SEND is not enabled. Use createDraft() instead.');
   }
 
   const gmail = await getGmailClient();
 
-  const message = [
-    `To: ${options.to}`,
-    `Subject: ${options.subject}`,
-    options.inReplyTo ? `In-Reply-To: ${options.inReplyTo}` : '',
-    options.inReplyTo ? `References: ${options.inReplyTo}` : '',
+  const headers = [
+    `To: ${sanitizeHeader(options.to)}`,
+    options.cc ? `Cc: ${sanitizeHeader(options.cc)}` : '',
+    options.bcc ? `Bcc: ${sanitizeHeader(options.bcc)}` : '',
+    `Subject: ${sanitizeHeader(options.subject)}`,
+    options.inReplyTo ? `In-Reply-To: ${sanitizeHeader(options.inReplyTo)}` : '',
+    options.inReplyTo ? `References: ${sanitizeHeader(options.inReplyTo)}` : '',
     'Content-Type: text/plain; charset=utf-8',
-    '',
-    options.body,
   ].filter(Boolean).join('\r\n');
 
+  const message = headers + '\r\n\r\n' + options.body;
   const encodedMessage = Buffer.from(message).toString('base64url');
 
   const response = await gmail.users.messages.send({
