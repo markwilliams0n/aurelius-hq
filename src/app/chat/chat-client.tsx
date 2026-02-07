@@ -388,16 +388,6 @@ export function ChatClient() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <AppShell>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-muted-foreground">Loading...</div>
-        </div>
-      </AppShell>
-    );
-  }
-
   const handleActionCardAction = useCallback(
     async (cardId: string, actionName: string, editedData?: Record<string, unknown>) => {
       try {
@@ -436,6 +426,16 @@ export function ChatClient() {
     },
     []
   );
+
+  if (isLoading) {
+    return (
+      <AppShell>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-muted-foreground">Loading...</div>
+        </div>
+      </AppShell>
+    );
+  }
 
   const handleOpenDailyNotes = () => {
     setToolPanelContent({ type: "daily_notes" });
