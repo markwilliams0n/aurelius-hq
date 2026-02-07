@@ -7,6 +7,7 @@ import { upsertEntity } from "@/lib/memory/entities";
 import { createFact } from "@/lib/memory/facts";
 import { resolveUser, resolveChannel, getDirectory } from "@/lib/slack/directory";
 import { canSendAsUser } from "@/lib/slack/actions";
+import { createCard, generateCardId } from "@/lib/action-cards/db";
 
 /**
  * Triage chat uses the same context building as main chat,
@@ -83,7 +84,7 @@ Current triage item:
 
     let response = result;
     let action = null;
-    let actionData = null;
+    let actionData: Record<string, unknown> | null = null;
 
     // Check for action JSON at the end of response (supports nested objects like tasks arrays)
     const actionMatch = response.match(/\{"action"[\s\S]*\}\s*$/);
@@ -102,11 +103,11 @@ Current triage item:
           response += "\n\n*Saved to memory*";
         }
 
-        // Resolve Slack message action — build action card data for the client
+        // Resolve Slack message action — build and persist action card
         if (action === "send_slack_message" && actionJson.to && actionJson.message) {
-          const slackCard = await buildSlackActionCard(actionJson.to, actionJson.message);
-          if (slackCard) {
-            actionData = { ...actionData, actionCard: slackCard };
+          const card = await buildAndPersistSlackCard(actionJson.to, actionJson.message);
+          if (card) {
+            actionData = { ...actionData, actionCard: card };
           }
         }
       } catch {
@@ -144,24 +145,30 @@ Current triage item:
   }
 }
 
-async function buildSlackActionCard(to: string, message: string) {
+/**
+ * Build and persist a Slack action card to the database.
+ * Returns the card data for the client, or null/error object on failure.
+ */
+async function buildAndPersistSlackCard(to: string, message: string) {
   try {
     const directory = await getDirectory();
     if (!directory) return null;
 
     const isChannel = to.startsWith("#");
-    const cardId = `card-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    // Use directory cache, fall back to env if stale
     const myUserId = directory.myUserId || process.env.SLACK_MY_USER_ID || '';
 
     if (isChannel) {
       const channel = await resolveChannel(to);
       if (!channel) return { error: `Channel "${to}" not found` };
 
-      return {
-        id: cardId,
-        cardType: "slack_message" as const,
-        status: "pending" as const,
+      // Triage chat is ephemeral (no conversation ID) — cards are returned
+      // inline in the JSON response, not hydrated from DB on refresh.
+      return await createCard({
+        id: generateCardId(),
+        pattern: "approval",
+        handler: "slack:send-message",
+        title: `Slack message to #${channel.name}`,
+        status: "pending",
         data: {
           recipientType: "channel",
           recipientId: channel.id,
@@ -170,11 +177,10 @@ async function buildSlackActionCard(to: string, message: string) {
           includeMe: true,
           message,
           myUserId,
-          sendAs: 'user' as const,
+          sendAs: "user",
           canSendAsUser: canSendAsUser(),
         },
-        actions: ["send", "cancel"],
-      };
+      });
     } else {
       const resolved = await resolveUser(to);
       if (!resolved.found) {
@@ -184,10 +190,12 @@ async function buildSlackActionCard(to: string, message: string) {
         return { error: `User "${to}" not found` };
       }
 
-      return {
-        id: cardId,
-        cardType: "slack_message" as const,
-        status: "pending" as const,
+      return await createCard({
+        id: generateCardId(),
+        pattern: "approval",
+        handler: "slack:send-message",
+        title: `Slack DM to ${resolved.user.realName || resolved.user.displayName}`,
+        status: "pending",
         data: {
           recipientType: "dm",
           recipientId: resolved.user.id,
@@ -196,11 +204,10 @@ async function buildSlackActionCard(to: string, message: string) {
           includeMe: true,
           message,
           myUserId,
-          sendAs: 'user' as const,
+          sendAs: "user",
           canSendAsUser: canSendAsUser(),
         },
-        actions: ["send", "cancel"],
-      };
+      });
     }
   } catch (error) {
     console.error("[Triage Chat] Failed to build Slack action card:", error);

@@ -1,13 +1,17 @@
-export type ActionCardStatus = "pending" | "confirmed" | "canceled" | "sent" | "error";
+export type CardPattern = "approval" | "config" | "confirmation" | "info";
 
-export type ActionCardType = "slack_message" | "task" | "email_draft";
+export type CardStatus = "pending" | "confirmed" | "dismissed" | "error";
 
 export interface ActionCardData {
   id: string;
-  cardType: ActionCardType;
-  status: ActionCardStatus;
+  messageId?: string;
+  conversationId?: string;
+  pattern: CardPattern;
+  status: CardStatus;
+  title: string;
   data: Record<string, unknown>;
-  actions: string[];
-  error?: string;
-  resultUrl?: string;
+  handler?: string | null; // e.g. "slack:send-message"
+  result?: Record<string, unknown> | null;
+  createdAt?: string;
+  updatedAt?: string;
 }

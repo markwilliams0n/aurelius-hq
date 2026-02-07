@@ -8,7 +8,7 @@ import { AppShell } from "@/components/aurelius/app-shell";
 import { ChatMemoryPanel } from "@/components/aurelius/chat-memory-panel";
 import { ToolPanel, PanelContent } from "@/components/aurelius/tool-panel";
 import { ActionCard } from "@/components/aurelius/action-card";
-import { SlackMessageCardContent } from "@/components/aurelius/cards/slack-message-card";
+import { CardContent } from "@/components/aurelius/cards/card-content";
 import type { ActionCardData } from "@/lib/types/action-card";
 import { FileText } from "lucide-react";
 import { toast } from "sonner";
@@ -30,24 +30,6 @@ type ChatStats = {
 
 const SHARED_CONVERSATION_ID = "00000000-0000-0000-0000-000000000000"; // Shared between web and Telegram
 
-/** Generic content renderer for action cards — delegates to type-specific components */
-function ActionCardContent({ card, onDataChange, onAction }: { card: ActionCardData; onDataChange?: (data: Record<string, unknown>) => void; onAction?: (action: string, data?: Record<string, unknown>) => void }) {
-  if (card.cardType === "slack_message") {
-    return <SlackMessageCardContent card={card} onDataChange={onDataChange} onAction={onAction} />;
-  }
-  // Generic fallback: show data as key-value pairs
-  const data = card.data;
-  return (
-    <div className="space-y-1 text-sm">
-      {Object.entries(data).map(([key, value]) => (
-        <p key={key}>
-          <span className="text-muted-foreground">{key}: </span>
-          <span>{String(value)}</span>
-        </p>
-      ))}
-    </div>
-  );
-}
 
 export function ChatClient() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -95,6 +77,26 @@ export function ChatClient() {
           model: data.model || prev.model,
           factsSaved: data.factsSaved || 0,
         }));
+
+        // Hydrate persisted action cards on initial load
+        if (data.actionCards?.length > 0 && isInitial) {
+          const cardMap = new Map<string, ActionCardData[]>();
+          // Build a set of known message IDs for matching
+          const messageIdSet = new Set(loadedMessages.map((m: Message) => m.id));
+          const lastAssistantMsg = [...loadedMessages].reverse().find((m: Message) => m.role === "assistant");
+          const fallbackId = lastAssistantMsg?.id || "orphan";
+          for (const card of data.actionCards as ActionCardData[]) {
+            // Match card to its original message if the ID is stable,
+            // otherwise fall back to the last assistant message
+            const targetId = card.messageId && messageIdSet.has(card.messageId)
+              ? card.messageId
+              : fallbackId;
+            const existing = cardMap.get(targetId) || [];
+            existing.push(card);
+            cardMap.set(targetId, existing);
+          }
+          setActionCards(cardMap);
+        }
       }
     } catch (error) {
       console.error("Failed to load conversation:", error);
@@ -318,6 +320,23 @@ export function ChatClient() {
                   ...prev,
                   factsSaved: prev.factsSaved + data.memories.length,
                 }));
+              } else if (data.type === "assistant_message_id") {
+                // Server provides a stable message ID for card<->message association
+                const oldId = currentAssistantIdRef.current;
+                const newId = data.id as string;
+                currentAssistantIdRef.current = newId;
+                setMessages((prev) =>
+                  prev.map((m) => (m.id === oldId ? { ...m, id: newId } : m))
+                );
+                // Move any cards already attached to old ID
+                setActionCards((prev) => {
+                  const cards = prev.get(oldId);
+                  if (!cards) return prev;
+                  const next = new Map(prev);
+                  next.delete(oldId);
+                  next.set(newId, cards);
+                  return next;
+                });
               } else if (data.type === "conversation") {
                 setConversationId(data.id);
               } else if (data.type === "stats") {
@@ -406,7 +425,7 @@ export function ChatClient() {
             const idx = cards.findIndex((c) => c.id === cardId);
             if (idx >= 0) {
               const updated = [...cards];
-              updated[idx] = { ...updated[idx], status: result.status, resultUrl: result.resultUrl, error: result.error };
+              updated[idx] = { ...updated[idx], status: result.status, result: result.result };
               next.set(msgId, updated);
               break;
             }
@@ -414,10 +433,10 @@ export function ChatClient() {
           return next;
         });
 
-        if (result.status === "sent") {
-          toast.success("Slack message sent!");
+        if (result.status === "confirmed") {
+          toast.success(result.successMessage || "Done!");
         } else if (result.status === "error") {
-          toast.error(result.error || "Failed to send");
+          toast.error(result.result?.error || "Action failed");
         }
       } catch (error) {
         console.error("Action card action failed:", error);
@@ -513,7 +532,7 @@ export function ChatClient() {
                           card={card}
                           onAction={(action, editedData) => handleActionCardAction(card.id, action, editedData ?? card.data)}
                         >
-                          <ActionCardContent
+                          <CardContent
                             card={card}
                             onDataChange={(newData) => {
                               setActionCards((prev) => {

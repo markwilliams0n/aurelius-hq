@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { X, Send, Brain, Clock, CheckCircle, Loader2 } from "lucide-react";
 import { TriageItem } from "./triage-card";
 import { ActionCard } from "./action-card";
-import { SlackMessageCardContent } from "./cards/slack-message-card";
+import { CardContent } from "./cards/card-content";
 import type { ActionCardData } from "@/lib/types/action-card";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -145,17 +145,17 @@ What would you like to do?
           const next = new Map(prev);
           for (const [msgId, card] of next) {
             if (card.id === cardId) {
-              next.set(msgId, { ...card, status: result.status, resultUrl: result.resultUrl, error: result.error });
+              next.set(msgId, { ...card, status: result.status, result: result.result });
               break;
             }
           }
           return next;
         });
 
-        if (result.status === "sent") {
-          toast.success("Slack message sent!");
+        if (result.status === "confirmed") {
+          toast.success(result.successMessage || "Done!");
         } else if (result.status === "error") {
-          toast.error(result.error || "Failed to send");
+          toast.error(result.result?.error || "Action failed");
         }
       } catch (error) {
         console.error("Card action failed:", error);
@@ -229,7 +229,7 @@ What would you like to do?
                       card={card}
                       onAction={(action, editedData) => handleCardAction(card.id, action, editedData ?? card.data)}
                     >
-                      <SlackMessageCardContent
+                      <CardContent
                         card={card}
                         onDataChange={(newData) => {
                           setActionCards((prev) => {

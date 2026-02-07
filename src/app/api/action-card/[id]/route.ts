@@ -1,98 +1,66 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { sendDirectMessage, sendChannelMessage, type SendAs } from "@/lib/slack/actions";
-import type { ActionCardStatus } from "@/lib/types/action-card";
+import { getCard, updateCard } from "@/lib/action-cards/db";
+import { dispatchCardAction } from "@/lib/action-cards/registry";
+
+// Auto-register handlers on import
+import "@/lib/action-cards/handlers/slack";
+import "@/lib/action-cards/handlers/gmail";
+import "@/lib/action-cards/handlers/linear";
+import "@/lib/action-cards/handlers/config";
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const { id } = await params;
-  const { action, data } = await request.json();
+    const { id } = await params;
+    const { action, data } = await request.json();
 
-  if (!action || typeof action !== "string") {
+    if (!action || typeof action !== "string") {
+      return NextResponse.json(
+        { error: "Action is required" },
+        { status: 400 }
+      );
+    }
+
+    // Load card from DB to get handler info
+    const card = await getCard(id);
+    if (!card) {
+      return NextResponse.json({ error: "Card not found" }, { status: 404 });
+    }
+
+    // Update card data if provided (e.g. inline edits before send)
+    if (data && action !== "cancel" && action !== "dismiss") {
+      await updateCard(id, { data });
+    }
+
+    // Dispatch action through registry
+    const cardData = data ?? card.data ?? {};
+    const result = await dispatchCardAction(card.handler, action, cardData);
+
+    // Persist status + result to DB
+    await updateCard(id, {
+      status: result.status,
+      ...(result.result && { result: result.result }),
+    });
+
+    return NextResponse.json({
+      success: result.status !== "error",
+      status: result.status,
+      result: result.result,
+      successMessage: result.successMessage,
+    });
+  } catch (error) {
+    console.error("[Action Card] Error:", error);
     return NextResponse.json(
-      { error: "Action is required" },
-      { status: 400 }
+      { success: false, error: "Internal server error" },
+      { status: 500 }
     );
   }
-
-  let newStatus: ActionCardStatus;
-  let resultUrl: string | undefined;
-
-  switch (action) {
-    case "send": {
-      // Execute actual Slack send for slack_message cards
-      const cardData = data as Record<string, unknown> | undefined;
-      const recipientType = cardData?.recipientType as string | undefined;
-      const recipientId = cardData?.recipientId as string | undefined;
-      const message = cardData?.message as string | undefined;
-      const myUserId = (cardData?.myUserId as string) || "";
-      const threadTs = cardData?.threadTs as string | undefined;
-      const sendAs = (cardData?.sendAs as SendAs) || "bot";
-
-      if (recipientType && recipientId && message) {
-        try {
-          const result = recipientType === "dm"
-            ? await sendDirectMessage(recipientId, myUserId, message, sendAs)
-            : await sendChannelMessage(recipientId, myUserId, message, threadTs, sendAs);
-
-          if (result.ok) {
-            newStatus = "sent";
-            resultUrl = result.permalink;
-          } else {
-            console.error("[ActionCard] Slack send error:", result.error);
-            newStatus = "error";
-            return NextResponse.json({
-              success: false,
-              status: "error",
-              error: result.error || "Slack send failed",
-            });
-          }
-        } catch (error) {
-          const errMsg = error instanceof Error ? error.message : String(error);
-          console.error("[ActionCard] Slack send failed:", errMsg);
-          return NextResponse.json({
-            success: false,
-            status: "error",
-            error: errMsg,
-          });
-        }
-      } else if (!recipientType && !recipientId) {
-        // Non-Slack card — just mark as sent
-        newStatus = "sent";
-      } else {
-        // Slack card but missing required data
-        return NextResponse.json({
-          success: false,
-          status: "error",
-          error: "Missing required fields: recipientId or message",
-        });
-      }
-      break;
-    }
-    case "confirm":
-      newStatus = "confirmed";
-      break;
-    case "cancel":
-      newStatus = "canceled";
-      break;
-    case "edit":
-      newStatus = "pending";
-      break;
-    default:
-      newStatus = "confirmed";
-      break;
-  }
-
-  return NextResponse.json({
-    success: true,
-    status: newStatus,
-    resultUrl,
-  });
 }
