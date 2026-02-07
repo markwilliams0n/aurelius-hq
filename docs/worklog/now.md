@@ -59,6 +59,19 @@ Gmail Connector + Memory System Fixes:
 
 ## Just Completed
 
+**2026-02-07 (Continued)**
+
+Global Action Card System (feature/global-action-cards → PR #13):
+- Refactored Action Cards from Slack-specific to generic pattern-based containers
+- 4 card patterns: approval, config, confirmation, info
+- Handler registry — adding new card types is just a new handler file
+- DB persistence (action_cards table) — cards survive page refresh
+- Stable message IDs so cards attach to correct messages after reload
+- Handlers: Slack, Gmail, Linear, Config
+- Config cards render markdown with click-to-edit
+- show_config_card tool for inline config editing
+- Code review fixes: 404 guard, try/catch, narrowed types
+
 **2026-02-07**
 
 Slack Sending with Action Cards (feature/slack-sending → PR #12):
@@ -110,9 +123,10 @@ Nothing active - ready for next task.
 
 ## Up Next
 
-- [ ] **Global Action Card system** — make Action Cards reusable beyond Slack (handler registry, different card types for email, tasks, alerts)
-- [x] **Linear triage reconciliation** — done, auto-archives when read/archived in Linear
-- [ ] **Connector-aware memory extraction** — `extractEmailMemory` is used for ALL connectors but the prompt is email-specific. Granola transcripts get treated as emails (wrong summary framing, extracts random metrics, misses meeting decisions/commitments). Need either separate prompts per connector type or a connector-aware prompt that adjusts for meetings vs emails vs slack. Key file: `src/lib/memory/ollama.ts:extractEmailMemory`
+- [ ] **Gmail approval card rich rendering** (PER-172) — dedicated renderer with To/CC, subject, body preview
+- [ ] **Linear approval card rich rendering** (PER-173) — dedicated renderer with title, description, project, priority
+- [ ] **Action Cards notification tray** (PER-174) — global view of pending cards outside chat
+- [ ] **Connector-aware memory extraction** — `extractEmailMemory` is used for ALL connectors but the prompt is email-specific. Need connector-aware prompts. Key file: `src/lib/memory/ollama.ts:extractEmailMemory`
 - [ ] Test Gmail sync with real inbox
 - [ ] Add UI components for Gmail-specific features (thread expand/collapse)
 
