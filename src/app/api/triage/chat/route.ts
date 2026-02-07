@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
 import { chat } from "@/lib/ai/client";
 import { buildAgentContext } from "@/lib/ai/context";
 import { emitMemoryEvent } from "@/lib/memory/events";
@@ -40,6 +41,11 @@ When the user wants to send a Slack message, respond with a draft and include th
 `;
 
 export async function POST(request: Request) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
     const { itemId, item, message, history = [] } = body;
