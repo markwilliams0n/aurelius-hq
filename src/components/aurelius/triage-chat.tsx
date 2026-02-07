@@ -145,17 +145,17 @@ What would you like to do?
           const next = new Map(prev);
           for (const [msgId, card] of next) {
             if (card.id === cardId) {
-              next.set(msgId, { ...card, status: result.status, resultUrl: result.resultUrl, error: result.error });
+              next.set(msgId, { ...card, status: result.status, result: result.result });
               break;
             }
           }
           return next;
         });
 
-        if (result.status === "sent") {
-          toast.success("Slack message sent!");
+        if (result.status === "confirmed") {
+          toast.success(result.successMessage || "Done!");
         } else if (result.status === "error") {
-          toast.error(result.error || "Failed to send");
+          toast.error(result.result?.error || "Action failed");
         }
       } catch (error) {
         console.error("Card action failed:", error);

@@ -7,6 +7,8 @@ import { emitMemoryEvent } from "@/lib/memory/events";
 import { db } from "@/lib/db";
 import { conversations } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { createCard, generateCardId } from "@/lib/action-cards/db";
+import type { CardPattern } from "@/lib/types/action-card";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -98,16 +100,26 @@ export async function POST(request: NextRequest) {
                 `data: ${JSON.stringify({ type: "tool_result", toolName: event.toolName, result: event.result })}\n\n`
               )
             );
-            // Check if tool result contains an action card to emit as separate SSE event
+            // Check if tool result contains an action card — persist to DB and emit
             try {
               const parsed = JSON.parse(event.result);
               if (parsed.action_card) {
-                const cardId = `card-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+                const cardId = generateCardId();
+                const ac = parsed.action_card;
+                const card = await createCard({
+                  id: cardId,
+                  conversationId: conversationId || undefined,
+                  pattern: (ac.pattern || "approval") as CardPattern,
+                  status: "pending",
+                  title: ac.title || "Action",
+                  data: ac.data || {},
+                  handler: ac.handler || null,
+                });
                 controller.enqueue(
                   encoder.encode(
                     `data: ${JSON.stringify({
                       type: "action_card",
-                      card: { id: cardId, ...parsed.action_card },
+                      card,
                     })}\n\n`
                   )
                 );

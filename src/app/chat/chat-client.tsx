@@ -30,9 +30,10 @@ type ChatStats = {
 
 const SHARED_CONVERSATION_ID = "00000000-0000-0000-0000-000000000000"; // Shared between web and Telegram
 
-/** Generic content renderer for action cards — delegates to type-specific components */
+/** Generic content renderer for action cards — delegates to handler-specific components */
 function ActionCardContent({ card, onDataChange, onAction }: { card: ActionCardData; onDataChange?: (data: Record<string, unknown>) => void; onAction?: (action: string, data?: Record<string, unknown>) => void }) {
-  if (card.cardType === "slack_message") {
+  // Route to handler-specific renderers
+  if (card.handler?.startsWith("slack:")) {
     return <SlackMessageCardContent card={card} onDataChange={onDataChange} onAction={onAction} />;
   }
   // Generic fallback: show data as key-value pairs
@@ -406,7 +407,7 @@ export function ChatClient() {
             const idx = cards.findIndex((c) => c.id === cardId);
             if (idx >= 0) {
               const updated = [...cards];
-              updated[idx] = { ...updated[idx], status: result.status, resultUrl: result.resultUrl, error: result.error };
+              updated[idx] = { ...updated[idx], status: result.status, result: result.result };
               next.set(msgId, updated);
               break;
             }
@@ -414,10 +415,10 @@ export function ChatClient() {
           return next;
         });
 
-        if (result.status === "sent") {
-          toast.success("Slack message sent!");
+        if (result.status === "confirmed") {
+          toast.success(result.successMessage || "Done!");
         } else if (result.status === "error") {
-          toast.error(result.error || "Failed to send");
+          toast.error(result.result?.error || "Action failed");
         }
       } catch (error) {
         console.error("Action card action failed:", error);

@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import type { ActionCardData, ActionCardStatus, ActionCardType } from "@/lib/types/action-card";
+import type { ActionCardData, CardPattern, CardStatus } from "@/lib/types/action-card";
 import {
   Card,
   CardHeader,
@@ -11,32 +11,40 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  MessageSquare,
-  CheckSquare,
-  Mail,
+  CheckCircle,
+  Settings,
+  AlertTriangle,
+  Info,
   ExternalLink,
 } from "lucide-react";
 
-const CARD_TYPE_META: Record<ActionCardType, { icon: typeof MessageSquare; label: string }> = {
-  slack_message: { icon: MessageSquare, label: "Slack Message" },
-  task: { icon: CheckSquare, label: "Task" },
-  email_draft: { icon: Mail, label: "Email Draft" },
+const PATTERN_META: Record<CardPattern, { icon: typeof CheckCircle; label: string }> = {
+  approval: { icon: CheckCircle, label: "Approval" },
+  config: { icon: Settings, label: "Configuration" },
+  confirmation: { icon: AlertTriangle, label: "Confirmation" },
+  info: { icon: Info, label: "Info" },
 };
 
-const STATUS_STYLES: Record<ActionCardStatus, string> = {
+const STATUS_STYLES: Record<CardStatus, string> = {
   pending: "bg-amber-500/15 text-amber-400 border-amber-500/30",
   confirmed: "bg-green-500/15 text-green-400 border-green-500/30",
-  sent: "bg-green-500/15 text-green-400 border-green-500/30",
-  canceled: "bg-muted text-muted-foreground border-border",
+  dismissed: "bg-muted text-muted-foreground border-border",
   error: "bg-red-500/15 text-red-400 border-red-500/30",
 };
 
-const STATUS_LABELS: Record<ActionCardStatus, string> = {
+const STATUS_LABELS: Record<CardStatus, string> = {
   pending: "Pending",
-  confirmed: "Confirmed",
-  sent: "Sent",
-  canceled: "Canceled",
+  confirmed: "Done",
+  dismissed: "Dismissed",
   error: "Error",
+};
+
+/** Default actions per pattern */
+const PATTERN_ACTIONS: Record<CardPattern, string[]> = {
+  approval: ["send", "cancel"],
+  config: ["save", "dismiss"],
+  confirmation: ["confirm", "cancel"],
+  info: ["dismiss"],
 };
 
 function getButtonProps(action: string): {
@@ -48,8 +56,12 @@ function getButtonProps(action: string): {
       return { variant: "default", label: "Send" };
     case "confirm":
       return { variant: "default", label: "Confirm" };
+    case "save":
+      return { variant: "default", label: "Save" };
     case "cancel":
       return { variant: "ghost", label: "Cancel" };
+    case "dismiss":
+      return { variant: "ghost", label: "Dismiss" };
     case "edit":
       return { variant: "outline", label: "Edit" };
     default:
@@ -64,12 +76,15 @@ interface ActionCardProps {
 }
 
 export function ActionCard({ card, onAction, children }: ActionCardProps) {
-  const typeMeta = CARD_TYPE_META[card.cardType] ?? {
-    icon: MessageSquare,
-    label: card.cardType,
+  const patternMeta = PATTERN_META[card.pattern] ?? {
+    icon: Info,
+    label: card.pattern,
   };
-  const Icon = typeMeta.icon;
+  const Icon = patternMeta.icon;
   const isPending = card.status === "pending";
+  const actions = PATTERN_ACTIONS[card.pattern] ?? [];
+  const resultUrl = (card.result as Record<string, unknown> | undefined)?.resultUrl as string | undefined;
+  const error = (card.result as Record<string, unknown> | undefined)?.error as string | undefined;
 
   return (
     <Card
@@ -83,7 +98,7 @@ export function ActionCard({ card, onAction, children }: ActionCardProps) {
           <div className="flex items-center gap-2 text-sm">
             <Icon className="size-4 text-gold" />
             <CardTitle className="text-sm font-medium">
-              {typeMeta.label}
+              {card.title}
             </CardTitle>
           </div>
           <span
@@ -99,14 +114,14 @@ export function ActionCard({ card, onAction, children }: ActionCardProps) {
 
       <CardContent className="pt-2 pb-0">
         {children}
-        {card.status === "error" && card.error && (
-          <p className="mt-2 text-xs text-red-400">{card.error}</p>
+        {card.status === "error" && error && (
+          <p className="mt-2 text-xs text-red-400">{error}</p>
         )}
       </CardContent>
 
       <CardFooter className="pt-3 gap-2 flex-wrap">
         {isPending ? (
-          card.actions.map((action) => {
+          actions.map((action) => {
             const { variant, label } = getButtonProps(action);
             return (
               <Button
@@ -121,9 +136,9 @@ export function ActionCard({ card, onAction, children }: ActionCardProps) {
           })
         ) : (
           <>
-            {card.resultUrl && (
+            {resultUrl && (
               <a
-                href={card.resultUrl}
+                href={resultUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 text-xs text-gold hover:text-gold-bright transition-colors"
