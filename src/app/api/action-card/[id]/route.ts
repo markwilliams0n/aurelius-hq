@@ -5,6 +5,8 @@ import { dispatchCardAction } from "@/lib/action-cards/registry";
 
 // Auto-register handlers on import
 import "@/lib/action-cards/handlers/slack";
+import "@/lib/action-cards/handlers/gmail";
+import "@/lib/action-cards/handlers/linear";
 
 export async function POST(
   request: NextRequest,
