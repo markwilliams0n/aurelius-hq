@@ -4,6 +4,7 @@ import { buildAgentContext } from "@/lib/ai/context";
 import { emitMemoryEvent } from "@/lib/memory/events";
 import { upsertEntity } from "@/lib/memory/entities";
 import { createFact } from "@/lib/memory/facts";
+import { resolveUser, resolveChannel, getDirectory } from "@/lib/slack/directory";
 
 /**
  * Triage chat uses the same context building as main chat,
@@ -16,6 +17,7 @@ You are currently helping the user with a specific triage item. You can:
 - Add facts to memory about people, companies, or projects mentioned
 - Create tasks or action items
 - Snooze the item for later
+- Send a Slack message (DM or channel post)
 
 When the user wants to add something to memory, extract:
 - Entity name and type (person, company, project)
@@ -28,6 +30,13 @@ If you need to trigger an action, include it in your response as JSON at the end
 When the user asks to modify, add, remove, or update tasks, respond with a complete updated task list as JSON:
 {"action": "update_tasks", "tasks": [{"description": "Task description", "assignee": "Name or null", "assigneeType": "self", "dueDate": null, "confidence": "high"}]}
 The assigneeType should be "self" for user's own tasks or "other" for tasks assigned to others.
+
+When the user wants to send a Slack message, respond with a draft and include this JSON at the end:
+{"action": "send_slack_message", "to": "person name or #channel", "message": "message in Slack mrkdwn format"}
+- For DMs, use the person's first name (e.g. "harvy", "mark")
+- For channels, use #channel-name (e.g. "#general")
+- Messages use Slack mrkdwn: *bold*, _italic_, \`code\`
+- Always draft first — the user will see a confirmation card before sending
 `;
 
 export async function POST(request: Request) {
@@ -85,6 +94,14 @@ Current triage item:
           await saveFactToMemory(actionJson.entity, actionJson.entityType || "person", actionJson.fact, itemId);
           response += "\n\n*Saved to memory*";
         }
+
+        // Resolve Slack message action — build action card data for the client
+        if (action === "send_slack_message" && actionJson.to && actionJson.message) {
+          const slackCard = await buildSlackActionCard(actionJson.to, actionJson.message);
+          if (slackCard) {
+            actionData = { ...actionData, actionCard: slackCard };
+          }
+        }
       } catch {
         // Invalid JSON, ignore
       }
@@ -117,6 +134,66 @@ Current triage item:
       { error: "Failed to process chat", response: "Sorry, I encountered an error. Please try again." },
       { status: 500 }
     );
+  }
+}
+
+async function buildSlackActionCard(to: string, message: string) {
+  try {
+    const directory = await getDirectory();
+    if (!directory) return null;
+
+    const isChannel = to.startsWith("#");
+    const cardId = `card-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    // Use directory cache, fall back to env if stale
+    const myUserId = directory.myUserId || process.env.SLACK_MY_USER_ID || '';
+
+    if (isChannel) {
+      const channel = await resolveChannel(to);
+      if (!channel) return { error: `Channel "${to}" not found` };
+
+      return {
+        id: cardId,
+        cardType: "slack_message" as const,
+        status: "pending" as const,
+        data: {
+          recipientType: "channel",
+          recipientId: channel.id,
+          recipientName: `#${channel.name}`,
+          channelName: channel.name,
+          includeMe: true,
+          message,
+          myUserId,
+        },
+        actions: ["send", "cancel"],
+      };
+    } else {
+      const resolved = await resolveUser(to);
+      if (!resolved.found) {
+        if (resolved.suggestions.length > 0) {
+          return { error: `Ambiguous: ${resolved.suggestions.map(u => u.realName).join(", ")}` };
+        }
+        return { error: `User "${to}" not found` };
+      }
+
+      return {
+        id: cardId,
+        cardType: "slack_message" as const,
+        status: "pending" as const,
+        data: {
+          recipientType: "dm",
+          recipientId: resolved.user.id,
+          recipientName: resolved.user.realName || resolved.user.displayName,
+          recipient: resolved.user.realName || resolved.user.displayName,
+          includeMe: true,
+          message,
+          myUserId,
+        },
+        actions: ["send", "cancel"],
+      };
+    }
+  } catch (error) {
+    console.error("[Triage Chat] Failed to build Slack action card:", error);
+    return null;
   }
 }
 

@@ -15,10 +15,12 @@ import type { ConfigKey } from '@/lib/config';
 // Import capabilities — add new ones here as they're created
 import { configCapability } from './config';
 import { tasksCapability } from './tasks';
+import { slackCapability } from './slack';
 
 const ALL_CAPABILITIES: Capability[] = [
   configCapability,
   tasksCapability,
+  slackCapability,
 ];
 
 /** Get all tool definitions from all capabilities (OpenAI function calling format) */

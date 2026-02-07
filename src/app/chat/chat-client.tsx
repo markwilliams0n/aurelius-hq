@@ -7,6 +7,9 @@ import { ChatStatus } from "@/components/aurelius/chat-status";
 import { AppShell } from "@/components/aurelius/app-shell";
 import { ChatMemoryPanel } from "@/components/aurelius/chat-memory-panel";
 import { ToolPanel, PanelContent } from "@/components/aurelius/tool-panel";
+import { ActionCard } from "@/components/aurelius/action-card";
+import { SlackMessageCardContent } from "@/components/aurelius/cards/slack-message-card";
+import type { ActionCardData } from "@/lib/types/action-card";
 import { FileText } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,6 +30,25 @@ type ChatStats = {
 
 const SHARED_CONVERSATION_ID = "00000000-0000-0000-0000-000000000000"; // Shared between web and Telegram
 
+/** Generic content renderer for action cards — delegates to type-specific components */
+function ActionCardContent({ card }: { card: ActionCardData }) {
+  if (card.cardType === "slack_message") {
+    return <SlackMessageCardContent card={card} />;
+  }
+  // Generic fallback: show data as key-value pairs
+  const data = card.data;
+  return (
+    <div className="space-y-1 text-sm">
+      {Object.entries(data).map(([key, value]) => (
+        <p key={key}>
+          <span className="text-muted-foreground">{key}: </span>
+          <span>{String(value)}</span>
+        </p>
+      ))}
+    </div>
+  );
+}
+
 export function ChatClient() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -41,8 +63,10 @@ export function ChatClient() {
   const [panelWidth, setPanelWidth] = useState(384);
   const [currentToolName, setCurrentToolName] = useState<string | null>(null);
   const [hasError, setHasError] = useState(false);
+  const [actionCards, setActionCards] = useState<Map<string, ActionCardData[]>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingContentRef = useRef("");
+  const currentAssistantIdRef = useRef<string>("");
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -113,6 +137,7 @@ export function ChatClient() {
       console.error("Failed to clear conversation:", error);
     }
     setMessages([]);
+    setActionCards(new Map());
     setConversationId(SHARED_CONVERSATION_ID);
     setStats((prev) => ({ ...prev, tokenCount: 0, factsSaved: 0 }));
     setToolPanelContent(null);
@@ -182,6 +207,7 @@ export function ChatClient() {
 
     const userMessage: Message = { id: generateMessageId(), role: "user", content };
     const assistantMessage: Message = { id: generateMessageId(), role: "assistant", content: "" };
+    currentAssistantIdRef.current = assistantMessage.id;
     setMessages((prev) => [...prev, userMessage, assistantMessage]);
     setIsStreaming(true);
 
@@ -302,6 +328,24 @@ export function ChatClient() {
                 }));
               } else if (data.type === "error") {
                 toast.error(data.message);
+              } else if (data.type === "action_card") {
+                const card = data.card as ActionCardData;
+                const msgId = currentAssistantIdRef.current;
+                if (msgId) {
+                  setActionCards((prev) => {
+                    const next = new Map(prev);
+                    const existing = next.get(msgId) || [];
+                    const idx = existing.findIndex((c) => c.id === card.id);
+                    if (idx >= 0) {
+                      const updated = [...existing];
+                      updated[idx] = card;
+                      next.set(msgId, updated);
+                    } else {
+                      next.set(msgId, [...existing, card]);
+                    }
+                    return next;
+                  });
+                }
               }
             } catch {
               // Skip invalid JSON
@@ -353,6 +397,45 @@ export function ChatClient() {
       </AppShell>
     );
   }
+
+  const handleActionCardAction = useCallback(
+    async (cardId: string, actionName: string, editedData?: Record<string, unknown>) => {
+      try {
+        const response = await fetch(`/api/action-card/${cardId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: actionName, data: editedData }),
+        });
+        if (!response.ok) throw new Error("Action failed");
+        const result = await response.json();
+
+        // Update the card in local state
+        setActionCards((prev) => {
+          const next = new Map(prev);
+          for (const [msgId, cards] of next) {
+            const idx = cards.findIndex((c) => c.id === cardId);
+            if (idx >= 0) {
+              const updated = [...cards];
+              updated[idx] = { ...updated[idx], status: result.status, resultUrl: result.resultUrl, error: result.error };
+              next.set(msgId, updated);
+              break;
+            }
+          }
+          return next;
+        });
+
+        if (result.status === "sent") {
+          toast.success("Slack message sent!");
+        } else if (result.status === "error") {
+          toast.error(result.error || "Failed to send");
+        }
+      } catch (error) {
+        console.error("Action card action failed:", error);
+        toast.error("Action failed");
+      }
+    },
+    []
+  );
 
   const handleOpenDailyNotes = () => {
     setToolPanelContent({ type: "daily_notes" });
@@ -416,13 +499,25 @@ export function ChatClient() {
                 const isLastMessage = index === messages.length - 1;
                 const isAssistantStreaming = isStreaming && isLastMessage && message.role === "assistant";
                 const showError = hasError && isLastMessage && message.role === "assistant";
+                const cards = actionCards.get(message.id);
                 return (
-                  <ChatMessage
-                    key={message.id}
-                    message={message}
-                    isStreaming={isAssistantStreaming}
-                    hasError={showError}
-                  />
+                  <div key={message.id}>
+                    <ChatMessage
+                      message={message}
+                      isStreaming={isAssistantStreaming}
+                      hasError={showError}
+                    />
+                    {cards?.map((card) => (
+                      <div key={card.id} className="ml-11">
+                        <ActionCard
+                          card={card}
+                          onAction={(action, editedData) => handleActionCardAction(card.id, action, editedData ?? card.data)}
+                        >
+                          <ActionCardContent card={card} />
+                        </ActionCard>
+                      </div>
+                    ))}
+                  </div>
                 );
               })}
               <div ref={messagesEndRef} />
