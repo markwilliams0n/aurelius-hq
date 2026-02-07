@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getCard, updateCard } from "@/lib/action-cards/db";
-import { sendDirectMessage, sendChannelMessage, type SendAs } from "@/lib/slack/actions";
-import type { CardStatus } from "@/lib/types/action-card";
+import { dispatchCardAction } from "@/lib/action-cards/registry";
+
+// Auto-register handlers on import
+import "@/lib/action-cards/handlers/slack";
 
 export async function POST(
   request: NextRequest,
@@ -23,62 +25,29 @@ export async function POST(
     );
   }
 
-  // Load card from DB
+  // Load card from DB to get handler info
   const card = await getCard(id);
+  const handler = card?.handler ?? null;
 
-  // Generic status-only actions
-  if (action === "cancel" || action === "dismiss") {
-    const updated = await updateCard(id, { status: "dismissed" });
-    return NextResponse.json({ success: true, status: "dismissed", result: updated?.result });
-  }
-  if (action === "edit") {
-    if (data) await updateCard(id, { status: "pending", data });
-    else await updateCard(id, { status: "pending" });
-    return NextResponse.json({ success: true, status: "pending" });
+  // Update card data if provided (e.g. inline edits before send)
+  if (data && action !== "cancel" && action !== "dismiss") {
+    await updateCard(id, { data });
   }
 
-  // Primary action — dispatch based on handler
-  const handler = card?.handler ?? (data as Record<string, unknown> | undefined)?.handler;
+  // Dispatch action through registry
+  const cardData = data ?? card?.data ?? {};
+  const result = await dispatchCardAction(handler, action, cardData);
 
-  // Slack send handler (temporary — will be extracted to registry in PER-165)
-  if (handler === "slack:send-message" || (!handler && data?.recipientType)) {
-    const cardData = data as Record<string, unknown> | undefined;
-    const recipientType = cardData?.recipientType as string | undefined;
-    const recipientId = cardData?.recipientId as string | undefined;
-    const message = cardData?.message as string | undefined;
-    const myUserId = (cardData?.myUserId as string) || "";
-    const threadTs = cardData?.threadTs as string | undefined;
-    const sendAs = (cardData?.sendAs as SendAs) || "bot";
+  // Persist status + result to DB
+  await updateCard(id, {
+    status: result.status,
+    ...(result.result && { result: result.result }),
+  });
 
-    if (!recipientType || !recipientId || !message) {
-      const errorResult = { error: "Missing required fields: recipientId or message" };
-      await updateCard(id, { status: "error", result: errorResult });
-      return NextResponse.json({ success: false, status: "error", result: errorResult });
-    }
-
-    try {
-      const slackResult = recipientType === "dm"
-        ? await sendDirectMessage(recipientId, myUserId, message, sendAs)
-        : await sendChannelMessage(recipientId, myUserId, message, threadTs, sendAs);
-
-      if (slackResult.ok) {
-        const result = { resultUrl: slackResult.permalink };
-        await updateCard(id, { status: "confirmed", result });
-        return NextResponse.json({ success: true, status: "confirmed", result, successMessage: "Slack message sent!" });
-      } else {
-        const errorResult = { error: slackResult.error || "Slack send failed" };
-        await updateCard(id, { status: "error", result: errorResult });
-        return NextResponse.json({ success: false, status: "error", result: errorResult });
-      }
-    } catch (error) {
-      const errMsg = error instanceof Error ? error.message : String(error);
-      const errorResult = { error: errMsg };
-      await updateCard(id, { status: "error", result: errorResult });
-      return NextResponse.json({ success: false, status: "error", result: errorResult });
-    }
-  }
-
-  // Default: just mark as confirmed
-  const updated = await updateCard(id, { status: "confirmed" });
-  return NextResponse.json({ success: true, status: "confirmed", result: updated?.result });
+  return NextResponse.json({
+    success: result.status !== "error",
+    status: result.status,
+    result: result.result,
+    successMessage: result.successMessage,
+  });
 }
