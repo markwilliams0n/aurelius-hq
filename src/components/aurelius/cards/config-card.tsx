@@ -120,7 +120,14 @@ export function ConfigCardContent({ card, onDataChange }: ConfigCardContentProps
         title={isPending ? "Click to edit" : undefined}
       >
         {content ? (
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              a: ({ href, children }) => (
+                <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+              ),
+            }}
+          >{content}</ReactMarkdown>
         ) : (
           <span className="text-muted-foreground italic">No content set. Click to add.</span>
         )}

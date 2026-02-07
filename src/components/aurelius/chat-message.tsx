@@ -69,7 +69,14 @@ export function ChatMessage({ message, isStreaming = false, hasError = false }: 
               <p className="whitespace-pre-wrap">{displayContent}</p>
             ) : (
               <div className="chat-prose">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    a: ({ href, children }) => (
+                      <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+                    ),
+                  }}
+                >
                   {displayContent}
                 </ReactMarkdown>
               </div>

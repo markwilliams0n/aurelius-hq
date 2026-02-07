@@ -2,6 +2,15 @@
 
 import { useEffect, useState, useMemo } from "react";
 import DOMPurify from "isomorphic-dompurify";
+
+// Force all links in sanitized HTML to open in new tab
+DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+  if (node.tagName === "A") {
+    node.setAttribute("target", "_blank");
+    node.setAttribute("rel", "noopener noreferrer");
+  }
+});
+
 import {
   X,
   Mail,
