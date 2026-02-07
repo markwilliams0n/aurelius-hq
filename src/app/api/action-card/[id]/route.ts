@@ -7,6 +7,7 @@ import { dispatchCardAction } from "@/lib/action-cards/registry";
 import "@/lib/action-cards/handlers/slack";
 import "@/lib/action-cards/handlers/gmail";
 import "@/lib/action-cards/handlers/linear";
+import "@/lib/action-cards/handlers/config";
 
 export async function POST(
   request: NextRequest,

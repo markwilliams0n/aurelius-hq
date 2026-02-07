@@ -14,6 +14,21 @@ export const CONFIG_TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
+    name: "show_config_card",
+    description: "Show a configuration to the user as an editable card in the chat. Use this when the user asks to see or review a config — it provides an inline editing experience.",
+    parameters: {
+      type: "object",
+      properties: {
+        key: {
+          type: "string",
+          description: "The configuration key to show",
+          enum: configKeyEnum.enumValues,
+        },
+      },
+      required: ["key"],
+    },
+  },
+  {
     name: "read_config",
     description: "Read the current content of a specific configuration. Use this to see the current state before proposing changes.",
     parameters: {
@@ -65,6 +80,53 @@ export async function handleConfigTool(
   conversationId?: string
 ): Promise<ToolResult | null> {
   switch (toolName) {
+    case "show_config_card": {
+      const key = toolInput.key;
+
+      if (!key || !isValidConfigKey(key)) {
+        return {
+          result: JSON.stringify({
+            error: `Invalid config key: "${key}". Valid keys are: ${configKeyEnum.enumValues.join(", ")}`,
+          }),
+        };
+      }
+
+      const config = await getConfig(key);
+      const description = CONFIG_DESCRIPTIONS[key];
+      const content = config?.content || "";
+
+      // Parse content into editable entries (line-based key: value format)
+      const lines = content.split("\n").filter((l: string) => l.trim());
+      const isKeyValueFormat = lines.length > 0 && lines.every((l: string) => l.includes(":"));
+
+      const cardData: Record<string, unknown> = {
+        key,
+        description,
+        version: config?.version ?? 0,
+      };
+
+      if (isKeyValueFormat) {
+        cardData.entries = lines.map((l: string) => {
+          const [k, ...rest] = l.split(":");
+          return { key: k.trim(), value: rest.join(":").trim(), editable: true };
+        });
+      } else {
+        cardData.content = content;
+      }
+
+      return {
+        result: JSON.stringify({
+          action_card: {
+            pattern: "config",
+            handler: "config:save",
+            title: `Config: ${key}`,
+            data: cardData,
+          },
+          summary: `Showing ${key} configuration`,
+        }),
+      };
+    }
+
     case "list_configs": {
       const configs = await getAllConfigs();
       const configList = configKeyEnum.enumValues.map((key) => {
