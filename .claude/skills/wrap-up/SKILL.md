@@ -5,7 +5,7 @@ description: Update worklog with current session progress. Use after completing 
 
 # Wrap Up
 
-Quick worklog update to maintain session context.
+Quick worklog update + Linear sync to maintain session context.
 
 ## When to Run
 
@@ -34,32 +34,23 @@ Quick worklog update to maintain session context.
    cat docs/worklog/now.md
    ```
 
-3. **Propose updates** to the user:
-   ```
-   Based on this session, here's what I'd update in now.md:
+3. **Update now.md directly** — don't ask, just do it:
+   - Add completed work to "Just Completed" with today's date
+   - Move completed items from "Up Next" (mark with [x] or remove)
+   - Update "In Progress" if anything is WIP
+   - Add new "Up Next" items discovered during the session
+   - Keep it concise — bullet points, not paragraphs
 
-   ## Just Completed
-   + Added Gmail OAuth flow
-   + Created email sync logic
-
-   ## In Progress
-   (unchanged / or note what's WIP)
-
-   ## Up Next
-   - [x] Gmail connector ← DONE, remove
-   - [ ] Linear connector ← still todo
-
-   Want me to update now.md with these changes?
-   ```
-
-4. **If user approves**, update the file:
-   - Move completed items from "Up Next" to "Just Completed"
-   - Update date header if it's a new day
-   - Keep it concise - details go in recent.md/changelog.md
+4. **Ensure Linear is up to date:**
+   - Check for any Linear issues related to work completed this session
+   - Move completed issues to "Done" status
+   - Update issue descriptions or comments if scope changed during implementation
+   - Create new issues for follow-up work identified during the session
+   - Use the Linear MCP tools (`linear_update_issue`, `linear_search_issues`, etc.)
 
 5. **Check if recent.md needs updating:**
    - If "Just Completed" section is getting long (>5-6 items)
-   - Suggest moving older items to recent.md
+   - Move older items to recent.md
    - Keep now.md focused on *current* context
 
 6. **Remind about uncommitted changes:**
@@ -67,6 +58,11 @@ Quick worklog update to maintain session context.
    git status --short
    ```
    If dirty, ask if they want to commit before wrapping up.
+
+7. **Confirm completion** with a brief summary:
+   ```
+   Updated now.md and Linear. Working tree is clean.
+   ```
 
 ## Keep It Light
 
@@ -82,28 +78,15 @@ User: /wrap-up
 
 Claude: Let me check what we did this session...
 
-        Commits (last 3 hours):
-        • abc123 - feat: add Gmail OAuth flow
-        • def456 - feat: create email sync
-        • ghi789 - fix: handle token refresh
+        [reads commits, updates now.md, syncs Linear]
 
-        Current now.md shows "Gmail connector" in Up Next.
+        Updated now.md:
+        + Just Completed: Gmail OAuth flow and email sync
+        + Up Next: added Linear connector
 
-        Proposed update:
-
-        ## Just Completed (2026-02-02 Evening)
-        - Added Gmail OAuth flow and email sync
-        - (previously: branching workflow skills)
-
-        ## Up Next
-        - [ ] Linear connector
-        - [ ] Task/PM system
-
-        Update now.md? (y/n)
-
-User: y
-
-Claude: ✓ Updated docs/worklog/now.md
+        Linear:
+        + PER-42 "Gmail connector" → Done
+        + Created PER-45 "Linear connector" (Todo)
 
         Working tree is clean. You're all set!
 ```

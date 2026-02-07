@@ -59,6 +59,18 @@ Gmail Connector + Memory System Fixes:
 
 ## Just Completed
 
+**2026-02-07**
+
+Slack Sending with Action Cards (feature/slack-sending → PR #12):
+- Slack directory cache with daily sync via heartbeat
+- send_slack_message agent capability (DB-backed prompt, self-editable)
+- Action Card system (generic typed cards with status, actions, content slots)
+- Slack message card: send-as toggle (user/bot), inline editing, keyboard shortcuts
+- DMs as group DM (bot) or 1:1 (user token), channels with auto-join + @mention cc
+- Markdown rendering in chat messages (react-markdown + remark-gfm)
+- Integrated in both main chat (SSE) and triage chat
+- Bug fixes: auth on triage chat, hooks order, stale data on send
+
 **2026-02-06 (Evening)**
 
 Linear Triage Improvements (feature/triage-improvements):
@@ -98,6 +110,7 @@ Nothing active - ready for next task.
 
 ## Up Next
 
+- [ ] **Global Action Card system** — make Action Cards reusable beyond Slack (handler registry, different card types for email, tasks, alerts)
 - [x] **Linear triage reconciliation** — done, auto-archives when read/archived in Linear
 - [ ] **Connector-aware memory extraction** — `extractEmailMemory` is used for ALL connectors but the prompt is email-specific. Granola transcripts get treated as emails (wrong summary framing, extracts random metrics, misses meeting decisions/commitments). Need either separate prompts per connector type or a connector-aware prompt that adjusts for meetings vs emails vs slack. Key file: `src/lib/memory/ollama.ts:extractEmailMemory`
 - [ ] Test Gmail sync with real inbox
