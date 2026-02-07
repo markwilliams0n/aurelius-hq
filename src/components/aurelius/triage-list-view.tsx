@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Check, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import {
   TriageItem,
   CONNECTOR_CONFIG,
@@ -83,9 +84,13 @@ export function TriageListView({
           }
           break;
         case "a":
-          if (!e.shiftKey && onActionNeeded && items[focusedIndex]) {
+          if (!e.shiftKey && items[focusedIndex]) {
             e.preventDefault();
-            onActionNeeded(items[focusedIndex]);
+            if (items[focusedIndex].connector !== "gmail") {
+              toast.info("Action Needed is only available for Gmail items");
+            } else if (onActionNeeded) {
+              onActionNeeded(items[focusedIndex]);
+            }
           }
           break;
         case "A":

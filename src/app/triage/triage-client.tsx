@@ -271,32 +271,32 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
 
   // Action Needed (a) - 3-day snooze + Gmail label, swipe animation + optimistic
   const handleActionNeeded = useCallback((targetItem?: TriageItem) => {
-    const item = targetItem || currentItem;
-    if (!item) return;
+    const itemToAction = targetItem || currentItem;
+    if (!itemToAction) return;
 
-    if (item.connector !== "gmail") {
+    if (itemToAction.connector !== "gmail") {
       toast.info("Action Needed is only available for Gmail items");
       return;
     }
 
     setAnimatingOut("right");
-    setLastAction({ type: "action-needed", itemId: item.id, item });
+    setLastAction({ type: "action-needed", itemId: itemToAction.id, item: itemToAction });
 
     // Fire API calls in background immediately
-    fetch(`/api/triage/${item.id}/tasks`, { method: "DELETE" }).catch(() => {});
-    fetch(`/api/triage/${item.id}`, {
+    fetch(`/api/triage/${itemToAction.id}/tasks`, { method: "DELETE" }).catch(() => {});
+    fetch(`/api/triage/${itemToAction.id}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "action-needed" }),
     }).catch((error) => {
       console.error("Failed to mark action needed:", error);
       toast.error("Failed to mark for action - item restored");
-      setItems((prev) => [item, ...prev]);
+      setItems((prev) => [itemToAction, ...prev]);
     });
 
     // Remove from list after brief animation
     setTimeout(() => {
-      setItems((prev) => prev.filter((i) => i.id !== item.id));
+      setItems((prev) => prev.filter((i) => i.id !== itemToAction.id));
       setAnimatingOut(null);
     }, 150);
 
@@ -420,18 +420,24 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
   const handleUndo = useCallback(() => {
     if (!lastAction) return;
 
-    const itemToRestore = lastAction.item;
+    let itemToRestore = lastAction.item;
+
+    // If undoing action-needed, clear the actionNeededDate from enrichment
+    if (lastAction.type === "action-needed" && itemToRestore.enrichment) {
+      const { actionNeededDate, ...restEnrichment } = itemToRestore.enrichment as Record<string, unknown>;
+      itemToRestore = { ...itemToRestore, enrichment: restEnrichment };
+    }
 
     // Immediately add item back to front and reset index to show it
     setItems((prev) => [itemToRestore, ...prev]);
     setCurrentIndex(0);
     setLastAction(null);
 
-    // Fire restore API in background
+    // Fire restore API in background, pass previousAction so server can clean up enrichment
     fetch(`/api/triage/${lastAction.itemId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "restore" }),
+      body: JSON.stringify({ action: "restore", previousAction: lastAction.type }),
     }).catch((error) => {
       console.error("Failed to restore:", error);
       toast.error("Failed to restore on server");
@@ -969,88 +975,11 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
 
       {/* Quick task action card overlay */}
       {viewMode === "quick-task" && quickTaskCard && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-lg">
-            <ActionCard
-              card={quickTaskCard}
-              onAction={async (actionName) => {
-                if (actionName === "send" || actionName === "confirm") {
-                  // Dispatch to the action card API with current data
-                  try {
-                    const res = await fetch(`/api/action-card/${quickTaskCard.id}`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        action: actionName,
-                        data: quickTaskCard.data,
-                      }),
-                    });
-                    const result = await res.json();
-                    if (result.status === "confirmed") {
-                      toast.success(result.successMessage || "Task created!", {
-                        action: result.result?.resultUrl ? {
-                          label: "Open in Linear",
-                          onClick: () => window.open(result.result.resultUrl, "_blank"),
-                        } : undefined,
-                      });
-                    } else {
-                      toast.error(result.result?.error || "Failed to create task");
-                    }
-                  } catch {
-                    toast.error("Failed to create task");
-                  }
-                  setQuickTaskCard(null);
-                  handleCloseOverlay();
-                } else if (actionName === "cancel" || actionName === "dismiss") {
-                  setQuickTaskCard(null);
-                  handleCloseOverlay();
-                }
-              }}
-            >
-              <CardContent
-                card={quickTaskCard}
-                onDataChange={(newData) => {
-                  setQuickTaskCard((prev) =>
-                    prev ? { ...prev, data: newData } : null
-                  );
-                }}
-                onAction={async (actionName, data) => {
-                  if (actionName === "send" || actionName === "confirm") {
-                    const cardData = data ?? quickTaskCard.data;
-                    try {
-                      const res = await fetch(`/api/action-card/${quickTaskCard.id}`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          action: actionName,
-                          data: cardData,
-                        }),
-                      });
-                      const result = await res.json();
-                      if (result.status === "confirmed") {
-                        toast.success(result.successMessage || "Task created!", {
-                          action: result.result?.resultUrl ? {
-                            label: "Open in Linear",
-                            onClick: () => window.open(result.result.resultUrl, "_blank"),
-                          } : undefined,
-                        });
-                      } else {
-                        toast.error(result.result?.error || "Failed to create task");
-                      }
-                    } catch {
-                      toast.error("Failed to create task");
-                    }
-                    setQuickTaskCard(null);
-                    handleCloseOverlay();
-                  } else if (actionName === "cancel" || actionName === "dismiss") {
-                    setQuickTaskCard(null);
-                    handleCloseOverlay();
-                  }
-                }}
-              />
-            </ActionCard>
-          </div>
-        </div>
+        <QuickTaskOverlay
+          card={quickTaskCard}
+          onCardChange={setQuickTaskCard}
+          onClose={() => { setQuickTaskCard(null); handleCloseOverlay(); }}
+        />
       )}
     </AppShell>
   );
@@ -1076,4 +1005,64 @@ function getActionMessage(action: string): string {
     default:
       return "Action completed";
   }
+}
+
+/**
+ * Quick task overlay — extracted to avoid duplicate action dispatch.
+ * Single `handleAction` is shared by both ActionCard footer buttons
+ * and CardContent keyboard shortcuts (Cmd+Enter).
+ */
+function QuickTaskOverlay({
+  card,
+  onCardChange,
+  onClose,
+}: {
+  card: ActionCardData;
+  onCardChange: (updater: (prev: ActionCardData | null) => ActionCardData | null) => void;
+  onClose: () => void;
+}) {
+  const handleAction = useCallback(async (actionName: string, editedData?: Record<string, unknown>) => {
+    if (actionName === "send" || actionName === "confirm") {
+      const cardData = editedData ?? card.data;
+      try {
+        const res = await fetch(`/api/action-card/${card.id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: actionName, data: cardData }),
+        });
+        const result = await res.json();
+        if (result.status === "confirmed") {
+          toast.success(result.successMessage || "Task created!", {
+            action: result.result?.resultUrl ? {
+              label: "Open in Linear",
+              onClick: () => window.open(result.result.resultUrl, "_blank"),
+            } : undefined,
+          });
+        } else {
+          toast.error(result.result?.error || "Failed to create task");
+        }
+      } catch {
+        toast.error("Failed to create task");
+      }
+      onClose();
+    } else if (actionName === "cancel" || actionName === "dismiss") {
+      onClose();
+    }
+  }, [card.id, card.data, onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="w-full max-w-lg">
+        <ActionCard card={card} onAction={handleAction}>
+          <CardContent
+            card={card}
+            onDataChange={(newData) => {
+              onCardChange((prev) => prev ? { ...prev, data: newData } : null);
+            }}
+            onAction={handleAction}
+          />
+        </ActionCard>
+      </div>
+    </div>
+  );
 }

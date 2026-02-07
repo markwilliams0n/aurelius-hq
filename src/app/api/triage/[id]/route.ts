@@ -172,10 +172,18 @@ export async function POST(
       break;
     }
 
-    case "restore":
+    case "restore": {
       updates.status = "new";
       updates.snoozedUntil = null;
+
+      // If restoring from action-needed, clear actionNeededDate from enrichment
+      if (actionData.previousAction === "action-needed") {
+        const currentEnrichment = (item.enrichment as Record<string, unknown>) || {};
+        const { actionNeededDate, ...restEnrichment } = currentEnrichment;
+        updates.enrichment = restEnrichment;
+      }
       break;
+    }
 
     default:
       return NextResponse.json(
