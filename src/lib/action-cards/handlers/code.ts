@@ -35,6 +35,53 @@ process.on('SIGTERM', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Gather final worktree stats and update the card as completed. */
+async function finalizeSession(
+  sessionId: string,
+  cardId: string | undefined,
+  data: Record<string, unknown>,
+  worktreePath: string,
+  totalTurns: number,
+  totalCostUsd: number | null,
+): Promise<void> {
+  activeSessions.delete(sessionId);
+
+  if (!cardId) return;
+
+  try {
+    const stats = getWorktreeStats(worktreePath);
+    const changedFiles = getChangedFiles(worktreePath);
+    const log = getWorktreeLog(worktreePath);
+
+    const currentCard = await getCard(cardId);
+    if (currentCard?.status === "confirmed") {
+      await updateCard(cardId, {
+        data: {
+          ...data,
+          state: 'completed',
+          worktreePath,
+          totalTurns,
+          totalCostUsd,
+          result: {
+            sessionId,
+            turns: totalTurns,
+            costUsd: totalCostUsd,
+            stats,
+            changedFiles,
+            log,
+          },
+        },
+      });
+    }
+  } catch (err) {
+    console.error(`[code-session:${sessionId}] Failed to gather results:`, err);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // code:start — Start a coding session in an isolated worktree
 // ---------------------------------------------------------------------------
 
@@ -54,8 +101,6 @@ registerCardHandler("code:start", {
     const task = data.task as string;
     const context = data.context as string | undefined;
     const branchName = data.branchName as string;
-    const maxTurns = (data.maxTurns as number) ?? 25;
-    const timeoutMs = (data.timeoutMs as number) ?? 300_000;
     const cardId = data._cardId as string | undefined;
 
     if (!sessionId || !task || !branchName) {
@@ -66,7 +111,14 @@ registerCardHandler("code:start", {
     }
 
     // Reserve the session slot atomically to prevent concurrent starts
-    const placeholder = { pid: 0, kill: () => {}, process: null as unknown } as ActiveSession;
+    const placeholder = {
+      pid: 0,
+      kill: () => {},
+      process: null as unknown,
+      state: 'running' as const,
+      sendMessage: () => {},
+      closeInput: () => {},
+    } as ActiveSession;
     activeSessions.set(sessionId, placeholder);
 
     let worktree: { path: string; branchName: string };
@@ -78,53 +130,50 @@ registerCardHandler("code:start", {
       return { status: "error", error: `Failed to create worktree: ${msg}` };
     }
 
+    // Track cumulative turns and cost across multi-turn conversation
+    let totalTurns = 0;
+    let totalCostUsd: number | null = null;
+
     let session: ActiveSession;
     try {
-      const prompt = buildCodePrompt(task, context);
+      const systemPrompt = buildCodePrompt(task, context);
 
       session = startSession({
         sessionId,
-        prompt,
+        systemPrompt,
+        task,
         worktreePath: worktree.path,
-        maxTurns,
-        timeoutMs,
 
         onProgress(event) {
           console.log(`[code-session:${sessionId}] ${event.type}`, event.text ?? event.tool ?? "");
         },
 
-        async onComplete(result) {
-          activeSessions.delete(sessionId);
+        async onResult(result) {
+          // Accumulate turns and cost across turns
+          totalTurns = result.turns;
+          if (result.costUsd !== null) {
+            totalCostUsd = result.costUsd;
+          }
 
-          try {
-            const stats = getWorktreeStats(worktree.path);
-            const changedFiles = getChangedFiles(worktree.path);
-            const log = getWorktreeLog(worktree.path);
-
-            if (cardId) {
-              // Only update if card is still in "confirmed" (running) state —
-              // user may have clicked Stop, which sets a different status
+          // Update card data with latest state + last message
+          if (cardId) {
+            try {
               const currentCard = await getCard(cardId);
               if (currentCard?.status === "confirmed") {
                 await updateCard(cardId, {
                   data: {
                     ...data,
                     worktreePath: worktree.path,
-                    result: {
-                      sessionId: result.sessionId,
-                      turns: result.turns,
-                      durationMs: result.durationMs,
-                      costUsd: result.costUsd,
-                      stats,
-                      changedFiles,
-                      log,
-                    },
+                    state: 'waiting',
+                    lastMessage: result.text,
+                    totalTurns,
+                    totalCostUsd,
                   },
                 });
               }
+            } catch (err) {
+              console.error(`[code-session:${sessionId}] Failed to update card:`, err);
             }
-          } catch (err) {
-            console.error(`[code-session:${sessionId}] Failed to gather results:`, err);
           }
         },
 
@@ -159,6 +208,98 @@ registerCardHandler("code:start", {
     // Replace placeholder with real session handle
     activeSessions.set(sessionId, session);
 
+    // Listen for process exit to finalize the session
+    session.process.on('exit', () => {
+      if (session.state === 'completed' || session.state === 'waiting_for_input') {
+        finalizeSession(sessionId, cardId, data, worktree.path, totalTurns, totalCostUsd);
+      }
+    });
+
+    // Update card to running state
+    if (cardId) {
+      await updateCard(cardId, {
+        data: {
+          ...data,
+          worktreePath: worktree.path,
+          state: 'running',
+          totalTurns: 0,
+          totalCostUsd: null,
+        },
+      });
+    }
+
+    return { status: "confirmed" };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// code:respond — Send a user message to a running session
+// ---------------------------------------------------------------------------
+
+registerCardHandler("code:respond", {
+  label: "Send Response",
+  successMessage: "Message sent",
+
+  async execute(data) {
+    const sessionId = data.sessionId as string;
+    const message = data.message as string;
+    const cardId = data._cardId as string | undefined;
+
+    if (!sessionId || !message) {
+      return { status: "error", error: "Missing sessionId or message" };
+    }
+
+    const session = activeSessions.get(sessionId);
+    if (!session) {
+      return { status: "error", error: "No active session found" };
+    }
+
+    if (session.state !== 'waiting_for_input') {
+      return { status: "error", error: `Session is ${session.state}, not waiting for input` };
+    }
+
+    // Send the message and update card state
+    session.sendMessage(message);
+
+    if (cardId) {
+      try {
+        await updateCard(cardId, {
+          data: {
+            ...data,
+            state: 'running',
+            lastMessage: undefined,
+          },
+        });
+      } catch (err) {
+        console.error(`[code-session:${sessionId}] Failed to update card:`, err);
+      }
+    }
+
+    return { status: "confirmed" };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// code:finish — Close stdin to let the session complete gracefully
+// ---------------------------------------------------------------------------
+
+registerCardHandler("code:finish", {
+  label: "Finish Session",
+  successMessage: "Session finishing...",
+
+  async execute(data) {
+    const sessionId = data.sessionId as string;
+
+    if (!sessionId) {
+      return { status: "error", error: "Missing sessionId" };
+    }
+
+    const session = activeSessions.get(sessionId);
+    if (!session) {
+      return { status: "error", error: "No active session found" };
+    }
+
+    session.closeInput();
     return { status: "confirmed" };
   },
 });

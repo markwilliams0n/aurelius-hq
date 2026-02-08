@@ -43,8 +43,6 @@ export async function POST(request: Request) {
         task,
         context: context || null,
         branchName,
-        maxTurns: 25,
-        timeoutMs: 300_000,
       },
     });
 

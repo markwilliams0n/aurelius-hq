@@ -1,17 +1,21 @@
 /**
  * Claude Code Session Executor
  *
- * Spawns `claude` CLI processes in isolated git worktrees and parses
- * their NDJSON streaming output into typed progress events.
+ * Spawns `claude` CLI processes in isolated git worktrees using
+ * bidirectional stream-json mode. The CLI stays alive across
+ * multiple turns — the user can send follow-up messages via stdin
+ * and Claude responds via new assistant + result events on stdout.
  *
- * The CLI is invoked with --output-format stream-json, which emits
- * one JSON object per line on stdout. We parse these to surface
- * thinking, tool calls, tool results, and milestones back to the
- * orchestrator.
+ * Protocol:
+ *   - CLI is started with --input-format stream-json --output-format stream-json
+ *   - System prompt is passed via --append-system-prompt
+ *   - Task is sent as the first user message on stdin
+ *   - Each user message triggers a new assistant response + result event
+ *   - Closing stdin ends the session gracefully
  *
- * Security: The subprocess env is stripped to only safe variables.
- * ANTHROPIC_API_KEY is explicitly excluded so the CLI uses the
- * user's Max subscription rather than a leaked server key.
+ * Security: The subprocess env passes through everything EXCEPT
+ * known API keys/secrets, so the CLI can authenticate via the
+ * user's Max subscription.
  */
 
 import { spawn, type ChildProcess } from 'child_process';
@@ -24,7 +28,7 @@ import path from 'path';
 // ---------------------------------------------------------------------------
 
 export interface ProgressEvent {
-  type: 'thinking' | 'tool_call' | 'tool_result' | 'milestone';
+  type: 'thinking' | 'tool_call' | 'tool_result' | 'result';
   text?: string;
   tool?: string;
   input?: string;
@@ -35,16 +39,18 @@ export interface SessionResult {
   turns: number;
   durationMs: number;
   costUsd: number | null;
+  text: string;
 }
+
+export type SessionState = 'running' | 'waiting_for_input' | 'completed' | 'error';
 
 export interface CodeSessionOptions {
   sessionId: string;
-  prompt: string;
+  systemPrompt: string;
+  task: string;
   worktreePath: string;
-  maxTurns: number;
-  timeoutMs: number;
   onProgress: (event: ProgressEvent) => void;
-  onComplete: (result: SessionResult) => void;
+  onResult: (result: SessionResult) => void;
   onError: (error: Error) => void;
 }
 
@@ -52,6 +58,9 @@ export interface ActiveSession {
   pid: number;
   kill: () => void;
   process: ChildProcess;
+  state: SessionState;
+  sendMessage: (text: string) => void;
+  closeInput: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -190,19 +199,23 @@ function summarizeToolInput(toolName: string, input: unknown): string {
  *
  * Each line is a JSON object with a `type` field. We care about:
  * - `assistant`: contains content blocks (text or tool_use)
- * - `result`: final summary with session_id, num_turns, etc.
+ * - `result`: turn summary — fires after each assistant response
  *
- * Content blocks live in `event.message.content[]` for assistant
- * messages. Each block has a `type` of `text` or `tool_use`.
+ * In bidirectional mode, multiple result events can fire (one per
+ * user→assistant turn). The process stays alive between them.
  */
 function parseStream(
   stdout: NodeJS.ReadableStream,
   log: (level: 'info' | 'error', msg: string) => void,
   onProgress: (event: ProgressEvent) => void,
-  onComplete: (result: SessionResult) => void,
+  onResult: (result: SessionResult) => void,
   onError: (error: Error) => void,
 ): void {
   const rl = createInterface({ input: stdout, crlfDelay: Infinity });
+
+  // Collect the last text block from each assistant turn so we can
+  // include it in the result event for display in the UI
+  let lastTextForTurn = '';
 
   rl.on('line', (line: string) => {
     if (!line.trim()) return;
@@ -211,15 +224,12 @@ function parseStream(
     try {
       event = JSON.parse(line);
     } catch {
-      // Non-JSON line — skip silently (claude CLI sometimes emits
-      // status text before the stream starts)
       return;
     }
 
     const eventType = event.type as string | undefined;
 
     if (eventType === 'assistant') {
-      // Extract content blocks from the message
       const message = event.message as Record<string, unknown> | undefined;
       const contentBlocks = (message?.content ?? event.content) as
         | Array<Record<string, unknown>>
@@ -229,12 +239,9 @@ function parseStream(
 
       for (const block of contentBlocks) {
         if (block.type === 'text' && typeof block.text === 'string') {
-          // Log text responses so we can debug what Claude says
           log('info', `Text: ${block.text.slice(0, 500)}`);
-          onProgress({
-            type: 'thinking',
-            text: block.text,
-          });
+          lastTextForTurn = block.text;
+          onProgress({ type: 'thinking', text: block.text });
         } else if (block.type === 'tool_use') {
           const toolName = (block.name as string) ?? 'unknown';
           const toolInput = block.input;
@@ -257,15 +264,41 @@ function parseStream(
       if (isError) {
         onError(new Error(resultText || 'Claude CLI returned an error result'));
       } else {
-        onComplete({
+        const result: SessionResult = {
           sessionId: event.session_id as string | undefined,
           turns: (event.num_turns as number | undefined) ?? 0,
           durationMs: (event.duration_ms as number | undefined) ?? 0,
           costUsd: (event.total_cost_usd as number | undefined) ?? null,
-        });
+          text: lastTextForTurn,
+        };
+
+        // Emit as a progress event too, so the handler can see it
+        onProgress({ type: 'result', text: lastTextForTurn });
+        onResult(result);
       }
+
+      // Reset for next turn
+      lastTextForTurn = '';
     }
   });
+}
+
+// ---------------------------------------------------------------------------
+// Stdin message formatting
+// ---------------------------------------------------------------------------
+
+/**
+ * Build an NDJSON user message for the stream-json stdin protocol.
+ */
+function buildStdinMessage(text: string): string {
+  const msg = {
+    type: 'user',
+    message: {
+      role: 'user',
+      content: [{ type: 'text', text }],
+    },
+  };
+  return JSON.stringify(msg) + '\n';
 }
 
 // ---------------------------------------------------------------------------
@@ -273,78 +306,56 @@ function parseStream(
 // ---------------------------------------------------------------------------
 
 /**
- * Spawn a Claude Code CLI session in an isolated worktree.
+ * Spawn a Claude Code CLI session in bidirectional streaming mode.
  *
- * Returns an ActiveSession handle that the caller can use to
- * monitor or kill the process. Progress, completion, and errors
- * are delivered via the callbacks in `options`.
+ * The CLI stays alive across multiple turns. The caller can:
+ * - Send follow-up messages via session.sendMessage(text)
+ * - Close the session gracefully via session.closeInput()
+ * - Kill the session immediately via session.kill()
+ *
+ * Callbacks:
+ * - onProgress: tool calls, text, milestones during a turn
+ * - onResult: fires after each assistant turn completes (can fire multiple times)
+ * - onError: fires on errors (error result events, spawn failures, exit codes)
  */
 export function startSession(options: CodeSessionOptions): ActiveSession {
   const {
     sessionId,
-    prompt,
+    systemPrompt,
+    task,
     worktreePath,
-    maxTurns,
-    timeoutMs,
     onProgress,
-    onComplete,
+    onResult,
     onError,
   } = options;
 
   const log = (level: 'info' | 'error', msg: string) => sessionLog(sessionId, level, msg);
 
   const args: string[] = [
-    '-p', prompt,
+    '-p', '',
+    '--append-system-prompt', systemPrompt,
+    '--input-format', 'stream-json',
     '--output-format', 'stream-json',
     '--verbose',
-    '--max-turns', String(maxTurns),
     '--permission-mode', 'acceptEdits',
-    '--no-session-persistence',
   ];
 
   for (const tool of ALLOWED_TOOLS) {
     args.push('--allowedTools', tool);
   }
 
-  log('info', `Starting session in ${worktreePath}`);
-  log('info', `Prompt: ${prompt.slice(0, 200)}${prompt.length > 200 ? '...' : ''}`);
-  log('info', `Max turns: ${maxTurns}, timeout: ${timeoutMs}ms`);
+  log('info', `Starting bidirectional session in ${worktreePath}`);
+  log('info', `Task: ${task.slice(0, 200)}${task.length > 200 ? '...' : ''}`);
 
   const child = spawn('claude', args, {
     cwd: worktreePath,
     env: buildSafeEnv() as NodeJS.ProcessEnv,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['pipe', 'pipe', 'pipe'],
   });
 
-  log('info', `Spawned claude CLI, PID: ${child.pid ?? 'unknown'}`);
+  log('info', `Spawned claude CLI (bidirectional), PID: ${child.pid ?? 'unknown'}`);
 
-  // Ensure only one terminal callback fires (complete, error, or timeout)
-  let settled = false;
-  let sigkillTimer: NodeJS.Timeout | null = null;
-
-  const settle = () => {
-    if (settled) return false;
-    settled = true;
-    clearTimeout(timer);
-    if (sigkillTimer) clearTimeout(sigkillTimer);
-    return true;
-  };
-
-  // Timeout guard — kill the process if it runs too long
-  const timer = setTimeout(() => {
-    if (!settled) {
-      child.kill('SIGTERM');
-      sigkillTimer = setTimeout(() => {
-        if (!child.killed) {
-          child.kill('SIGKILL');
-        }
-      }, 5_000);
-
-      if (settle()) {
-        onError(new Error(`Session timed out after ${timeoutMs}ms`));
-      }
-    }
-  }, timeoutMs);
+  let sessionState: SessionState = 'running';
 
   if (child.stdout) {
     parseStream(
@@ -357,16 +368,14 @@ export function startSession(options: CodeSessionOptions): ActiveSession {
         onProgress(event);
       },
       (result) => {
-        log('info', `Complete — turns: ${result.turns}, duration: ${result.durationMs}ms, cost: $${result.costUsd ?? '?'}`);
-        if (settle()) {
-          onComplete(result);
-        }
+        log('info', `Turn complete — turns: ${result.turns}, cost: $${result.costUsd ?? '?'}`);
+        sessionState = 'waiting_for_input';
+        onResult(result);
       },
       (error) => {
         log('error', `Stream error: ${error.message}`);
-        if (settle()) {
-          onError(error);
-        }
+        sessionState = 'error';
+        onError(error);
       },
     );
   }
@@ -381,41 +390,66 @@ export function startSession(options: CodeSessionOptions): ActiveSession {
 
   child.on('error', (err) => {
     log('error', `Spawn error: ${err.message}`);
-    if (settle()) {
-      onError(new Error(`Failed to spawn claude CLI: ${err.message}`));
-    }
+    sessionState = 'error';
+    onError(new Error(`Failed to spawn claude CLI: ${err.message}`));
   });
 
   child.on('exit', (code, signal) => {
     log('info', `Process exited — code: ${code}, signal: ${signal}`);
-    if (settle()) {
-      if (code !== 0) {
+    if (sessionState !== 'error') {
+      if (code !== 0 && code !== null) {
         const reason = signal
           ? `killed by signal ${signal}`
           : `exited with code ${code}`;
         log('error', `Session failed: ${reason}`);
+        sessionState = 'error';
         onError(new Error(`Claude CLI ${reason}`));
       } else {
-        log('info', 'Session exited cleanly (no result event)');
-        onComplete({
-          sessionId: undefined,
-          turns: 0,
-          durationMs: 0,
-          costUsd: null,
-        });
+        sessionState = 'completed';
+        log('info', 'Session ended');
       }
     }
   });
 
+  // Send the task as the first user message to kick off the session
+  if (child.stdin) {
+    const firstMessage = buildStdinMessage(task);
+    log('info', `Sending initial task via stdin`);
+    child.stdin.write(firstMessage);
+  }
+
   const pid = child.pid ?? 0;
 
-  return {
+  const session: ActiveSession = {
     pid,
+    get state() { return sessionState; },
+
     kill: () => {
       if (!child.killed) {
+        sessionState = 'completed';
         child.kill('SIGTERM');
       }
     },
+
+    sendMessage: (text: string) => {
+      if (!child.stdin || child.stdin.destroyed) {
+        log('error', 'Cannot send message — stdin is closed');
+        return;
+      }
+      log('info', `User message: ${text.slice(0, 200)}`);
+      sessionState = 'running';
+      child.stdin.write(buildStdinMessage(text));
+    },
+
+    closeInput: () => {
+      if (child.stdin && !child.stdin.destroyed) {
+        log('info', 'Closing stdin — session will end after current turn');
+        child.stdin.end();
+      }
+    },
+
     process: child,
   };
+
+  return session;
 }

@@ -14,7 +14,9 @@ import {
   ArrowLeft,
   Code,
   Loader2,
+  MessageSquare,
   RotateCcw,
+  Send,
   Square,
   Terminal,
 } from "lucide-react";
@@ -40,7 +42,7 @@ interface ProgressResponse {
   };
 }
 
-type SessionMode = "loading" | "pending" | "running" | "completed" | "error";
+type SessionMode = "loading" | "pending" | "running" | "waiting" | "completed" | "error";
 
 function getMode(card: ProgressResponse["card"] | null): SessionMode {
   if (!card) return "loading";
@@ -48,6 +50,12 @@ function getMode(card: ProgressResponse["card"] | null): SessionMode {
   if (card.status === "dismissed") return "error";
   if (card.status === "confirmed") {
     const data = card.data as Record<string, unknown>;
+    // Check the bidirectional state field first
+    const state = data.state as string | undefined;
+    if (state === "waiting") return "waiting";
+    if (state === "completed") return "completed";
+    if (state === "running") return "running";
+    // Fallback: if result exists without state field, it's completed
     return data.result ? "completed" : "running";
   }
   return "pending";
@@ -84,6 +92,28 @@ function LogLine({ line }: { line: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Session stats display
+// ---------------------------------------------------------------------------
+
+function SessionStats({ data }: { data: Record<string, unknown> }) {
+  const turns = data.totalTurns as number | undefined;
+  const cost = data.totalCostUsd as number | null | undefined;
+
+  if (!turns && !cost) return null;
+
+  return (
+    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+      {turns !== undefined && turns > 0 && (
+        <span>{turns} turn{turns !== 1 ? "s" : ""}</span>
+      )}
+      {cost !== undefined && cost !== null && (
+        <span>${cost.toFixed(4)}</span>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -93,13 +123,17 @@ export function CodeSessionDetail({ cardId }: { cardId: string }) {
   const [logLines, setLogLines] = useState<string[]>([]);
   const [lineOffset, setLineOffset] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [respondText, setRespondText] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
+  const respondInputRef = useRef<HTMLTextAreaElement>(null);
 
   const mode = getMode(card);
   const data = (card?.data ?? {}) as Record<string, unknown>;
   const task = (data.task as string) || "";
   const branchName = (data.branchName as string) || "";
   const sessionId = (data.sessionId as string) || "";
+  const lastMessage = (data.lastMessage as string) || "";
 
   // Build a conversation ID unique to this session for post-session chat
   const chatConversationId = `code-${cardId}`;
@@ -165,9 +199,9 @@ export function CodeSessionDetail({ cardId }: { cardId: string }) {
     fetchProgress();
   }, []);  // eslint-disable-line react-hooks/exhaustive-deps -- only on mount
 
-  // Poll while running
+  // Poll while running or waiting
   useEffect(() => {
-    if (mode !== "running" && mode !== "loading" && mode !== "pending") return;
+    if (mode !== "running" && mode !== "loading" && mode !== "pending" && mode !== "waiting") return;
     const interval = setInterval(fetchProgress, 2000);
     return () => clearInterval(interval);
   }, [mode, fetchProgress]);
@@ -176,6 +210,13 @@ export function CodeSessionDetail({ cardId }: { cardId: string }) {
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logLines]);
+
+  // Focus respond input when entering waiting mode
+  useEffect(() => {
+    if (mode === "waiting") {
+      respondInputRef.current?.focus();
+    }
+  }, [mode]);
 
   // -------------------------------------------------------------------------
   // Actions
@@ -255,6 +296,36 @@ export function CodeSessionDetail({ cardId }: { cardId: string }) {
     });
   }, [cardId, data, handleAction]);
 
+  const handleRespond = useCallback(async () => {
+    if (!respondText.trim() || isSending) return;
+
+    setIsSending(true);
+    try {
+      const res = await fetch(`/api/code-sessions/${cardId}/respond`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: respondText.trim() }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to send response");
+      }
+
+      setRespondText("");
+      // Refresh to pick up the new state
+      fetchProgress();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to send response");
+    } finally {
+      setIsSending(false);
+    }
+  }, [respondText, isSending, cardId, fetchProgress]);
+
+  const handleFinish = useCallback(() => {
+    handleAction(cardId, "finish", { sessionId });
+  }, [cardId, sessionId, handleAction]);
+
   // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
@@ -295,7 +366,8 @@ export function CodeSessionDetail({ cardId }: { cardId: string }) {
     updatedAt: card.updatedAt,
   };
 
-  const showChat = mode === "completed" || mode === "error";
+  const showPostChat = mode === "completed" || mode === "error";
+  const showLog = mode === "running" || mode === "waiting";
 
   return (
     <AppShell>
@@ -315,14 +387,17 @@ export function CodeSessionDetail({ cardId }: { cardId: string }) {
               <h1 className="font-serif text-lg truncate">{card.title}</h1>
               <StatusBadge mode={mode} />
             </div>
-            {branchName && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Branch:{" "}
-                <code className="bg-muted/50 px-1.5 py-0.5 rounded font-mono">
-                  {branchName}
-                </code>
-              </p>
-            )}
+            <div className="flex items-center gap-4 mt-1">
+              {branchName && (
+                <p className="text-xs text-muted-foreground">
+                  Branch:{" "}
+                  <code className="bg-muted/50 px-1.5 py-0.5 rounded font-mono">
+                    {branchName}
+                  </code>
+                </p>
+              )}
+              <SessionStats data={data} />
+            </div>
           </div>
         </div>
 
@@ -360,27 +435,50 @@ export function CodeSessionDetail({ cardId }: { cardId: string }) {
               </div>
             )}
 
-            {/* Running — live progress */}
-            {mode === "running" && (
+            {/* Running / Waiting — live progress + optional chat */}
+            {showLog && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm">
-                    <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
-                    <span className="text-amber-400 font-medium">
-                      Session running...
-                    </span>
+                    {mode === "running" ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+                        <span className="text-amber-400 font-medium">
+                          Working...
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <MessageSquare className="w-4 h-4 text-blue-400" />
+                        <span className="text-blue-400 font-medium">
+                          Waiting for your response
+                        </span>
+                      </>
+                    )}
                   </div>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={handleStop}
-                  >
-                    <Square className="w-3 h-3 mr-1" />
-                    Stop
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {mode === "waiting" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleFinish}
+                      >
+                        Finish Session
+                      </Button>
+                    )}
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleStop}
+                    >
+                      <Square className="w-3 h-3 mr-1" />
+                      Stop
+                    </Button>
+                  </div>
                 </div>
 
-                <div className="bg-muted/30 rounded-lg p-4 max-h-96 overflow-y-auto">
+                {/* Log viewer */}
+                <div className="bg-muted/30 rounded-lg p-4 max-h-72 overflow-y-auto">
                   {logLines.length === 0 ? (
                     <p className="text-xs text-muted-foreground italic">
                       Waiting for output...
@@ -390,6 +488,52 @@ export function CodeSessionDetail({ cardId }: { cardId: string }) {
                   )}
                   <div ref={logEndRef} />
                 </div>
+
+                {/* Claude's message + respond input (waiting mode) */}
+                {mode === "waiting" && (
+                  <div className="space-y-3">
+                    {lastMessage && (
+                      <div className="bg-muted/50 border border-border rounded-lg p-4">
+                        <p className="text-xs font-medium text-muted-foreground mb-2">
+                          Claude says:
+                        </p>
+                        <p className="text-sm text-foreground whitespace-pre-wrap">
+                          {lastMessage}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <textarea
+                        ref={respondInputRef}
+                        value={respondText}
+                        onChange={(e) => setRespondText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            handleRespond();
+                          }
+                        }}
+                        placeholder="Type your response..."
+                        className="flex-1 bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-gold/50"
+                        rows={2}
+                        disabled={isSending}
+                      />
+                      <Button
+                        onClick={handleRespond}
+                        disabled={!respondText.trim() || isSending}
+                        size="sm"
+                        className="self-end"
+                      >
+                        {isSending ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Send className="w-4 h-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -449,7 +593,7 @@ export function CodeSessionDetail({ cardId }: { cardId: string }) {
             )}
 
             {/* Chat section — for completed and error modes */}
-            {showChat && (
+            {showPostChat && (
               <div className="border-t border-border pt-6 space-y-4">
                 <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
                   Chat
@@ -507,7 +651,7 @@ export function CodeSessionDetail({ cardId }: { cardId: string }) {
         </div>
 
         {/* Chat input — pinned to bottom for completed/error modes */}
-        {showChat && (
+        {showPostChat && (
           <div className="shrink-0 border-t border-border px-6 py-3">
             <div className="max-w-3xl mx-auto">
               <ChatInput onSend={send} disabled={isStreaming} />
@@ -533,6 +677,10 @@ function StatusBadge({ mode }: { mode: SessionMode }) {
     running: {
       label: "Running",
       className: "bg-amber-500/20 text-amber-400",
+    },
+    waiting: {
+      label: "Needs Response",
+      className: "bg-blue-500/20 text-blue-400",
     },
     completed: {
       label: "Completed",
