@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const MODELS = ["ollama", "kimi"];
+const MODELS = ["kimi", "ollama"];
 
 type WizardStep = "input" | "processing" | "review" | "supermemory" | "done";
 
@@ -49,7 +49,7 @@ interface WizardState {
 const INITIAL_STATE: WizardState = {
   textContent: "",
   files: [],
-  model: "ollama",
+  model: "kimi",
   extractedText: "",
   suggestions: null,
   title: "",
@@ -201,7 +201,9 @@ export function VaultWizard({ isOpen, onClose, onItemSaved, editItem }: VaultWiz
       if (hasFiles) {
         const formData = new FormData();
         formData.append("file", state.files[0]);
-        formData.append("model", state.model);
+        if (state.model !== "ollama") {
+          formData.append("model", state.model);
+        }
 
         response = await fetch("/api/vault/parse", {
           method: "POST",

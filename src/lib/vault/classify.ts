@@ -1,6 +1,17 @@
 import { generate, isOllamaAvailable } from "@/lib/memory/ollama";
+import { ai, DEFAULT_MODEL } from "@/lib/ai/client";
 import { getAllTags } from "@/lib/vault";
 import { SENSITIVE_PATTERNS, redactSensitiveContent } from "@/lib/vault/patterns";
+
+/** Generate text via OpenRouter (for non-Ollama models like kimi) */
+async function generateViaOpenRouter(prompt: string): Promise<string> {
+  const result = ai.callModel({
+    model: DEFAULT_MODEL,
+    input: prompt,
+    instructions: "Respond with ONLY the requested JSON. No explanation.",
+  });
+  return result.getText();
+}
 
 export interface VaultClassification {
   title: string;
@@ -22,20 +33,24 @@ export async function classifyVaultItem(
 
   const existingTags = await getAllTags();
 
-  const available = await isOllamaAvailable();
-  if (!available) {
-    // Fallback: no AI, use pattern detection + defaults
-    return {
-      title: hints?.title || content.slice(0, 60).trim(),
-      type:
-        (hints?.type as VaultClassification["type"]) ||
-        (patternSensitive ? "credential" : "fact"),
-      tags: [],
-      sensitive: hints?.sensitive ?? patternSensitive,
-    };
+  const useOpenRouter = options?.model === "kimi";
+
+  if (!useOpenRouter) {
+    const available = await isOllamaAvailable();
+    if (!available) {
+      // Fallback: no AI, use pattern detection + defaults
+      return {
+        title: hints?.title || content.slice(0, 60).trim(),
+        type:
+          (hints?.type as VaultClassification["type"]) ||
+          (patternSensitive ? "credential" : "fact"),
+        tags: [],
+        sensitive: hints?.sensitive ?? patternSensitive,
+      };
+    }
   }
 
-  // Redact sensitive content before sending to Ollama
+  // Redact sensitive content before sending to LLM
   const contentForClassification = patternSensitive
     ? redactSensitiveContent(content.slice(0, 500))
     : content.slice(0, 500);
@@ -71,11 +86,9 @@ Rules:
 - normalizedContent: clean up the raw content. Normalize dates (e.g. "3.3.83" → "1983-03-03", "March 3, 1983"), expand shorthand, fix formatting. Keep the original value but make it more useful.
 - searchKeywords: 2-6 alternative words/phrases someone might search to find this item (synonyms, related terms, alternate date formats). E.g. for a birthday: ["date of birth", "DOB", "born", "March 1983"]`;
 
-  const response = await generate(prompt, {
-    temperature: 0.1,
-    maxTokens: 200,
-    model: options?.model,
-  });
+  const response = useOpenRouter
+    ? await generateViaOpenRouter(prompt)
+    : await generate(prompt, { temperature: 0.1, maxTokens: 200 });
 
   try {
     const jsonMatch = response.match(/\{[\s\S]*\}/);

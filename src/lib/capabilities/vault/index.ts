@@ -1,5 +1,5 @@
 import type { Capability, ToolDefinition, ToolResult } from '../types';
-import { createVaultItem, getVaultItem, searchVaultItems } from '@/lib/vault';
+import { createVaultItem, getVaultItem, searchVaultItems, updateVaultItem } from '@/lib/vault';
 import { classifyVaultItem } from '@/lib/vault/classify';
 import type { VaultItem } from '@/lib/db/schema/vault';
 
@@ -20,11 +20,18 @@ You can save and search items in the user's personal vault using these tools.
 - Present sensitive results with a "Reveal" action card — the client will handle showing the value directly to the user
 - For non-sensitive items: full content is returned and you can reference it in your response
 
+## update_vault_item
+- Use when the user says something stored in the vault is wrong or needs updating
+- Search first to find the item, then update it with corrected information
+- Can update: content, title, type, tags, sensitivity
+- Always confirm what was changed
+
 ## When to use
 - User says "remember this", "save this", "store this"
 - User shares a specific ID, number, or credential
 - User asks "what's my...", "find my...", "do you have my..."
-- User asks to look something up from their vault`;
+- User asks to look something up from their vault
+- User says something in the vault is wrong: "that's the wrong date", "update my...", "change it to..."`;
 
 const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
@@ -90,6 +97,42 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
           description: 'Filter by type: "document", "fact", "credential", or "reference"',
         },
       },
+    },
+  },
+  {
+    name: 'update_vault_item',
+    description:
+      'Update an existing vault item. Use search_vault first to find the item ID, then update it with corrected information.',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'The vault item ID to update',
+        },
+        content: {
+          type: 'string',
+          description: 'Updated content (replaces existing content)',
+        },
+        title: {
+          type: 'string',
+          description: 'Updated title',
+        },
+        type: {
+          type: 'string',
+          description: 'Updated type: "document", "fact", "credential", or "reference"',
+        },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Updated tags (replaces existing tags)',
+        },
+        sensitive: {
+          type: 'boolean',
+          description: 'Updated sensitivity flag',
+        },
+      },
+      required: ['id'],
     },
   },
 ];
@@ -277,6 +320,44 @@ async function handleSearch(
   };
 }
 
+async function handleUpdate(
+  toolInput: Record<string, unknown>,
+): Promise<ToolResult> {
+  const id = String(toolInput.id || '');
+  if (!id) {
+    return { result: JSON.stringify({ error: '"id" is required' }) };
+  }
+
+  const existing = await getVaultItem(id);
+  if (!existing) {
+    return { result: JSON.stringify({ error: `Vault item not found: ${id}` }) };
+  }
+
+  const updates: Record<string, unknown> = {};
+  if (toolInput.content !== undefined) updates.content = String(toolInput.content);
+  if (toolInput.title !== undefined) updates.title = String(toolInput.title);
+  if (toolInput.type !== undefined) updates.type = String(toolInput.type);
+  if (toolInput.tags !== undefined) updates.tags = (toolInput.tags as string[]).map(t => String(t));
+  if (toolInput.sensitive !== undefined) updates.sensitive = Boolean(toolInput.sensitive);
+
+  if (Object.keys(updates).length === 0) {
+    return { result: JSON.stringify({ error: 'No fields to update' }) };
+  }
+
+  const updated = await updateVaultItem(id, updates);
+  if (!updated) {
+    return { result: JSON.stringify({ error: 'Update failed' }) };
+  }
+
+  const changedFields = Object.keys(updates).join(', ');
+  return {
+    result: JSON.stringify({
+      item: formatVaultItem(updated),
+      summary: `Updated "${updated.title}" — changed: ${changedFields}`,
+    }),
+  };
+}
+
 async function handleVaultTool(
   toolName: string,
   toolInput: Record<string, unknown>,
@@ -286,6 +367,8 @@ async function handleVaultTool(
       return handleSave(toolInput);
     case 'search_vault':
       return handleSearch(toolInput);
+    case 'update_vault_item':
+      return handleUpdate(toolInput);
     default:
       return null;
   }
