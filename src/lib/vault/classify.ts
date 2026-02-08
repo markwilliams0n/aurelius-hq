@@ -7,6 +7,8 @@ export interface VaultClassification {
   type: "document" | "fact" | "credential" | "reference";
   tags: string[];
   sensitive: boolean;
+  normalizedContent?: string;
+  searchKeywords?: string[];
 }
 
 /** Classify a vault item using Ollama + pattern matching */
@@ -51,7 +53,9 @@ Respond with ONLY a JSON object:
   "title": "short descriptive title (3-8 words)",
   "type": "document|fact|credential|reference",
   "tags": ["tag1", "tag2"],
-  "sensitive": true/false
+  "sensitive": true/false,
+  "normalizedContent": "cleaned up version of the content (normalize dates to YYYY-MM-DD, expand abbreviations, fix formatting)",
+  "searchKeywords": ["keyword1", "keyword2"]
 }
 
 Rules:
@@ -62,7 +66,9 @@ Rules:
 - "document" type = longer text content (policy, agreement, certificate)
 - "reference" type = a link or pointer to something elsewhere
 - "sensitive" = true if it contains SSN, passport numbers, financial account numbers, or other identity-theft-risk data
-- Title should be descriptive: "State Farm Auto Insurance Policy", "US Passport Number", "AA Frequent Flyer Number"`;
+- Title should be descriptive: "State Farm Auto Insurance Policy", "US Passport Number", "AA Frequent Flyer Number"
+- normalizedContent: clean up the raw content. Normalize dates (e.g. "3.3.83" → "1983-03-03", "March 3, 1983"), expand shorthand, fix formatting. Keep the original value but make it more useful.
+- searchKeywords: 2-6 alternative words/phrases someone might search to find this item (synonyms, related terms, alternate date formats). E.g. for a birthday: ["date of birth", "DOB", "born", "March 1983"]`;
 
   const response = await generate(prompt, {
     temperature: 0.1,
@@ -82,6 +88,8 @@ Rules:
       type: (hints?.type as VaultClassification["type"]) || parsed.type || "fact",
       tags: Array.isArray(parsed.tags) ? parsed.tags.slice(0, 4) : [],
       sensitive: hints?.sensitive ?? parsed.sensitive ?? patternSensitive,
+      normalizedContent: parsed.normalizedContent || undefined,
+      searchKeywords: Array.isArray(parsed.searchKeywords) ? parsed.searchKeywords.slice(0, 6) : undefined,
     };
   } catch {
     return {

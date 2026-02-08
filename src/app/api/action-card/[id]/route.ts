@@ -8,6 +8,7 @@ import "@/lib/action-cards/handlers/slack";
 import "@/lib/action-cards/handlers/gmail";
 import "@/lib/action-cards/handlers/linear";
 import "@/lib/action-cards/handlers/config";
+import "@/lib/action-cards/handlers/vault";
 
 export async function POST(
   request: NextRequest,

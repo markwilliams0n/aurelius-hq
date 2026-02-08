@@ -1,5 +1,3 @@
-import mammoth from "mammoth";
-
 /** Extract text content from a file buffer based on MIME type */
 export async function extractText(
   buffer: Buffer,
@@ -23,8 +21,14 @@ export async function extractText(
       }
     }
     case "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
-      const result = await mammoth.extractRawText({ buffer });
-      return result.value || fileName;
+      try {
+        const mammoth = await import("mammoth");
+        const result = await mammoth.default.extractRawText({ buffer });
+        return result.value || fileName;
+      } catch (error) {
+        console.warn("[Vault] DOCX extraction failed, using filename:", error);
+        return fileName;
+      }
     }
     case "text/plain":
     case "text/markdown":

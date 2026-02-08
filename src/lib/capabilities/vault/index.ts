@@ -142,9 +142,15 @@ async function handleSave(
     : [];
   const allTags = [...new Set([...userTags, ...classification.tags])];
 
+  // Build stored content: use normalized version if available, append search keywords
+  const storedContent = classification.normalizedContent || content;
+  const keywordSuffix = classification.searchKeywords?.length
+    ? `\n\n[keywords: ${classification.searchKeywords.join(', ')}]`
+    : '';
+
   // Create the vault item
   const item = await createVaultItem({
-    content,
+    content: storedContent + keywordSuffix,
     title: classification.title,
     type: classification.type,
     sensitive: classification.sensitive,
@@ -157,7 +163,7 @@ async function handleSave(
     result: JSON.stringify({
       action_card: {
         pattern: 'vault',
-        handler: null,
+        handler: 'vault:supermemory',
         title: `Saved to Vault: ${item.title}`,
         data: {
           vault_item_id: item.id,
