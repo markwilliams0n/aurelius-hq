@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { AppShell } from "@/components/aurelius/app-shell";
-import { ActionCard } from "@/components/aurelius/action-card";
-import { CardContent } from "@/components/aurelius/cards/card-content";
 import { toast } from "sonner";
-import { Code, RefreshCw, Loader2, Terminal } from "lucide-react";
+import { Code, RefreshCw, Loader2, Terminal, Plus, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ActionCardData } from "@/lib/types/action-card";
 import { cn } from "@/lib/utils";
@@ -50,9 +50,13 @@ const GROUP_META: Record<SessionGroup, { label: string; dotClass: string }> = {
 };
 
 export function CodeSessionsClient() {
+  const router = useRouter();
   const [cards, setCards] = useState<ActionCardData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newTask, setNewTask] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
 
   const fetchCards = useCallback(async (showRefresh = false) => {
     if (showRefresh) setIsRefreshing(true);
@@ -83,55 +87,29 @@ export function CodeSessionsClient() {
     return () => clearInterval(interval);
   }, [fetchCards]);
 
-  const handleCardAction = useCallback(
-    async (
-      cardId: string,
-      actionName: string,
-      editedData?: Record<string, unknown>,
-    ) => {
+  const handleCreateSession = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!newTask.trim()) return;
+      setIsCreating(true);
       try {
-        const response = await fetch(`/api/action-card/${cardId}`, {
+        const res = await fetch("/api/code-sessions/create", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: actionName, data: editedData }),
+          body: JSON.stringify({ task: newTask.trim() }),
         });
-        if (!response.ok) throw new Error("Action failed");
-        const result = await response.json();
-
-        if (result.status === "needs_confirmation") {
-          if (confirm(result.confirmMessage || "Are you sure?")) {
-            return handleCardAction(cardId, actionName, {
-              ...editedData,
-              _confirmed: true,
-            });
-          }
-          return;
-        }
-
-        if (result.status === "confirmed") {
-          toast.success(result.successMessage || "Done!");
-        } else if (result.status === "dismissed") {
-          toast.success("Dismissed");
-        } else if (result.status === "error") {
-          toast.error(result.result?.error || "Action failed");
-        }
-
-        // Refresh the list after any action
-        fetchCards();
+        if (!res.ok) throw new Error("Failed to create session");
+        const { card } = await res.json();
+        setNewTask("");
+        setShowNewForm(false);
+        router.push(`/code/${card.id}`);
       } catch {
-        toast.error("Action failed");
+        toast.error("Failed to create session");
+      } finally {
+        setIsCreating(false);
       }
     },
-    [fetchCards],
-  );
-
-  const updateCardData = useCallback(
-    (cardId: string, newData: Record<string, unknown>) => {
-      setCards((prev) =>
-        prev.map((c) => (c.id === cardId ? { ...c, data: newData } : c)),
-      );
-    },
-    [],
+    [newTask, router],
   );
 
   // Group cards by status
@@ -162,22 +140,79 @@ export function CodeSessionsClient() {
                 </span>
               )}
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => fetchCards(true)}
-              disabled={isRefreshing}
-            >
-              <RefreshCw
-                className={cn("w-4 h-4", isRefreshing && "animate-spin")}
-              />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => fetchCards(true)}
+                disabled={isRefreshing}
+              >
+                <RefreshCw
+                  className={cn("w-4 h-4", isRefreshing && "animate-spin")}
+                />
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setShowNewForm((v) => !v)}
+                className="bg-gold/90 hover:bg-gold text-black"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                New Session
+              </Button>
+            </div>
           </div>
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <div className="max-w-3xl mx-auto">
+            {/* New session form */}
+            {showNewForm && (
+              <form
+                onSubmit={handleCreateSession}
+                className="mb-6 border border-border rounded-lg p-4 bg-muted/20"
+              >
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  What should Aurelius code?
+                </label>
+                <input
+                  type="text"
+                  value={newTask}
+                  onChange={(e) => setNewTask(e.target.value)}
+                  placeholder="e.g. Fix the login validation bug, Add dark mode toggle..."
+                  className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-gold/50"
+                  autoFocus
+                  disabled={isCreating}
+                />
+                <div className="flex gap-2 mt-3">
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={!newTask.trim() || isCreating}
+                    className="bg-green-600 hover:bg-green-500 text-white"
+                  >
+                    {isCreating ? (
+                      <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                    ) : (
+                      <Plus className="w-3 h-3 mr-1" />
+                    )}
+                    Create Session
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setShowNewForm(false);
+                      setNewTask("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            )}
+
             {isLoading && (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -191,8 +226,7 @@ export function CodeSessionsClient() {
                   No coding sessions yet
                 </h2>
                 <p className="text-sm text-muted-foreground/70">
-                  Ask Aurelius to fix a bug or add a feature in chat — coding
-                  sessions will appear here.
+                  Click &quot;New Session&quot; above or ask Aurelius in chat to start coding.
                 </p>
               </div>
             )}
@@ -219,37 +253,60 @@ export function CodeSessionsClient() {
                       </div>
 
                       <div className="space-y-2">
-                        {groups[group].map((card) => (
-                          <div key={card.id}>
-                            <div className="flex items-center gap-2 mb-1 text-xs text-muted-foreground/60">
-                              <span>{timeAgo(card.createdAt ?? "")}</span>
-                            </div>
-                            <ActionCard
-                              card={card}
-                              onAction={(action, editedData) =>
-                                handleCardAction(
-                                  card.id,
-                                  action,
-                                  editedData ?? card.data,
-                                )
-                              }
+                        {groups[group].map((card) => {
+                          const data = card.data as Record<string, unknown>;
+                          const task = (data.task as string) || card.title;
+                          const branch = data.branchName as string | undefined;
+                          const statusLabel =
+                            card.status === "error"
+                              ? "Failed"
+                              : card.status === "confirmed"
+                                ? data.result
+                                  ? "Completed"
+                                  : "Running"
+                                : "Pending";
+                          const statusColor =
+                            card.status === "error"
+                              ? "text-red-400"
+                              : card.status === "confirmed" && data.result
+                                ? "text-green-400"
+                                : "text-amber-400";
+
+                          return (
+                            <Link
+                              key={card.id}
+                              href={`/code/${card.id}`}
+                              className="block border border-border rounded-lg p-4 hover:border-gold/30 hover:bg-muted/20 transition-colors group"
                             >
-                              <CardContent
-                                card={card}
-                                onDataChange={(newData) =>
-                                  updateCardData(card.id, newData)
-                                }
-                                onAction={(action, data) =>
-                                  handleCardAction(
-                                    card.id,
-                                    action,
-                                    data ?? card.data,
-                                  )
-                                }
-                              />
-                            </ActionCard>
-                          </div>
-                        ))}
+                              <div className="flex items-center justify-between">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium text-foreground truncate group-hover:text-gold transition-colors">
+                                    {task}
+                                  </p>
+                                  <div className="flex items-center gap-3 mt-1">
+                                    <span
+                                      className={cn(
+                                        "text-xs font-medium",
+                                        statusColor,
+                                      )}
+                                    >
+                                      {statusLabel}
+                                    </span>
+                                    {branch && (
+                                      <code className="text-xs text-muted-foreground/60 bg-muted/50 px-1.5 py-0.5 rounded font-mono truncate max-w-48">
+                                        {branch}
+                                      </code>
+                                    )}
+                                    <span className="text-xs text-muted-foreground/50">
+                                      {timeAgo(card.createdAt ?? "")}
+                                    </span>
+                                  </div>
+                                </div>
+                                <ArrowRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-gold/60 transition-colors shrink-0 ml-3" />
+                              </div>
+                            </Link>
+                          );
+                        })}
                       </div>
                     </div>
                   );

@@ -1,4 +1,4 @@
-export type ChatSurface = "main" | "triage" | "panel" | "vault";
+export type ChatSurface = "main" | "triage" | "panel" | "vault" | "code";
 
 export interface TriageItemContext {
   connector: string;
