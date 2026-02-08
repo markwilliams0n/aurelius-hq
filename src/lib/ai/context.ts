@@ -61,6 +61,15 @@ You can help the user with this item using your available tools — send Slack m
       return `The user is chatting via the quick-access panel. Page context: ${context.pageContext}`;
     }
 
+    case "vault":
+      return `You are currently helping the user manage their personal vault — a filing system for important documents, facts, credentials, and references.
+
+Your tools here are save_to_vault and search_vault.
+- When the user provides content to save, use save_to_vault immediately
+- When the user asks about saved items, use search_vault
+- NEVER print sensitive values (SSN, passport numbers, etc.) in your response text — they appear in action cards only
+- Suggest organization (tags, titles) when saving items`;
+
     default:
       return null;
   }

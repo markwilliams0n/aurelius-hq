@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { AppShell } from "@/components/aurelius/app-shell";
+import { ActionCard } from "@/components/aurelius/action-card";
+import { CardContent } from "@/components/aurelius/cards/card-content";
+import { useChat } from "@/hooks/use-chat";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -44,18 +47,6 @@ interface VaultItem {
   supermemorySummary: string | null;
   createdAt: string;
   updatedAt: string;
-}
-
-interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-}
-
-interface ActionCard {
-  id: string;
-  type: "save_confirmation" | "sm_level_select" | "sm_preview";
-  title: string;
-  data: Record<string, unknown>;
 }
 
 // ============================================================
@@ -424,133 +415,10 @@ function VaultItemCard({
 }
 
 // ============================================================
-// VaultSaveCard — Action card for save confirmation from AI chat
-// ============================================================
-
-function VaultSaveCard({
-  card,
-  onDismiss,
-  onItemSaved,
-}: {
-  card: ActionCard;
-  onDismiss: () => void;
-  onItemSaved: (item: VaultItem) => void;
-}) {
-  const data = card.data as {
-    content: string;
-    title: string;
-    type: string;
-    sensitive: boolean;
-    tags: string[];
-    actionCard?: { id: string };
-  };
-
-  const [title, setTitle] = useState(data.title || "");
-  const [tags, setTags] = useState((data.tags || []).join(", "));
-  const [isSaving, setIsSaving] = useState(false);
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    try {
-      const res = await fetch("/api/vault/items", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          content: data.content,
-          title,
-          type: data.type,
-          sensitive: data.sensitive,
-          tags: tags
-            .split(",")
-            .map((t) => t.trim())
-            .filter(Boolean),
-        }),
-      });
-      if (!res.ok) throw new Error("Save failed");
-      const { item } = await res.json();
-      onItemSaved(item);
-      onDismiss();
-      toast.success("Saved to vault");
-    } catch {
-      toast.error("Failed to save to vault");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  return (
-    <div className="border border-gold/30 bg-gold/5 rounded-lg p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-gold">Save to Vault</h3>
-        <button
-          onClick={onDismiss}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-
-      <div className="space-y-2">
-        <div>
-          <label className="text-xs text-muted-foreground">Title</label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full mt-1 px-3 py-1.5 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-gold/50 focus:border-gold/50"
-          />
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground">Tags</label>
-          <input
-            type="text"
-            value={tags}
-            onChange={(e) => setTags(e.target.value)}
-            className="w-full mt-1 px-3 py-1.5 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-gold/50 focus:border-gold/50"
-          />
-        </div>
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span>Type: {data.type}</span>
-          {data.sensitive && (
-            <span className="text-amber-400 flex items-center gap-1">
-              <Lock className="w-3 h-3" /> Sensitive
-            </span>
-          )}
-        </div>
-        <pre className="text-xs text-muted-foreground bg-muted/50 rounded p-2 max-h-32 overflow-y-auto whitespace-pre-wrap">
-          {data.content?.length > 200
-            ? data.content.slice(0, 200) + "..."
-            : data.content}
-        </pre>
-      </div>
-
-      <div className="flex gap-2">
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-gold/20 text-gold text-xs font-medium hover:bg-gold/30 transition-colors disabled:opacity-50"
-        >
-          {isSaving ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : (
-            <Check className="w-3.5 h-3.5" />
-          )}
-          Save
-        </button>
-        <button
-          onClick={onDismiss}
-          className="px-3 py-1.5 rounded-md text-muted-foreground text-xs hover:text-foreground hover:bg-muted transition-colors"
-        >
-          Dismiss
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================
 // Main VaultClient Component
 // ============================================================
+
+const VAULT_CONVERSATION_ID = "vault";
 
 export default function VaultClient() {
   const [items, setItems] = useState<VaultItem[]>([]);
@@ -558,10 +426,7 @@ export default function VaultClient() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [chatInput, setChatInput] = useState("");
-  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
-  const [actionCards, setActionCards] = useState<ActionCard[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSending, setIsSending] = useState(false);
+  const [isItemsLoading, setIsItemsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -570,11 +435,44 @@ export default function VaultClient() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Refresh items list when the AI saves/searches vault items
+  const refreshItems = useCallback(() => {
+    fetchItemsFn();
+    fetchTagsFn();
+  }, []);
+
+  const refreshItemsRef = useRef(refreshItems);
+  refreshItemsRef.current = refreshItems;
+
+  // ----------------------------------------------------------
+  // Unified chat via useChat hook
+  // ----------------------------------------------------------
+
+  const {
+    messages,
+    isStreaming,
+    actionCards,
+    send,
+    handleCardAction,
+    updateCardData,
+  } = useChat({
+    conversationId: VAULT_CONVERSATION_ID,
+    context: {
+      surface: "vault",
+      overrides: { skipSupermemory: true },
+    },
+    loadOnMount: true,
+    onToolResult: (_toolName) => {
+      // When a vault tool completes, refresh the items list
+      refreshItemsRef.current();
+    },
+  });
+
   // ----------------------------------------------------------
   // Data fetching
   // ----------------------------------------------------------
 
-  const fetchItems = useCallback(
+  const fetchItemsFn = useCallback(
     async (query?: string, filterTags?: string[]) => {
       try {
         const params = new URLSearchParams();
@@ -592,7 +490,7 @@ export default function VaultClient() {
     []
   );
 
-  const fetchTags = useCallback(async () => {
+  const fetchTagsFn = useCallback(async () => {
     try {
       const res = await fetch("/api/vault/tags");
       if (!res.ok) throw new Error("Fetch failed");
@@ -605,8 +503,8 @@ export default function VaultClient() {
 
   // Initial load
   useEffect(() => {
-    Promise.all([fetchItems(), fetchTags()]).then(() => setIsLoading(false));
-  }, [fetchItems, fetchTags]);
+    Promise.all([fetchItemsFn(), fetchTagsFn()]).then(() => setIsItemsLoading(false));
+  }, [fetchItemsFn, fetchTagsFn]);
 
   // ----------------------------------------------------------
   // Search (debounced)
@@ -616,13 +514,13 @@ export default function VaultClient() {
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
 
     searchTimeoutRef.current = setTimeout(() => {
-      fetchItems(searchQuery || undefined, selectedTags.length ? selectedTags : undefined);
+      fetchItemsFn(searchQuery || undefined, selectedTags.length ? selectedTags : undefined);
     }, 300);
 
     return () => {
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     };
-  }, [searchQuery, selectedTags, fetchItems]);
+  }, [searchQuery, selectedTags, fetchItemsFn]);
 
   // ----------------------------------------------------------
   // Tag filter
@@ -642,63 +540,11 @@ export default function VaultClient() {
   // AI chat
   // ----------------------------------------------------------
 
-  const handleChatSend = async () => {
+  const handleChatSend = () => {
     const message = chatInput.trim();
-    if (!message || isSending) return;
-
+    if (!message || isStreaming) return;
     setChatInput("");
-    setIsSending(true);
-
-    const newHistory: ChatMessage[] = [
-      ...chatHistory,
-      { role: "user", content: message },
-    ];
-    setChatHistory(newHistory);
-
-    try {
-      const res = await fetch("/api/vault/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message,
-          history: chatHistory.slice(-10),
-        }),
-      });
-
-      if (!res.ok) throw new Error("Chat failed");
-      const data = await res.json();
-
-      setChatHistory([
-        ...newHistory,
-        { role: "assistant", content: data.response },
-      ]);
-
-      // Handle action cards from AI response
-      if (data.action === "save_to_vault" && data.actionData) {
-        const cardData = data.actionData as Record<string, unknown>;
-        setActionCards((prev) => [
-          ...prev,
-          {
-            id: (cardData.actionCard as { id?: string })?.id || crypto.randomUUID(),
-            type: "save_confirmation",
-            title: (cardData.title as string) || "Save to vault",
-            data: cardData,
-          },
-        ]);
-      }
-
-      if (data.action === "search_vault" && data.actionData) {
-        const queryStr = (data.actionData as { query?: string }).query;
-        if (queryStr) {
-          setSearchQuery(queryStr);
-        }
-      }
-    } catch {
-      toast.error("Failed to send message");
-      setChatHistory(newHistory); // keep user message, remove pending
-    } finally {
-      setIsSending(false);
-    }
+    send(message);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -729,7 +575,7 @@ export default function VaultClient() {
       // Add to items list at top
       setItems((prev) => [data.item, ...prev]);
       // Refresh tags
-      fetchTags();
+      fetchTagsFn();
       toast.success(`Uploaded: ${data.item.title}`);
     } catch {
       toast.error("Failed to upload file");
@@ -770,18 +616,15 @@ export default function VaultClient() {
     setItems((prev) =>
       prev.map((item) => (item.id === updated.id ? updated : item))
     );
-    // Refresh tags in case they changed
-    fetchTags();
-  };
-
-  const handleItemSavedFromCard = (newItem: VaultItem) => {
-    setItems((prev) => [newItem, ...prev]);
-    fetchTags();
+    fetchTagsFn();
   };
 
   // ----------------------------------------------------------
   // Render
   // ----------------------------------------------------------
+
+  // Get recent messages for the chat history display
+  const recentMessages = messages.slice(-6);
 
   return (
     <AppShell>
@@ -820,10 +663,10 @@ export default function VaultClient() {
               <div className="flex flex-col gap-2">
                 <button
                   onClick={handleChatSend}
-                  disabled={isSending || !chatInput.trim()}
+                  disabled={isStreaming || !chatInput.trim()}
                   className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-md bg-gold/20 text-gold text-sm font-medium hover:bg-gold/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isSending ? (
+                  {isStreaming ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <Send className="w-4 h-4" />
@@ -858,43 +701,47 @@ export default function VaultClient() {
             </div>
           </div>
 
-          {/* Chat history (last few messages) */}
-          {chatHistory.length > 0 && (
+          {/* Chat history (last few messages + action cards) */}
+          {recentMessages.length > 0 && (
             <div className="space-y-2">
-              {chatHistory.slice(-4).map((msg, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    "text-sm rounded-lg px-3 py-2",
-                    msg.role === "user"
-                      ? "bg-muted/50 text-foreground ml-8"
-                      : "bg-card border border-border/50 text-foreground mr-8"
-                  )}
-                >
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wide block mb-0.5">
-                    {msg.role === "user" ? "You" : "Vault AI"}
-                  </span>
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Action Cards */}
-          {actionCards.length > 0 && (
-            <div className="space-y-3">
-              {actionCards.map((card) => (
-                <VaultSaveCard
-                  key={card.id}
-                  card={card}
-                  onDismiss={() =>
-                    setActionCards((prev) =>
-                      prev.filter((c) => c.id !== card.id)
-                    )
-                  }
-                  onItemSaved={handleItemSavedFromCard}
-                />
-              ))}
+              {recentMessages.map((msg) => {
+                const cards = actionCards.get(msg.id);
+                return (
+                  <div key={msg.id}>
+                    <div
+                      className={cn(
+                        "text-sm rounded-lg px-3 py-2",
+                        msg.role === "user"
+                          ? "bg-muted/50 text-foreground ml-8"
+                          : "bg-card border border-border/50 text-foreground mr-8"
+                      )}
+                    >
+                      <span className="text-[10px] text-muted-foreground uppercase tracking-wide block mb-0.5">
+                        {msg.role === "user" ? "You" : "Vault AI"}
+                      </span>
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    </div>
+                    {cards?.map((card) => (
+                      <div key={card.id} className="mt-2">
+                        <ActionCard
+                          card={card}
+                          onAction={(action, editedData) =>
+                            handleCardAction(card.id, action, editedData ?? card.data)
+                          }
+                        >
+                          <CardContent
+                            card={card}
+                            onDataChange={(newData) => updateCardData(card.id, newData)}
+                            onAction={(action, data) =>
+                              handleCardAction(card.id, action, data ?? card.data)
+                            }
+                          />
+                        </ActionCard>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -953,7 +800,7 @@ export default function VaultClient() {
           </div>
 
           {/* Items list */}
-          {isLoading ? (
+          {isItemsLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
               <span className="ml-2 text-sm text-muted-foreground">
