@@ -1,6 +1,7 @@
 import { appendToDailyNote } from './daily-notes';
 import { emitMemoryEvent } from './events';
 import { addMemory } from './supermemory';
+import type { ChatContext } from '@/lib/types/chat-context';
 
 /**
  * Extract and save noteworthy information from a conversation turn.
@@ -8,27 +9,30 @@ import { addMemory } from './supermemory';
  */
 export async function extractAndSaveMemories(
   userMessage: string,
-  assistantResponse: string
+  assistantResponse: string,
+  context?: ChatContext
 ): Promise<void> {
   const startTime = Date.now();
   const entry = formatConversationEntry(userMessage, assistantResponse);
 
   await appendToDailyNote(entry);
 
-  // Send to Supermemory for long-term memory (fire-and-forget)
-  addMemory(
-    `User: ${userMessage}\nAssistant: ${assistantResponse}`,
-    { source: "chat" }
-  ).catch((error) => {
-    console.error('[Extraction] Supermemory add failed:', error);
-    emitMemoryEvent({
-      eventType: 'save',
-      trigger: 'chat',
-      summary: `Supermemory save failed: ${error instanceof Error ? error.message : String(error)}`,
-      payload: { error: String(error), content: userMessage.slice(0, 200) },
-      metadata: { status: 'error', method: 'supermemory' },
-    }).catch(() => {});
-  });
+  // Send to Supermemory for long-term memory (fire-and-forget) unless overridden
+  if (!context?.overrides?.skipSupermemory) {
+    addMemory(
+      `User: ${userMessage}\nAssistant: ${assistantResponse}`,
+      { source: "chat" }
+    ).catch((error) => {
+      console.error('[Extraction] Supermemory add failed:', error);
+      emitMemoryEvent({
+        eventType: 'save',
+        trigger: 'chat',
+        summary: `Supermemory save failed: ${error instanceof Error ? error.message : String(error)}`,
+        payload: { error: String(error), content: userMessage.slice(0, 200) },
+        metadata: { status: 'error', method: 'supermemory' },
+      }).catch(() => {});
+    });
+  }
 
   emitMemoryEvent({
     eventType: 'extract',

@@ -351,10 +351,7 @@ function sanitizeHeader(value: string): string {
   return value.replace(/[\r\n\0]/g, '');
 }
 
-/**
- * Create a draft reply
- */
-export async function createDraft(options: {
+interface EmailOptions {
   threadId: string;
   to: string;
   subject: string;
@@ -362,9 +359,10 @@ export async function createDraft(options: {
   inReplyTo?: string;
   cc?: string;
   bcc?: string;
-}): Promise<string> {
-  const gmail = await getGmailClient();
+}
 
+/** Build an RFC 2822 message and return it as a base64url-encoded string */
+function buildRawMessage(options: EmailOptions): string {
   const headers = [
     `To: ${sanitizeHeader(options.to)}`,
     options.cc ? `Cc: ${sanitizeHeader(options.cc)}` : '',
@@ -376,14 +374,21 @@ export async function createDraft(options: {
   ].filter(Boolean).join('\r\n');
 
   const message = headers + '\r\n\r\n' + options.body;
-  const encodedMessage = Buffer.from(message).toString('base64url');
+  return Buffer.from(message).toString('base64url');
+}
+
+/**
+ * Create a draft reply
+ */
+export async function createDraft(options: EmailOptions): Promise<string> {
+  const gmail = await getGmailClient();
 
   const response = await gmail.users.drafts.create({
     userId: 'me',
     requestBody: {
       message: {
         threadId: options.threadId,
-        raw: encodedMessage,
+        raw: buildRawMessage(options),
       },
     },
   });
@@ -394,39 +399,18 @@ export async function createDraft(options: {
 /**
  * Send email (only if GMAIL_ENABLE_SEND=true)
  */
-export async function sendEmail(options: {
-  threadId: string;
-  to: string;
-  subject: string;
-  body: string;
-  inReplyTo?: string;
-  cc?: string;
-  bcc?: string;
-}): Promise<string> {
+export async function sendEmail(options: EmailOptions): Promise<string> {
   if (process.env.GMAIL_ENABLE_SEND !== 'true') {
     throw new Error('GMAIL_ENABLE_SEND is not enabled. Use createDraft() instead.');
   }
 
   const gmail = await getGmailClient();
 
-  const headers = [
-    `To: ${sanitizeHeader(options.to)}`,
-    options.cc ? `Cc: ${sanitizeHeader(options.cc)}` : '',
-    options.bcc ? `Bcc: ${sanitizeHeader(options.bcc)}` : '',
-    `Subject: ${sanitizeHeader(options.subject)}`,
-    options.inReplyTo ? `In-Reply-To: ${sanitizeHeader(options.inReplyTo)}` : '',
-    options.inReplyTo ? `References: ${sanitizeHeader(options.inReplyTo)}` : '',
-    'Content-Type: text/plain; charset=utf-8',
-  ].filter(Boolean).join('\r\n');
-
-  const message = headers + '\r\n\r\n' + options.body;
-  const encodedMessage = Buffer.from(message).toString('base64url');
-
   const response = await gmail.users.messages.send({
     userId: 'me',
     requestBody: {
       threadId: options.threadId,
-      raw: encodedMessage,
+      raw: buildRawMessage(options),
     },
   });
 
@@ -447,6 +431,53 @@ export async function getThread(threadId: string): Promise<ParsedEmail[]> {
 
   const messages = response.data.messages || [];
   return messages.map(msg => parseMessage(msg as GmailMessage));
+}
+
+// Module-level label cache (labels rarely change)
+const labelCache: Map<string, string> = new Map();
+const LABEL_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+let labelCacheTime = 0;
+
+/**
+ * Add a label to a Gmail message by label name.
+ * Looks up the label ID from a cached list, then applies it.
+ * Auto-creates the label if it doesn't exist.
+ */
+export async function addLabel(messageId: string, labelName: string): Promise<void> {
+  const gmail = await getGmailClient();
+
+  let labelId = labelCache.get(labelName);
+
+  // Refresh cache if stale or miss
+  if (!labelId || Date.now() - labelCacheTime > LABEL_CACHE_TTL) {
+    const labels = await gmail.users.labels.list({ userId: 'me' });
+    labelCache.clear();
+    labelCacheTime = Date.now();
+    for (const l of labels.data.labels || []) {
+      if (l.name && l.id) labelCache.set(l.name, l.id);
+    }
+    labelId = labelCache.get(labelName);
+  }
+
+  // Auto-create the label if it doesn't exist
+  if (!labelId) {
+    const created = await gmail.users.labels.create({
+      userId: 'me',
+      requestBody: {
+        name: labelName,
+        labelListVisibility: 'labelShow',
+        messageListVisibility: 'show',
+      },
+    });
+    labelId = created.data.id!;
+    labelCache.set(labelName, labelId);
+  }
+
+  await gmail.users.messages.modify({
+    userId: 'me',
+    id: messageId,
+    requestBody: { addLabelIds: [labelId] },
+  });
 }
 
 /**

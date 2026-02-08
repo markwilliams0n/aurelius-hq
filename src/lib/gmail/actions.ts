@@ -7,26 +7,34 @@
 import {
   archiveEmail,
   markAsSpam,
+  addLabel,
   createDraft,
   sendEmail,
 } from './client';
 import { findInboxItem } from './queries';
 
 /**
- * Archive in Gmail when archived in triage
+ * Resolve a triage item to its Gmail messageId.
+ * Returns null if the item is not found, not a Gmail item, or has no messageId.
  */
-export async function syncArchiveToGmail(itemId: string): Promise<void> {
+async function resolveGmailMessageId(itemId: string): Promise<string | null> {
   const item = await findInboxItem(itemId);
-
-  if (!item || item.connector !== 'gmail') {
-    return;
-  }
+  if (!item || item.connector !== 'gmail') return null;
 
   const messageId = (item.rawPayload as Record<string, unknown>)?.messageId as string | undefined;
   if (!messageId) {
     console.warn(`[Gmail] No messageId found for item ${itemId}`);
-    return;
+    return null;
   }
+  return messageId;
+}
+
+/**
+ * Archive in Gmail when archived in triage
+ */
+export async function syncArchiveToGmail(itemId: string): Promise<void> {
+  const messageId = await resolveGmailMessageId(itemId);
+  if (!messageId) return;
 
   try {
     await archiveEmail(messageId);
@@ -41,17 +49,8 @@ export async function syncArchiveToGmail(itemId: string): Promise<void> {
  * Mark as spam in Gmail
  */
 export async function syncSpamToGmail(itemId: string): Promise<void> {
-  const item = await findInboxItem(itemId);
-
-  if (!item || item.connector !== 'gmail') {
-    return;
-  }
-
-  const messageId = (item.rawPayload as Record<string, unknown>)?.messageId as string | undefined;
-  if (!messageId) {
-    console.warn(`[Gmail] No messageId found for item ${itemId}`);
-    return;
-  }
+  const messageId = await resolveGmailMessageId(itemId);
+  if (!messageId) return;
 
   try {
     await markAsSpam(messageId);
@@ -119,6 +118,22 @@ export async function replyToEmail(
       bcc,
     });
     return { messageId: sentMessageId, wasDraft: false };
+  }
+}
+
+/**
+ * Apply "Action Needed" label in Gmail for an inbox item
+ */
+export async function markActionNeeded(itemId: string): Promise<void> {
+  const messageId = await resolveGmailMessageId(itemId);
+  if (!messageId) return;
+
+  try {
+    await addLabel(messageId, 'Action Needed');
+    console.log(`[Gmail] Applied "Action Needed" label to message ${messageId}`);
+  } catch (error) {
+    console.error(`[Gmail] Failed to apply "Action Needed" label:`, error);
+    throw error;
   }
 }
 

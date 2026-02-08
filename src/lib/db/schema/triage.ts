@@ -87,6 +87,12 @@ export const inboxItems = pgTable(
         assignee?: string;
         dueDate?: string;
       }>;
+      // Action needed tracking
+      actionNeededDate?: string;
+      // Gmail-specific sender tags
+      senderTags?: string[];
+      isSuspicious?: boolean;
+      phishingIndicators?: string[];
       // Recipients (Gmail-specific)
       recipients?: {
         to: Array<{ email: string; name?: string }>;

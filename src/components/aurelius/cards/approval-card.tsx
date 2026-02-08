@@ -2,6 +2,8 @@
 
 import type { ActionCardData } from "@/lib/types/action-card";
 import { SlackMessageCardContent } from "./slack-message-card";
+import { GmailCardContent } from "./gmail-card";
+import { LinearCardContent } from "./linear-card";
 
 interface ApprovalCardContentProps {
   card: ActionCardData;
@@ -18,6 +20,14 @@ export function ApprovalCardContent({ card, onDataChange, onAction }: ApprovalCa
   // Handler-specific renderers
   if (card.handler?.startsWith("slack:")) {
     return <SlackMessageCardContent card={card} onDataChange={onDataChange} onAction={onAction} />;
+  }
+
+  if (card.handler?.startsWith("gmail:")) {
+    return <GmailCardContent card={card} onDataChange={onDataChange} onAction={onAction} />;
+  }
+
+  if (card.handler?.startsWith("linear:")) {
+    return <LinearCardContent card={card} onDataChange={onDataChange} onAction={onAction} />;
   }
 
   // Generic approval: show message/content field + any metadata

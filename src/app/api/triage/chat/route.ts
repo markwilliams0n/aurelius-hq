@@ -10,8 +10,12 @@ import { canSendAsUser } from "@/lib/slack/actions";
 import { createCard, generateCardId } from "@/lib/action-cards/db";
 
 /**
- * Triage chat uses the same context building as main chat,
- * with additional triage-specific context and actions.
+ * Legacy triage chat endpoint — used ONLY by task-creator-panel for
+ * one-shot task modification chat. The main triage chat modal now uses
+ * the unified /api/chat with context.surface="triage".
+ *
+ * TODO: Migrate task-creator-panel to use /api/chat or a dedicated
+ * task-extraction endpoint, then delete this route.
  */
 
 const TRIAGE_CONTEXT = `

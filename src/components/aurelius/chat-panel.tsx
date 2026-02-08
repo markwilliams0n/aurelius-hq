@@ -1,16 +1,15 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useRef, useEffect } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChatMessage } from "./chat-message";
 import { ChatInput } from "./chat-input";
-import { toast } from "sonner";
+import { ActionCard } from "./action-card";
+import { CardContent } from "./cards/card-content";
+import { useChat } from "@/hooks/use-chat";
 
-type Message = {
-  role: "user" | "assistant";
-  content: string;
-};
+const SHARED_CONVERSATION_ID = "00000000-0000-0000-0000-000000000000";
 
 export function ChatPanel({
   isOpen,
@@ -21,9 +20,22 @@ export function ChatPanel({
   onClose: () => void;
   context?: string; // Optional context from current page
 }) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  const {
+    messages,
+    isStreaming,
+    isLoading,
+    actionCards,
+    send,
+    handleCardAction,
+    updateCardData,
+  } = useChat({
+    conversationId: SHARED_CONVERSATION_ID,
+    context: {
+      surface: "panel",
+      pageContext: context,
+    },
+  });
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -63,83 +75,6 @@ export function ChatPanel({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen, onClose]);
 
-  const handleSend = async (content: string) => {
-    if (!content.trim() || isStreaming) return;
-
-    // Prepend context if provided and this is the first message
-    let messageContent = content;
-    if (context && messages.length === 0) {
-      messageContent = `[Context: ${context}]\n\n${content}`;
-    }
-
-    // Add user message
-    const userMessage: Message = { role: "user", content };
-    setMessages((prev) => [...prev, userMessage]);
-    setIsStreaming(true);
-
-    // Add placeholder for assistant
-    setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
-
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: messageContent,
-          conversationId,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Chat request failed");
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("No response body");
-
-      const decoder = new TextDecoder();
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n");
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-
-              if (data.type === "text") {
-                setMessages((prev) => {
-                  const newMessages = [...prev];
-                  const lastMessage = newMessages[newMessages.length - 1];
-                  if (lastMessage.role === "assistant") {
-                    lastMessage.content += data.content;
-                  }
-                  return newMessages;
-                });
-              } else if (data.type === "conversation") {
-                setConversationId(data.id);
-              } else if (data.type === "error") {
-                toast.error(data.message);
-              }
-            } catch {
-              // Skip invalid JSON
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Chat error:", error);
-      toast.error("Failed to send message");
-      setMessages((prev) => prev.slice(0, -1));
-    } finally {
-      setIsStreaming(false);
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -162,21 +97,52 @@ export function ChatPanel({
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.length === 0 ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full text-muted-foreground">
+              <p>Loading...</p>
+            </div>
+          ) : messages.length === 0 ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               <p>Ask anything...</p>
             </div>
           ) : (
-            messages.map((message, index) => (
-              <ChatMessage key={index} message={message} />
-            ))
+            messages.map((message, index) => {
+              const cards = actionCards.get(message.id);
+              const isLast = index === messages.length - 1;
+              return (
+                <div key={message.id || index}>
+                  <ChatMessage
+                    message={message}
+                    isStreaming={isStreaming && isLast && message.role === "assistant"}
+                  />
+                  {cards?.map((card) => (
+                    <div key={card.id} className="ml-11 mt-2">
+                      <ActionCard
+                        card={card}
+                        onAction={(action, editedData) =>
+                          handleCardAction(card.id, action, editedData ?? card.data)
+                        }
+                      >
+                        <CardContent
+                          card={card}
+                          onDataChange={(newData) => updateCardData(card.id, newData)}
+                          onAction={(action, data) =>
+                            handleCardAction(card.id, action, data ?? card.data)
+                          }
+                        />
+                      </ActionCard>
+                    </div>
+                  ))}
+                </div>
+              );
+            })
           )}
           <div ref={messagesEndRef} />
         </div>
 
         {/* Input */}
         <div className="p-4 border-t border-border">
-          <ChatInput onSend={handleSend} disabled={isStreaming} />
+          <ChatInput onSend={send} disabled={isStreaming} />
         </div>
       </div>
     </>

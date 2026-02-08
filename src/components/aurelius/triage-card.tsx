@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 // Types matching the schema
 export type TriageItem = {
   id: string;
+  dbId?: string; // Original DB UUID (id gets remapped to externalId in triage-client)
   externalId: string;
   connector: "gmail" | "slack" | "linear" | "granola" | "manual";
   sender: string;
@@ -60,6 +61,8 @@ export type TriageItem = {
     threadId?: string;
     messageCount?: number;
     attachments?: Array<{ filename: string; mimeType: string; size: number }>;
+    // Action needed tracking
+    actionNeededDate?: string;
     // Recipients
     recipients?: {
       to: Array<{ email: string; name?: string }>;
@@ -76,7 +79,7 @@ interface TriageCardProps {
 }
 
 // Priority badge colors and icons
-const PRIORITY_CONFIG = {
+export const PRIORITY_CONFIG = {
   urgent: {
     icon: Zap,
     label: "Urgent",
@@ -100,7 +103,7 @@ const PRIORITY_CONFIG = {
 };
 
 // Connector icons and colors
-const CONNECTOR_CONFIG = {
+export const CONNECTOR_CONFIG = {
   gmail: { icon: Mail, label: "Gmail", color: "text-red-400", bgColor: "bg-red-500/20", borderColor: "border-red-500/30" },
   slack: { icon: MessageSquare, label: "Slack", color: "text-purple-400", bgColor: "bg-purple-500/20", borderColor: "border-purple-500/30" },
   linear: { icon: LayoutList, label: "Linear", color: "text-indigo-400", bgColor: "bg-indigo-500/20", borderColor: "border-indigo-500/30" },
@@ -244,6 +247,14 @@ export const TriageCard = forwardRef<HTMLDivElement, TriageCardProps>(
             </div>
           )}
 
+          {/* Action needed badge */}
+          {item.enrichment?.actionNeededDate && (
+            <div className="flex items-center gap-1 text-xs text-amber-400 mb-2">
+              <Clock className="w-3 h-3" />
+              Marked for action on {new Date(item.enrichment.actionNeededDate).toLocaleDateString()}
+            </div>
+          )}
+
           {/* User tags */}
           {item.tags.length > 0 && (
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -347,6 +358,9 @@ export const TriageCard = forwardRef<HTMLDivElement, TriageCardProps>(
               <KeyHint keyName="↑" label="Summary" />
               <KeyHint keyName="s" label="Snooze" />
               {item.connector === "gmail" && (
+                <KeyHint keyName="a" label="Action" />
+              )}
+              {item.connector === "gmail" && (
                 <KeyHint keyName="x" label="Spam" />
               )}
               <KeyHint keyName="␣" label="Chat" />
@@ -378,7 +392,7 @@ function KeyHint({ keyName, label }: { keyName: string; label: string }) {
 }
 
 // Format time ago
-function formatTimeAgo(date: Date): string {
+export function formatTimeAgo(date: Date): string {
   const now = new Date();
   const diff = now.getTime() - date.getTime();
   const minutes = Math.floor(diff / 60000);

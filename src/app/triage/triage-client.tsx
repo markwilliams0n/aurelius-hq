@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Dispatch, SetStateAction } from "react";
 import { AppShell } from "@/components/aurelius/app-shell";
 import { TriageCard, TriageItem } from "@/components/aurelius/triage-card";
+import { TriageListView } from "@/components/aurelius/triage-list-view";
 import { TriageActionMenu } from "@/components/aurelius/triage-action-menu";
 import { TriageReplyComposer } from "@/components/aurelius/triage-reply-composer";
 import { TriageSidebar } from "@/components/aurelius/triage-sidebar";
@@ -11,6 +12,9 @@ import { TriageChat } from "@/components/aurelius/triage-chat";
 import { SuggestedTasksBox } from "@/components/aurelius/suggested-tasks-box";
 import { TriageSnoozeMenu } from "@/components/aurelius/triage-snooze-menu";
 import { TaskCreatorPanel } from "@/components/aurelius/task-creator-panel";
+import { ActionCard } from "@/components/aurelius/action-card";
+import { CardContent } from "@/components/aurelius/cards/card-content";
+import type { ActionCardData } from "@/lib/types/action-card";
 import { toast } from "sonner";
 import {
   MessageSquare,
@@ -20,11 +24,14 @@ import {
   Filter,
   CalendarDays,
   RefreshCw,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type ViewMode = "triage" | "action" | "reply" | "detail" | "chat" | "snooze" | "create-task";
+type ViewMode = "triage" | "action" | "reply" | "detail" | "chat" | "snooze" | "create-task" | "quick-task";
 type ConnectorFilter = "all" | "gmail" | "slack" | "linear" | "granola";
+type TriageView = "card" | "list";
 
 // Define which actions are available for each connector
 const CONNECTOR_ACTIONS: Record<string, {
@@ -77,7 +84,18 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
   const [animatingOut, setAnimatingOut] = useState<"left" | "right" | "up" | null>(null);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [triageView, setTriageView] = useState<TriageView>("card");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [returnToList, setReturnToList] = useState(false);
+  const [quickTaskCard, setQuickTaskCard] = useState<ActionCardData | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  const lastActionRef = useRef<{ type: string; itemId: string; item: TriageItem } | null>(null);
+  const bulkUndoRef = useRef<TriageItem[]>([]);
+
+  // Keep ref in sync with state (state for re-renders, ref for closures)
+  useEffect(() => {
+    lastActionRef.current = lastAction;
+  }, [lastAction]);
 
   const sidebarWidth = isSidebarExpanded ? 480 : 320;
 
@@ -104,6 +122,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
       const data = await response.json();
       const mappedItems = data.items.map((item: any) => ({
         ...item,
+        dbId: item.id,
         id: item.externalId || item.id,
       }));
 
@@ -258,6 +277,45 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     setViewMode("snooze");
   }, [currentItem]);
 
+  // Action Needed (a) - 3-day snooze + Gmail label, swipe animation + optimistic
+  const handleActionNeeded = useCallback((targetItem?: TriageItem) => {
+    const itemToAction = targetItem || currentItem;
+    if (!itemToAction) return;
+
+    if (itemToAction.connector !== "gmail") {
+      toast.info("Action Needed is only available for Gmail items");
+      return;
+    }
+
+    setAnimatingOut("right");
+    setLastAction({ type: "action-needed", itemId: itemToAction.id, item: itemToAction });
+
+    // Fire API calls in background immediately
+    fetch(`/api/triage/${itemToAction.id}/tasks`, { method: "DELETE" }).catch(() => {});
+    fetch(`/api/triage/${itemToAction.id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "action-needed" }),
+    }).catch((error) => {
+      console.error("Failed to mark action needed:", error);
+      toast.error("Failed to mark for action - item restored");
+      setItems((prev) => [itemToAction, ...prev]);
+    });
+
+    // Remove from list after brief animation
+    setTimeout(() => {
+      setItems((prev) => prev.filter((i) => i.id !== itemToAction.id));
+      setAnimatingOut(null);
+    }, 150);
+
+    toast.success("Marked for action (3 days)", {
+      action: {
+        label: "Undo",
+        onClick: () => handleUndo(),
+      },
+    });
+  }, [currentItem]);
+
   // Spam action (x) - swipe animation + optimistic
   const handleSpam = useCallback(() => {
     if (!currentItem) return;
@@ -368,27 +426,52 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
 
   // Undo last action - instant, brings item back on screen
   const handleUndo = useCallback(() => {
-    if (!lastAction) return;
+    const action = lastActionRef.current;
+    if (!action) return;
 
-    const itemToRestore = lastAction.item;
+    if (action.type === "bulk-archive") {
+      const itemsToRestore = bulkUndoRef.current;
+      setItems((prev) => [...itemsToRestore, ...prev]);
+      setCurrentIndex(0);
 
-    // Immediately add item back to front and reset index to show it
-    setItems((prev) => [itemToRestore, ...prev]);
-    setCurrentIndex(0);
+      // Restore all via API
+      itemsToRestore.forEach((item) => {
+        fetch(`/api/triage/${item.id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "restore" }),
+        }).catch(console.error);
+      });
+
+      bulkUndoRef.current = [];
+    } else {
+      let itemToRestore = action.item;
+
+      // If undoing action-needed, clear the actionNeededDate from enrichment
+      if (action.type === "action-needed" && itemToRestore.enrichment) {
+        const { actionNeededDate, ...restEnrichment } = itemToRestore.enrichment as Record<string, unknown>;
+        itemToRestore = { ...itemToRestore, enrichment: restEnrichment };
+      }
+
+      // Immediately add item back to front and reset index to show it
+      setItems((prev) => [itemToRestore, ...prev]);
+      setCurrentIndex(0);
+
+      // Fire restore API in background, pass previousAction so server can clean up enrichment
+      fetch(`/api/triage/${action.itemId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "restore", previousAction: action.type }),
+      }).catch((error) => {
+        console.error("Failed to restore:", error);
+        toast.error("Failed to restore on server");
+      });
+    }
+
     setLastAction(null);
-
-    // Fire restore API in background
-    fetch(`/api/triage/${lastAction.itemId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "restore" }),
-    }).catch((error) => {
-      console.error("Failed to restore:", error);
-      toast.error("Failed to restore on server");
-    });
-
+    lastActionRef.current = null;
     toast.success("Restored");
-  }, [lastAction]);
+  }, []);
 
   // Sync all connectors (fire-and-forget, poll for completion)
   const handleSync = useCallback(async () => {
@@ -420,6 +503,73 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     await fetchItems({ skipCache: true });
   }, [isSyncing, fetchItems]);
 
+  // Bulk archive selected items (list view)
+  const handleBulkArchive = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+
+    const idsToArchive = Array.from(selectedIds);
+    const itemsToArchive = items.filter((i) => selectedIds.has(i.id));
+    const count = idsToArchive.length;
+
+    // Store for undo
+    setLastAction({ type: "bulk-archive", itemId: idsToArchive[0], item: itemsToArchive[0] });
+    bulkUndoRef.current = itemsToArchive;
+
+    // Optimistically remove items
+    setItems((prev) => prev.filter((i) => !selectedIds.has(i.id)));
+    setSelectedIds(new Set());
+
+    // Fire archive API calls (fire-and-forget)
+    idsToArchive.forEach((id) => {
+      fetch(`/api/triage/${id}/tasks`, { method: "DELETE" }).catch(() => {});
+      fetch(`/api/triage/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "archive" }),
+      }).catch(console.error);
+    });
+
+    toast.success(`Archived ${count} item${count === 1 ? "" : "s"}`, {
+      action: {
+        label: "Undo",
+        onClick: () => handleUndo(),
+      },
+    });
+  }, [selectedIds, items, handleUndo]);
+
+  // List view: toggle select
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  // List view: select all filtered items
+  const handleSelectAll = useCallback(() => {
+    setSelectedIds(new Set(filteredItems.map((i) => i.id)));
+  }, [filteredItems]);
+
+  // List view: clear selection
+  const handleClearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  // List view: open an item (switch to card view for that item)
+  const handleOpenListItem = useCallback((id: string) => {
+    const index = filteredItems.findIndex((i) => i.id === id);
+    if (index >= 0) {
+      setCurrentIndex(index);
+      setReturnToList(true);
+      setTriageView("card");
+    }
+  }, [filteredItems]);
+
   // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -434,7 +584,20 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
       // Handle escape
       if (e.key === "Escape") {
         if (viewMode !== "triage") {
+          // If returning to list from card detail view
+          if (returnToList) {
+            setReturnToList(false);
+            setTriageView("list");
+            setViewMode("triage");
+            return;
+          }
           handleCloseOverlay();
+          return;
+        }
+        // In base triage mode with card view opened from list
+        if (returnToList && triageView === "card") {
+          setReturnToList(false);
+          setTriageView("list");
           return;
         }
       }
@@ -461,8 +624,17 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
         return;
       }
 
-      // Only handle arrows in triage mode
-      if (viewMode !== "triage") return;
+      // Toggle view with 'v' (works in base triage mode, both card and list)
+      if (e.key === "v" && viewMode === "triage") {
+        e.preventDefault();
+        setTriageView((prev) => (prev === "card" ? "list" : "card"));
+        setSelectedIds(new Set());
+        setReturnToList(false);
+        return;
+      }
+
+      // Only handle card-mode arrows in triage mode
+      if (viewMode !== "triage" || triageView === "list") return;
 
       switch (e.key) {
         case "ArrowLeft":
@@ -503,7 +675,24 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           break;
         case "t":
           e.preventDefault();
-          if (currentItem) setViewMode("create-task");
+          if (currentItem) {
+            // Create a pre-filled Linear issue action card
+            fetch(`/api/triage/${currentItem.id}/quick-task`, { method: "POST" })
+              .then((res) => res.json())
+              .then((data) => {
+                if (data.card) {
+                  setQuickTaskCard(data.card);
+                  setViewMode("quick-task");
+                } else {
+                  toast.error(data.error || "Failed to create task card");
+                }
+              })
+              .catch(() => toast.error("Failed to create task card"));
+          }
+          break;
+        case "a":
+          e.preventDefault();
+          handleActionNeeded();
           break;
         case "l":
         case "L":
@@ -517,11 +706,6 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           }
           break;
         case "u":
-          if (e.metaKey || e.ctrlKey) {
-            e.preventDefault();
-            handleUndo();
-          }
-          break;
         case "z":
           if (e.metaKey || e.ctrlKey) {
             e.preventDefault();
@@ -535,6 +719,8 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     viewMode,
+    triageView,
+    returnToList,
     currentItem,
     connectorFilter,
     handleArchive,
@@ -546,6 +732,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     handleOpenChat,
     handleOpenSnooze,
     handleSpam,
+    handleActionNeeded,
     handleCloseOverlay,
     handleUndo,
   ]);
@@ -590,15 +777,45 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
                 </span>
               )}
             </div>
-            <button
-              onClick={handleSync}
-              disabled={isSyncing}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
-              title="Sync all connectors"
-            >
-              <RefreshCw className={cn("w-3.5 h-3.5", isSyncing && "animate-spin")} />
-              {isSyncing ? "Syncing..." : "Sync"}
-            </button>
+            <div className="flex items-center gap-2">
+              {/* View toggle */}
+              <div className="flex items-center rounded-lg border border-border overflow-hidden">
+                <button
+                  onClick={() => { setTriageView("card"); setSelectedIds(new Set()); setReturnToList(false); }}
+                  className={cn(
+                    "flex items-center gap-1 px-2.5 py-1.5 text-xs transition-colors",
+                    triageView === "card"
+                      ? "bg-gold/20 text-gold"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  )}
+                  title="Card view (v)"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => { setTriageView("list"); setReturnToList(false); }}
+                  className={cn(
+                    "flex items-center gap-1 px-2.5 py-1.5 text-xs transition-colors",
+                    triageView === "list"
+                      ? "bg-gold/20 text-gold"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  )}
+                  title="List view (v)"
+                >
+                  <List className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <button
+                onClick={handleSync}
+                disabled={isSyncing}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
+                title="Sync all connectors"
+              >
+                <RefreshCw className={cn("w-3.5 h-3.5", isSyncing && "animate-spin")} />
+                {isSyncing ? "Syncing..." : "Sync"}
+              </button>
+            </div>
           </div>
 
           {/* Connector filters */}
@@ -652,8 +869,22 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           </div>
         )}
 
+        {/* List view */}
+        {!isLoading && hasItems && triageView === "list" && (
+          <TriageListView
+            items={filteredItems}
+            selectedIds={selectedIds}
+            onToggleSelect={handleToggleSelect}
+            onSelectAll={handleSelectAll}
+            onClearSelection={handleClearSelection}
+            onBulkArchive={handleBulkArchive}
+            onOpenItem={handleOpenListItem}
+            onActionNeeded={handleActionNeeded}
+          />
+        )}
+
         {/* Card area */}
-        {!isLoading && hasItems && (
+        {!isLoading && hasItems && triageView === "card" && (
         <div className="flex-1 flex items-start justify-center pt-12 p-6 relative overflow-y-auto">
           {/* Card stack effect - show next cards behind */}
           {filteredItems.slice(currentIndex + 1, currentIndex + 3).map((item, idx) => (
@@ -767,6 +998,15 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           onClose={handleCloseOverlay}
         />
       )}
+
+      {/* Quick task action card overlay */}
+      {viewMode === "quick-task" && quickTaskCard && (
+        <QuickTaskOverlay
+          card={quickTaskCard}
+          onCardChange={setQuickTaskCard}
+          onClose={() => { setQuickTaskCard(null); handleCloseOverlay(); }}
+        />
+      )}
     </AppShell>
   );
 }
@@ -786,7 +1026,69 @@ function getActionMessage(action: string): string {
       return "Tag added";
     case "actioned":
       return "Marked as done";
+    case "action-needed":
+      return "Marked for action (3 days)";
     default:
       return "Action completed";
   }
+}
+
+/**
+ * Quick task overlay — extracted to avoid duplicate action dispatch.
+ * Single `handleAction` is shared by both ActionCard footer buttons
+ * and CardContent keyboard shortcuts (Cmd+Enter).
+ */
+function QuickTaskOverlay({
+  card,
+  onCardChange,
+  onClose,
+}: {
+  card: ActionCardData;
+  onCardChange: Dispatch<SetStateAction<ActionCardData | null>>;
+  onClose: () => void;
+}) {
+  const handleAction = useCallback(async (actionName: string, editedData?: Record<string, unknown>) => {
+    if (actionName === "send" || actionName === "confirm") {
+      const cardData = editedData ?? card.data;
+      try {
+        const res = await fetch(`/api/action-card/${card.id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: actionName, data: cardData }),
+        });
+        const result = await res.json();
+        if (result.status === "confirmed") {
+          toast.success(result.successMessage || "Task created!", {
+            action: result.result?.resultUrl ? {
+              label: "Open in Linear",
+              onClick: () => window.open(result.result.resultUrl, "_blank"),
+            } : undefined,
+          });
+        } else {
+          toast.error(result.result?.error || "Failed to create task");
+        }
+      } catch {
+        toast.error("Failed to create task");
+      }
+      onClose();
+    } else if (actionName === "cancel" || actionName === "dismiss") {
+      onClose();
+    }
+  }, [card.id, card.data, onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="w-full max-w-lg">
+        <ActionCard card={card} onAction={handleAction}>
+          <CardContent
+            card={card}
+            onDataChange={(newData) => {
+              onCardChange((prev) => prev ? { ...prev, data: newData } : null);
+            }}
+            onAction={handleAction}
+          />
+        </ActionCard>
+      </div>
+    </div>
+  );
 }

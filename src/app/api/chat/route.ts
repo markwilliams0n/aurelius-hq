@@ -9,6 +9,7 @@ import { conversations } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { createCard, generateCardId } from "@/lib/action-cards/db";
 import type { CardPattern } from "@/lib/types/action-card";
+import type { ChatContext } from "@/lib/types/chat-context";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -30,7 +31,11 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const { message, conversationId } = await request.json();
+  const { message, conversationId, context } = await request.json() as {
+    message: string;
+    conversationId?: string;
+    context?: ChatContext;
+  };
 
   if (!message || typeof message !== "string") {
     return new Response(JSON.stringify({ error: "Message required" }), {
@@ -60,7 +65,7 @@ export async function POST(request: NextRequest) {
   }));
 
   // Build agent context (recent notes + QMD search + soul config)
-  const { systemPrompt } = await buildAgentContext({ query: message });
+  const { systemPrompt } = await buildAgentContext({ query: message, context });
 
   // Build messages for AI
   const aiMessages: Message[] = [
@@ -168,13 +173,30 @@ export async function POST(request: NextRequest) {
         ];
 
         if (conversationId) {
-          await db
-            .update(conversations)
-            .set({
-              messages: newStoredMessages,
-              updatedAt: new Date(),
-            })
-            .where(eq(conversations.id, conversationId));
+          // Check if conversation exists (may not for first triage-{itemId} message)
+          const [existing] = await db
+            .select({ id: conversations.id })
+            .from(conversations)
+            .where(eq(conversations.id, conversationId))
+            .limit(1);
+
+          if (existing) {
+            await db
+              .update(conversations)
+              .set({
+                messages: newStoredMessages,
+                updatedAt: new Date(),
+              })
+              .where(eq(conversations.id, conversationId));
+          } else {
+            // First message in this conversation — create with the provided ID
+            await db
+              .insert(conversations)
+              .values({
+                id: conversationId,
+                messages: newStoredMessages,
+              });
+          }
         } else {
           const [newConv] = await db
             .insert(conversations)
@@ -206,7 +228,7 @@ export async function POST(request: NextRequest) {
 
         // Save to daily notes — let extraction decide what's notable
         try {
-          await extractAndSaveMemories(message, fullResponse);
+          await extractAndSaveMemories(message, fullResponse, context);
         } catch (error) {
           console.error("Failed to save to daily notes:", error);
           // Don't fail the request if memory saving fails
