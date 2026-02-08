@@ -97,6 +97,13 @@ export function createWorktree(branchName: string, sessionId: string): WorktreeI
   // Fetch latest main so we branch from the freshest commit
   gitMaybe(['fetch', 'origin', 'main'], REPO_ROOT);
 
+  // Clean up stale branch from a previous failed session (if any)
+  const branchCheck = gitMaybe(['rev-parse', '--verify', branchName], REPO_ROOT);
+  if (branchCheck.status === 0) {
+    // Branch exists but no worktree dir — leftover from a failed run
+    gitMaybe(['branch', '-D', branchName], REPO_ROOT);
+  }
+
   // Use origin/main if available, otherwise fall back to main
   const baseRef = gitMaybe(['rev-parse', '--verify', 'origin/main'], REPO_ROOT).status === 0
     ? 'origin/main'
