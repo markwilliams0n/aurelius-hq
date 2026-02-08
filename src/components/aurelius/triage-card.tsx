@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 // Types matching the schema
 export type TriageItem = {
   id: string;
+  dbId?: string; // Original DB UUID (id gets remapped to externalId in triage-client)
   externalId: string;
   connector: "gmail" | "slack" | "linear" | "granola" | "manual";
   sender: string;

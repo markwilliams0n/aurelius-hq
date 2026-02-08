@@ -12,6 +12,7 @@ import { getRecentNotes } from '@/lib/memory/daily-notes';
 import { getConfig } from '@/lib/config';
 import { emitMemoryEvent } from '@/lib/memory/events';
 import { getCapabilityPrompts } from '@/lib/capabilities';
+import type { ChatContext } from '@/lib/types/chat-context';
 
 export interface AgentContextOptions {
   /** The user's message - used for semantic search */
@@ -20,6 +21,8 @@ export interface AgentContextOptions {
   modelId?: string;
   /** Optional additional context to append to system prompt */
   additionalContext?: string;
+  /** Optional chat context for surface-specific behavior */
+  context?: ChatContext;
 }
 
 export interface AgentContext {
@@ -33,6 +36,34 @@ export interface AgentContext {
   soulConfig: string | null;
   /** Model ID being used */
   modelId: string;
+}
+
+function buildSurfaceContext(context?: ChatContext): string | null {
+  if (!context) return null;
+
+  switch (context.surface) {
+    case "triage": {
+      if (!context.triageItem) return null;
+      const item = context.triageItem;
+      return `You are currently helping the user with a specific triage item.
+
+Current triage item:
+- Type: ${item.connector}
+- From: ${item.senderName || item.sender}
+- Subject: ${item.subject}
+- Preview: ${(item.preview || item.content || "").slice(0, 500)}
+
+You can help the user with this item using your available tools — send Slack messages, create Linear tasks, save information to memory, update configuration, etc. Use the tools naturally based on what the user asks.`;
+    }
+
+    case "panel": {
+      if (!context.pageContext) return null;
+      return `The user is chatting via the quick-access panel. Page context: ${context.pageContext}`;
+    }
+
+    default:
+      return null;
+  }
 }
 
 /**
@@ -83,6 +114,12 @@ export async function buildAgentContext(
   // Append any additional context (e.g., Telegram-specific info)
   if (additionalContext) {
     systemPrompt += `\n\n${additionalContext}`;
+  }
+
+  // Append surface-specific context
+  const surfaceContext = buildSurfaceContext(options.context);
+  if (surfaceContext) {
+    systemPrompt += `\n\n${surfaceContext}`;
   }
 
   // Emit memory recall event (fire-and-forget)

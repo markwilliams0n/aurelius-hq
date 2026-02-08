@@ -122,6 +122,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
       const data = await response.json();
       const mappedItems = data.items.map((item: any) => ({
         ...item,
+        dbId: item.id,
         id: item.externalId || item.id,
       }));
 
