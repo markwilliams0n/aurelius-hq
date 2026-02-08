@@ -9,6 +9,7 @@ import "@/lib/action-cards/handlers/gmail";
 import "@/lib/action-cards/handlers/linear";
 import "@/lib/action-cards/handlers/config";
 import "@/lib/action-cards/handlers/vault";
+import "@/lib/action-cards/handlers/code";
 
 export async function POST(
   request: NextRequest,
