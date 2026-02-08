@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { actionCards } from "@/lib/db/schema";
 import { eq, desc } from "drizzle-orm";
-import type { ActionCardData, CardStatus } from "@/lib/types/action-card";
+import type { ActionCardData, CardPattern, CardStatus } from "@/lib/types/action-card";
 import type { NewActionCard } from "@/lib/db/schema/action-cards";
 
 /**
@@ -80,6 +80,21 @@ export async function getPendingCards(): Promise<ActionCardData[]> {
     .select()
     .from(actionCards)
     .where(eq(actionCards.status, "pending"))
+    .orderBy(desc(actionCards.createdAt));
+
+  return rows.map(rowToCardData);
+}
+
+/**
+ * Get all cards matching a pattern, ordered by newest first.
+ */
+export async function getCardsByPattern(
+  pattern: CardPattern
+): Promise<ActionCardData[]> {
+  const rows = await db
+    .select()
+    .from(actionCards)
+    .where(eq(actionCards.pattern, pattern))
     .orderBy(desc(actionCards.createdAt));
 
   return rows.map(rowToCardData);
