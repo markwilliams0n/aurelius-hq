@@ -4,6 +4,71 @@ Work completed in the last 2-4 weeks.
 
 ---
 
+## 2026-02-07
+
+### Unified Chat Across App (PER-188)
+- `useChat` hook — single shared engine for all chat surfaces (streaming, action cards, persistence)
+- `ChatContext` type — surface-specific context injection (triage item, page context, overrides)
+- All 3 web surfaces (main chat, triage modal, Cmd+K panel) unified on one API
+- Triage chat gained: streaming, real tools, markdown, action cards, per-item persistence
+- chat-client.tsx reduced 57% (575 → 248 lines)
+- Memory extraction respects overrides (e.g. skipSupermemory)
+
+### Triage Enhancements (PER-170–176)
+- List view with multi-select bulk archive, keyboard nav
+- "Action Needed" Gmail label with 3-day snooze
+- Rich approval card renderers (Gmail + Linear) with inline editing
+- `T` shortcut creates Linear issue via action card
+- CC recipients on Gmail cards, external links open in new tab
+
+### Cortex Neural Map
+- Interactive React Flow graph of all Aurelius systems
+- `system_events` table + topology API with live stats
+- Custom pulse edge animations, filter toggles, detail panel
+
+### Global Action Card System (PER-172–176)
+- Refactored from Slack-specific to generic pattern-based containers
+- 4 patterns: approval, config, confirmation, info
+- DB persistence, handler registry (Slack, Gmail, Linear, Config)
+- show_config_card tool for inline config editing
+
+### Slack Sending with Action Cards
+- Slack directory cache with daily sync via heartbeat
+- send_slack_message agent capability
+- DMs as group DM or 1:1, channels with auto-join + @mention cc
+- Markdown rendering in chat (react-markdown + remark-gfm)
+
+## 2026-02-06
+
+### Linear Task Management & Agent Capabilities
+- Task management page with Linear integration
+- Agent capability system — tools for create/update/list/get tasks via chat
+- Fixed triage→Linear task creation, identifier lookup, team visibility
+- Prompt version propagation for auto-upgrading DB prompts
+
+### Linear Triage Improvements
+- Contextual notification previews, project labels, self-action filtering
+- Fixed notification auth (personal key for inbox, bot token for task mgmt)
+
+## 2026-02-05
+
+### Heartbeat & System Page
+- Streaming heartbeat progress via SSE
+- Gmail inbox reconciliation on heartbeat
+- Rich expanded heartbeat details
+- Triage actions hidden from System feed by default
+
+### Memory Debug Mode
+- Full memory event instrumentation across all operations
+- CMD+D overlay panel with live SSE streaming
+- Debug feed tab on Memory page
+
+### Slack Connector
+- Real-time Socket Mode integration
+- DMs, @mentions, triage channel auto-capture
+- Thread capture, AI summaries via Ollama
+- Task extraction, user instructions
+
 ## 2026-02-03
 
 ### Gmail Connector (Full Implementation)

@@ -2,145 +2,19 @@
 
 > **Always check this file at session start.**
 
-## Just Completed (Last Session)
-
-**2026-02-05 (Continued)**
-
-Heartbeat & System Page:
-- Fixed scheduled heartbeats invisible on System page (was logging to file, now logs to DB)
-- Streaming heartbeat progress via SSE — live ticker shows each step as it runs
-- Gmail inbox reconciliation on heartbeat — auto-archives stale triage items
-- Rich expanded heartbeat details: step breakdown with timing, connector stats, expandable entities/facts, warnings
-- Triage actions hidden from System feed by default (toggle to show)
-- PR #5 merged to main
-
-**2026-02-05**
-
-Slack Connector:
-- Real-time integration via Socket Mode (WebSocket)
-- DMs, @mentions, triage channel auto-capture
-- Full thread capture when @mentioned in thread
-- AI summaries via Ollama (local LLM)
-- Task extraction defaulting to "For You"
-- User instructions: "@aurelius make a task to..." works
-- Code review fixes: TTLs on caches, rate limit batching
-- Full documentation in docs/connectors/slack.md
-
-**2026-02-03 (Continued)**
-
-Linear Connector:
-- Full Linear integration via GraphQL API
-- Notification sync via heartbeat (same pattern as Gmail)
-- Archive syncs back to Linear (marks as read)
-- `L` keyboard shortcut to open in Linear (list + modal)
-- Rich metadata display: state, priority, project, labels, actor
-- Documentation + design docs
-
-**2026-02-03 Night**
-
-Gmail Connector + Memory System Fixes:
-- **Gmail connector** complete with all core features:
-  - Service Account auth with domain-wide delegation
-  - Smart sender tags (Internal, Direct, CC, Auto, Newsletter, Suspicious)
-  - Phishing detection (brand impersonation, lookalike domains)
-  - Bi-directional sync (archive/spam sync back to Gmail)
-  - Reply support (drafts, with optional direct send)
-  - Heartbeat integration for auto-sync
-  - 36 tests covering sync, actions, phishing detection
-
-- **Memory system fixes**:
-  - Heartbeat now processes pre-extracted content from daily notes
-  - Fixed over-aggressive redundancy detection (string-based instead of LLM)
-  - QMD search now indexes facts from summary.md
-  - Triage chat uses shared context builder (no more hallucinations)
-
-- **UI fixes**:
-  - Triage cards scroll properly when tasks overflow
-
 ## Just Completed
 
-**2026-02-07 (Night)**
+**2026-02-07 (Late Night)**
 
-Triage Enhancements (feature/triage-enhancements → PR #15, merged):
-- **List view** (PER-170): `V` toggle, compact table rows, keyboard nav, multi-select checkboxes, bulk archive with undo
-- **Action Needed** (PER-171): `A` shortcut applies Gmail label, 3-day snooze, resurfaces with amber "Marked for action on X" badge
-- **Gmail card** (PER-172): Rich approval card renderer — To/CC, subject, body preview, editable, draft/send indicator
-- **Linear card** (PER-173): Rich approval card renderer — editable title (auto-focus), description, priority cycle, team/assignee badges
-- **Quick task** (PER-176): `T` shortcut creates pre-filled Linear issue action card from triage item
-- **CC recipients** (PER-140): @rostr.cc recipients on Gmail triage card summary, full To/CC in detail modal
-- **External links** (PER-138): All links open in new tab (ReactMarkdown + DOMPurify)
-- Code review fixes: stale undo closures (ref-based), keyboard isolation (stopImmediatePropagation), bulk undo, label cache with auto-create
-- Code simplification: -58 lines, extracted shared helpers (resolveGmailMessageId, buildRawMessage, EmailOptions)
-
-**2026-02-07 (Evening)**
-
-Cortex Neural Map (feature/config-home → PR #14):
-- New `/config` page with interactive React Flow graph of all Aurelius systems
-- `system_events` DB table + migration for activity tracking
-- Event logging instrumented across heartbeat, capabilities, config changes
-- Topology API with 5 parallel DB queries for live stats
-- Custom pulse edge animations scaled by traffic volume (neurons firing)
-- Filter toggles, detail panel with config content viewer, stats HUD
-- Ambient particle field, activity-based node glow, live event ticker
-- Also: switched AI model to Kimi K2.5, added trg-linear CLAUDE.md rule
-
-**2026-02-07 (Continued)**
-
-Global Action Card System (feature/global-action-cards → PR #13):
-- Refactored Action Cards from Slack-specific to generic pattern-based containers
-- 4 card patterns: approval, config, confirmation, info
-- Handler registry — adding new card types is just a new handler file
-- DB persistence (action_cards table) — cards survive page refresh
-- Stable message IDs so cards attach to correct messages after reload
-- Handlers: Slack, Gmail, Linear, Config
-- Config cards render markdown with click-to-edit
-- show_config_card tool for inline config editing
-- Code review fixes: 404 guard, try/catch, narrowed types
-
-**2026-02-07**
-
-Slack Sending with Action Cards (feature/slack-sending → PR #12):
-- Slack directory cache with daily sync via heartbeat
-- send_slack_message agent capability (DB-backed prompt, self-editable)
-- Action Card system (generic typed cards with status, actions, content slots)
-- Slack message card: send-as toggle (user/bot), inline editing, keyboard shortcuts
-- DMs as group DM (bot) or 1:1 (user token), channels with auto-join + @mention cc
-- Markdown rendering in chat messages (react-markdown + remark-gfm)
-- Integrated in both main chat (SSE) and triage chat
-- Bug fixes: auth on triage chat, hooks order, stale data on send
-
-**2026-02-06 (Evening)**
-
-Linear Triage Improvements (feature/triage-improvements):
-- Contextual previews: "Katie moved to In Progress — ..." instead of "Katie changed status"
-- Project notifications labeled clearly (project update, project deleted)
-- Self-action filtering (your own Linear actions don't create triage items)
-- Fixed notification auth: personal API key for inbox, bot token for task mgmt
-- Better sender attribution when actor is null (falls back to issue creator)
-
-**2026-02-06**
-
-Linear Task Management & Agent Capabilities:
-- PR #7: Task management page with Linear integration
-- PR #8: Triage performance, sync reconciliation, task creation from triage
-- PR #9: Agent capability system — tools for create/update/list/get tasks via chat
-- Fixed triage→Linear task creation (assignee, default team, error surfacing)
-- Fixed identifier lookup (PER-123) — was silently failing due to invalid Linear filter
-- Fixed agent team visibility (shows all 22 teams, defaults assignment to Mark)
-- Added prompt version propagation so code prompt changes auto-upgrade DB
-- Cleaned up all stale branches and worktrees
-
-**2026-02-05 (Evening)**
-
-Memory Debug Mode:
-- Full memory event instrumentation across all memory operations (recall, extract, save, search, reindex)
-- CMD+D overlay panel with live SSE streaming of events
-- Expandable event cards with payload, reasoning, evaluation details
-- Debug mode toggle with pulsing sidebar indicator
-- Debug feed tab on Memory page (filters, search, day grouping)
-- Ollama extraction prompts now include reasoning fields
-- Debug evaluator module (standalone, not yet wired into flow)
-- Bug fixes: event ID consistency, SSE listener leak, duplicate events, reconnection, buffer fallback to DB
+Unified Chat Across App (feature/chat-across-app, merged to main):
+- `useChat` hook — single shared engine for all chat surfaces (394 lines)
+- `ChatContext` type — surface-specific context injection (triage item, page context, overrides)
+- All 3 web surfaces (main chat, triage modal, Cmd+K panel) unified on `/api/chat`
+- Triage chat gained: streaming, real tools, markdown, action cards, per-item persistence
+- chat-client.tsx reduced 57% (575 → 248 lines)
+- Memory extraction respects `overrides.skipSupermemory`
+- Bugfix: triage-client remaps item.id to externalId — added `dbId` for conversation persistence
+- PER-188 + 10 sub-issues (PER-189–198) all Done
 
 ## In Progress
 
@@ -148,7 +22,8 @@ Nothing — main is clean.
 
 ## Up Next
 
-- [ ] **Triage chat memory → Supermemory** — triage chat `saveFactToMemory` only writes to local DB (entities/facts tables), NOT Supermemory. Facts saved in triage chat can't be recalled from main chat or Telegram. Need to push to Supermemory too.
+- [x] ~~**Triage chat memory → Supermemory**~~ — fixed by unified chat (triage now uses `/api/chat` → `extractAndSaveMemories`)
+- [ ] **Migrate task-creator-panel off legacy `/api/triage/chat`** — last consumer of old route
 - [ ] **Action Cards notification tray** (PER-174) — global view of pending cards outside chat (low priority, deferred)
 - [ ] **Connector-aware memory extraction** — `extractEmailMemory` is used for ALL connectors but the prompt is email-specific. Need connector-aware prompts. Key file: `src/lib/memory/ollama.ts:extractEmailMemory`
 - [ ] Test Gmail sync with real inbox
