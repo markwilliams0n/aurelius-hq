@@ -127,17 +127,11 @@ function summarizeToolInput(toolName: string, input: unknown): string {
 
   switch (toolName) {
     case 'Read':
-      return typeof obj.file_path === 'string' ? obj.file_path : '';
-
     case 'Edit':
-      return typeof obj.file_path === 'string' ? obj.file_path : '';
-
     case 'Write':
       return typeof obj.file_path === 'string' ? obj.file_path : '';
 
     case 'Glob':
-      return typeof obj.pattern === 'string' ? obj.pattern : '';
-
     case 'Grep':
       return typeof obj.pattern === 'string' ? obj.pattern : '';
 
@@ -214,10 +208,10 @@ function parseStream(
       }
     } else if (eventType === 'result') {
       onComplete({
-        sessionId: (event.session_id as string) ?? undefined,
-        turns: (event.num_turns as number) ?? 0,
-        durationMs: (event.duration_ms as number) ?? 0,
-        costUsd: (event.total_cost_usd as number) ?? null,
+        sessionId: event.session_id as string | undefined,
+        turns: (event.num_turns as number | undefined) ?? 0,
+        durationMs: (event.duration_ms as number | undefined) ?? 0,
+        costUsd: (event.total_cost_usd as number | undefined) ?? null,
       });
     }
   });
@@ -245,7 +239,6 @@ export function startSession(options: CodeSessionOptions): ActiveSession {
     onError,
   } = options;
 
-  // Build the CLI arguments
   const args: string[] = [
     '-p', prompt,
     '--output-format', 'stream-json',
@@ -254,21 +247,17 @@ export function startSession(options: CodeSessionOptions): ActiveSession {
     '--no-session-persistence',
   ];
 
-  // Append each allowed tool
   for (const tool of ALLOWED_TOOLS) {
     args.push('--allowedTools', tool);
   }
 
-  // Spawn the CLI
-  // Cast env to ProcessEnv — our stripped env is intentionally sparse
-  // but spawn() expects the full ProcessEnv type.
   const child = spawn('claude', args, {
     cwd: worktreePath,
     env: buildSafeEnv() as NodeJS.ProcessEnv,
     stdio: ['ignore', 'pipe', 'pipe'],
-  }) as ChildProcess;
+  });
 
-  // Track whether we've already fired a terminal callback
+  // Ensure only one terminal callback fires (complete, error, or timeout)
   let settled = false;
 
   const settle = () => {
@@ -295,7 +284,6 @@ export function startSession(options: CodeSessionOptions): ActiveSession {
     }
   }, timeoutMs);
 
-  // Parse stdout NDJSON stream
   if (child.stdout) {
     parseStream(child.stdout, onProgress, (result) => {
       if (settle()) {
@@ -304,7 +292,6 @@ export function startSession(options: CodeSessionOptions): ActiveSession {
     });
   }
 
-  // Log stderr (diagnostic output from the CLI)
   if (child.stderr) {
     const stderrRl = createInterface({ input: child.stderr, crlfDelay: Infinity });
     stderrRl.on('line', (line: string) => {
@@ -312,7 +299,6 @@ export function startSession(options: CodeSessionOptions): ActiveSession {
     });
   }
 
-  // Handle process exit
   child.on('error', (err) => {
     if (settle()) {
       onError(new Error(`Failed to spawn claude CLI: ${err.message}`));

@@ -92,13 +92,11 @@ export function createWorktree(branchName: string, sessionId: string): WorktreeI
     throw new Error(`Worktree already exists at ${worktreePath}`);
   }
 
-  // Ensure the base directory exists
   mkdirSync(WORKTREE_BASE, { recursive: true });
 
   // Fetch latest main so we branch from the freshest commit
   gitMaybe(['fetch', 'origin', 'main'], REPO_ROOT);
 
-  // Create worktree with a new branch based on main
   // Use origin/main if available, otherwise fall back to main
   const baseRef = gitMaybe(['rev-parse', '--verify', 'origin/main'], REPO_ROOT).status === 0
     ? 'origin/main'
@@ -106,7 +104,7 @@ export function createWorktree(branchName: string, sessionId: string): WorktreeI
 
   git(['worktree', 'add', '-b', branchName, worktreePath, baseRef], REPO_ROOT);
 
-  return { path: worktreePath, branchName: branchName };
+  return { path: worktreePath, branchName };
 }
 
 /**

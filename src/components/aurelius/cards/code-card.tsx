@@ -29,6 +29,25 @@ function formatDuration(ms: number): string {
   return `${minutes}m ${remainingSeconds}s`;
 }
 
+function StatusDot({ className, pulse }: { className: string; pulse?: boolean }) {
+  return (
+    <span
+      className={`inline-block w-2 h-2 rounded-full ${className} ${pulse ? "animate-pulse" : ""}`}
+    />
+  );
+}
+
+function BranchLabel({ branchName }: { branchName: string }) {
+  return (
+    <p className="text-muted-foreground">
+      Branch:{" "}
+      <code className="text-xs bg-muted/50 px-1.5 py-0.5 rounded font-mono text-foreground">
+        {branchName}
+      </code>
+    </p>
+  );
+}
+
 /**
  * Renders code session action cards with 4 states:
  * pending, running, completed, error.
@@ -45,14 +64,13 @@ export function CodeCardContent({ card, onAction }: CodeCardContentProps) {
 
   const { task, context, branchName } = data;
 
-  // Error state
   if (card.status === "error") {
     const errorMessage =
       (card.result?.error as string) || "Unknown error occurred";
     return (
       <div className="space-y-2 text-sm">
         <div className="flex items-center gap-2">
-          <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
+          <StatusDot className="bg-red-500" />
           <span className="font-medium text-red-400">Session failed</span>
         </div>
         <p className="text-muted-foreground">{errorMessage}</p>
@@ -60,14 +78,12 @@ export function CodeCardContent({ card, onAction }: CodeCardContentProps) {
     );
   }
 
-  // Completed state: data.result exists with stats
   if (data.result) {
     const { result } = data;
     return (
       <div className="space-y-3 text-sm">
-        {/* Header */}
         <div className="flex items-center gap-2">
-          <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+          <StatusDot className="bg-green-500" />
           <span className="font-medium text-green-400">Session complete</span>
           <span className="text-muted-foreground">
             {formatDuration(result.durationMs)} &middot; {result.turns} turn
@@ -75,7 +91,6 @@ export function CodeCardContent({ card, onAction }: CodeCardContentProps) {
           </span>
         </div>
 
-        {/* Diff stats */}
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span>
             {result.stats.filesChanged} file
@@ -85,7 +100,6 @@ export function CodeCardContent({ card, onAction }: CodeCardContentProps) {
           <span className="text-red-400">-{result.stats.deletions}</span>
         </div>
 
-        {/* Changed files */}
         {result.changedFiles.length > 0 && (
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground font-medium">
@@ -101,14 +115,12 @@ export function CodeCardContent({ card, onAction }: CodeCardContentProps) {
           </div>
         )}
 
-        {/* Commit log */}
         {result.log && (
           <pre className="text-xs bg-muted/50 rounded-md p-3 whitespace-pre-wrap overflow-x-auto text-foreground max-h-48 overflow-y-auto">
             {result.log}
           </pre>
         )}
 
-        {/* Action buttons */}
         <div className="flex items-center gap-2 pt-1">
           <button
             onClick={() =>
@@ -138,30 +150,19 @@ export function CodeCardContent({ card, onAction }: CodeCardContentProps) {
     );
   }
 
-  // Running state: confirmed but no result yet
-  if (card.status === "confirmed" && !data.result) {
+  if (card.status === "confirmed") {
     return (
       <div className="space-y-2 text-sm">
-        {/* Header with pulsing amber dot */}
         <div className="flex items-center gap-2">
-          <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+          <StatusDot className="bg-amber-400" pulse />
           <span className="font-medium text-amber-400">
             Session running...
           </span>
         </div>
 
-        {/* Task description */}
         <p className="text-foreground">{task}</p>
+        <BranchLabel branchName={branchName} />
 
-        {/* Branch */}
-        <p className="text-muted-foreground">
-          Branch:{" "}
-          <code className="text-xs bg-muted/50 px-1.5 py-0.5 rounded font-mono text-foreground">
-            {branchName}
-          </code>
-        </p>
-
-        {/* Stop button */}
         <div className="pt-1">
           <button
             onClick={() =>
@@ -183,19 +184,9 @@ export function CodeCardContent({ card, onAction }: CodeCardContentProps) {
   // Pending state (default)
   return (
     <div className="space-y-2 text-sm">
-      {/* Task description */}
       <p className="text-foreground">{task}</p>
-
-      {/* Context if present */}
       {context && <p className="text-muted-foreground">{context}</p>}
-
-      {/* Branch */}
-      <p className="text-muted-foreground">
-        Branch:{" "}
-        <code className="text-xs bg-muted/50 px-1.5 py-0.5 rounded font-mono text-foreground">
-          {branchName}
-        </code>
-      </p>
+      <BranchLabel branchName={branchName} />
     </div>
   );
 }

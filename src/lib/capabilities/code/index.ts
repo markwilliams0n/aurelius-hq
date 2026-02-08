@@ -98,7 +98,7 @@ async function handleCodeTool(
           context,
           branchName,
           maxTurns: 25,
-          timeoutMs: 300000,
+          timeoutMs: 300_000,
         },
       },
       summary: `Prepared coding session: ${truncatedTask}`,
