@@ -5,6 +5,7 @@ import { ApprovalCardContent } from "./approval-card";
 import { ConfigCardContent } from "./config-card";
 import { ConfirmationCardContent } from "./confirmation-card";
 import { InfoCardContent } from "./info-card";
+import { VaultCardContent } from "./vault-card";
 
 interface CardContentProps {
   card: ActionCardData;
@@ -25,6 +26,8 @@ export function CardContent({ card, onDataChange, onAction }: CardContentProps) 
       return <ConfirmationCardContent card={card} />;
     case "info":
       return <InfoCardContent card={card} />;
+    case "vault":
+      return <VaultCardContent card={card} />;
     default:
       // Fallback: raw data
       return (

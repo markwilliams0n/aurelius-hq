@@ -17,11 +17,13 @@ import { logCapabilityUse } from '@/lib/system-events';
 import { configCapability } from './config';
 import { tasksCapability } from './tasks';
 import { slackCapability } from './slack';
+import { vaultCapability } from './vault';
 
 const ALL_CAPABILITIES: Capability[] = [
   configCapability,
   tasksCapability,
   slackCapability,
+  vaultCapability,
 ];
 
 /** Get all tool definitions from all capabilities (OpenAI function calling format) */

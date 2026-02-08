@@ -1,4 +1,4 @@
-export type CardPattern = "approval" | "config" | "confirmation" | "info";
+export type CardPattern = "approval" | "config" | "confirmation" | "info" | "vault";
 
 export type CardStatus = "pending" | "confirmed" | "dismissed" | "error";
 

@@ -155,4 +155,5 @@ export const CONFIG_DESCRIPTIONS: Record<ConfigKey, string> = {
   "prompt:email_draft": "Prompt template for AI-generated email draft replies. Controls tone, style, and formatting of drafts.",
   "capability:slack": "Instructions for the Slack capability — how the agent sends messages via Slack.",
   "slack:directory": "Cached Slack workspace directory (users and channels). Auto-refreshed daily by heartbeat.",
+  "capability:vault": "Instructions for the Vault capability — how the agent manages the document library and fact store.",
 };

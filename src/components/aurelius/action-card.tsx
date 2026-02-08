@@ -23,6 +23,7 @@ const PATTERN_META: Record<CardPattern, { icon: typeof CheckCircle; label: strin
   config: { icon: Settings, label: "Configuration" },
   confirmation: { icon: AlertTriangle, label: "Confirmation" },
   info: { icon: Info, label: "Info" },
+  vault: { icon: Info, label: "Vault" },
 };
 
 const STATUS_STYLES: Record<CardStatus, string> = {
@@ -45,6 +46,7 @@ const PATTERN_ACTIONS: Record<CardPattern, string[]> = {
   config: ["save", "dismiss"],
   confirmation: ["confirm", "cancel"],
   info: ["dismiss"],
+  vault: [],
 };
 
 function getButtonProps(action: string): {
