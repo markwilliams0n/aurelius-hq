@@ -10,7 +10,7 @@
 
 import * as path from 'path';
 import { spawnSync } from 'child_process';
-import { existsSync } from 'fs';
+import { existsSync, mkdirSync } from 'fs';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -93,7 +93,7 @@ export function createWorktree(branchName: string, sessionId: string): WorktreeI
   }
 
   // Ensure the base directory exists
-  spawnSync('mkdir', ['-p', WORKTREE_BASE]);
+  mkdirSync(WORKTREE_BASE, { recursive: true });
 
   // Fetch latest main so we branch from the freshest commit
   gitMaybe(['fetch', 'origin', 'main'], REPO_ROOT);

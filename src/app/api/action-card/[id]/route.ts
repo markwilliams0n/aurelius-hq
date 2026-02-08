@@ -43,7 +43,8 @@ export async function POST(
     }
 
     // Dispatch action through registry
-    const cardData = data ?? card.data ?? {};
+    // Inject _cardId so handlers can update the card asynchronously (e.g., code sessions)
+    const cardData = { ...(data ?? card.data ?? {}), _cardId: id };
     const result = await dispatchCardAction(card.handler, action, cardData);
 
     // If confirmation needed, return without persisting status

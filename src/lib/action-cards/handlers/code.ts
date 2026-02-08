@@ -25,6 +25,15 @@ export function getActiveSessions(): Map<string, ActiveSession> {
   return activeSessions;
 }
 
+// Kill all active sessions on server shutdown to prevent orphaned processes
+process.on('SIGTERM', () => {
+  for (const [id, session] of activeSessions) {
+    console.log(`[code-session] Killing session ${id} on SIGTERM`);
+    session.kill();
+  }
+  activeSessions.clear();
+});
+
 // ---------------------------------------------------------------------------
 // code:start — Start a coding session in an isolated worktree
 // ---------------------------------------------------------------------------
