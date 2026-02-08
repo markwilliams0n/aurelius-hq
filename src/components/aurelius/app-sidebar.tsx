@@ -71,8 +71,24 @@ export function AppSidebar() {
     }
   };
 
-  const ThemeIcon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor;
-  const themeLabel = theme === "dark" ? "Dark" : theme === "light" ? "Light" : "Auto";
+  function getThemeIcon() {
+    switch (theme) {
+      case "dark": return Moon;
+      case "light": return Sun;
+      default: return Monitor;
+    }
+  }
+
+  function getThemeLabel(): string {
+    switch (theme) {
+      case "dark": return "Dark";
+      case "light": return "Light";
+      default: return "Auto";
+    }
+  }
+
+  const ThemeIcon = getThemeIcon();
+  const themeLabel = getThemeLabel();
 
   return (
     <aside className="w-20 border-r border-border bg-background flex flex-col items-center py-4 gap-1">

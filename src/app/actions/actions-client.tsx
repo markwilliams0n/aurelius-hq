@@ -151,11 +151,13 @@ export function ActionsClient() {
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <div className="max-w-3xl mx-auto">
-            {isLoading ? (
+            {isLoading && (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>
-            ) : cards.length === 0 ? (
+            )}
+
+            {!isLoading && cards.length === 0 && (
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <Inbox className="w-12 h-12 text-muted-foreground/40 mb-4" />
                 <h2 className="text-lg font-medium text-muted-foreground mb-1">
@@ -166,7 +168,9 @@ export function ActionsClient() {
                   appear here.
                 </p>
               </div>
-            ) : (
+            )}
+
+            {!isLoading && cards.length > 0 && (
               <div className="space-y-6">
                 {Array.from(groups.entries()).map(
                   ([conversationId, groupCards]) => (
