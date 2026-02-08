@@ -1,5 +1,5 @@
 import type { Capability, ToolDefinition, ToolResult } from '../types';
-import { createVaultItem, getVaultItem, searchVaultItems, updateVaultItem } from '@/lib/vault';
+import { createVaultItem, getVaultItem, searchVaultItems, updateVaultItem, findDuplicateVaultItem } from '@/lib/vault';
 import { classifyVaultItem } from '@/lib/vault/classify';
 import type { VaultItem } from '@/lib/db/schema/vault';
 
@@ -191,9 +191,46 @@ async function handleSave(
     ? `\n\n[keywords: ${classification.searchKeywords.join(', ')}]`
     : '';
 
+  const fullContent = storedContent + keywordSuffix;
+
+  // Check for existing duplicate before creating
+  const duplicate = await findDuplicateVaultItem(classification.title, content);
+
+  if (duplicate) {
+    // Update existing item instead of creating a new one
+    const updated = await updateVaultItem(duplicate.id, {
+      content: fullContent,
+      title: classification.title,
+      type: classification.type,
+      sensitive: classification.sensitive,
+      tags: [...new Set([...allTags, ...duplicate.tags])],
+    });
+
+    const item = updated || duplicate;
+
+    return {
+      result: JSON.stringify({
+        action_card: {
+          pattern: 'vault',
+          handler: 'vault:supermemory',
+          title: `Updated in Vault: ${item.title}`,
+          data: {
+            vault_item_id: item.id,
+            title: item.title,
+            type: item.type,
+            tags: item.tags,
+            sensitive: item.sensitive,
+            supermemoryStatus: item.supermemoryStatus,
+          },
+        },
+        summary: `Updated existing "${item.title}" in vault (was "${duplicate.title}")`,
+      }),
+    };
+  }
+
   // Create the vault item
   const item = await createVaultItem({
-    content: storedContent + keywordSuffix,
+    content: fullContent,
     title: classification.title,
     type: classification.type,
     sensitive: classification.sensitive,

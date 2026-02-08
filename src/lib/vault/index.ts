@@ -100,6 +100,67 @@ export async function updateVaultItem(
   return updated ?? null;
 }
 
+/**
+ * Find a duplicate vault item by fuzzy title match.
+ * Returns the best match if similarity is above threshold.
+ */
+export async function findDuplicateVaultItem(
+  title: string,
+  content: string,
+): Promise<VaultItem | null> {
+  // Search by the main keywords from the title
+  const keywords = title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "")
+    .split(/\s+/)
+    .filter((w) => w.length > 2);
+
+  if (keywords.length === 0) return null;
+
+  // Use full-text search with the title keywords
+  const query = keywords.join(" & ");
+  try {
+    const candidates = await db
+      .select()
+      .from(vaultItems)
+      .where(
+        sql`to_tsvector('english', ${vaultItems.title} || ' ' || COALESCE(${vaultItems.content}, '')) @@ to_tsquery('english', ${query})`
+      )
+      .orderBy(desc(vaultItems.createdAt))
+      .limit(5);
+
+    if (candidates.length === 0) return null;
+
+    // Score each candidate by word overlap with title + content
+    const inputWords = new Set(
+      `${title} ${content}`.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter((w) => w.length > 2)
+    );
+
+    let bestMatch: VaultItem | null = null;
+    let bestScore = 0;
+
+    for (const item of candidates) {
+      const itemWords = new Set(
+        `${item.title} ${item.content || ""}`.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter((w) => w.length > 2)
+      );
+      const intersection = [...inputWords].filter((w) => itemWords.has(w)).length;
+      const union = new Set([...inputWords, ...itemWords]).size;
+      const jaccard = union > 0 ? intersection / union : 0;
+
+      if (jaccard > bestScore) {
+        bestScore = jaccard;
+        bestMatch = item;
+      }
+    }
+
+    // Threshold: 0.4 Jaccard similarity means significant overlap
+    return bestScore >= 0.4 ? bestMatch : null;
+  } catch {
+    // FTS query might fail on edge cases — not critical, skip dedup
+    return null;
+  }
+}
+
 /** Get all unique tags across vault items */
 export async function getAllTags(): Promise<string[]> {
   const result = await db.execute(
