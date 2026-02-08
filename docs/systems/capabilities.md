@@ -263,4 +263,4 @@ export const CONFIG_DESCRIPTIONS: Record<ConfigKey, string> = {
 
 ### All chat surfaces get capabilities
 
-Both web chat and Telegram use `buildAgentContext()` → `chatStreamWithTools()`, so capabilities are available everywhere the agent operates. The triage chat surface gets capability prompts in its system prompt but doesn't currently support tool calling.
+All chat surfaces (web chat, triage modal, Cmd+K panel, Telegram) use `buildAgentContext()` → `chatStreamWithTools()`, so capabilities are available everywhere the agent operates. See [Unified Chat](./unified-chat.md) for the full architecture.

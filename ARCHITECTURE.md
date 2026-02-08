@@ -12,31 +12,42 @@ Aurelius is a personal AI assistant with persistent memory, multi-channel access
 src/
 ├── app/                    # Next.js App Router
 │   ├── api/               # API routes
-│   │   ├── chat/          # Main chat endpoint (streaming)
+│   │   ├── chat/          # Unified chat endpoint (streaming, all surfaces)
 │   │   ├── conversation/  # Conversation CRUD
 │   │   ├── daily-notes/   # Daily notes read/write
 │   │   ├── memory/        # Memory search API
 │   │   ├── config/        # Config management + pending changes
 │   │   ├── telegram/      # Telegram webhook + setup
-│   │   └── triage/        # Inbox items management
-│   └── chat/              # Web chat UI
+│   │   ├── triage/        # Inbox items management
+│   │   └── action-card/   # Action card execution
+│   ├── chat/              # Web chat UI
+│   └── triage/            # Triage page
 │
 ├── components/aurelius/   # UI components
 │   ├── chat-*.tsx         # Chat interface components
+│   ├── triage-chat.tsx    # Triage chat modal (uses shared useChat hook)
+│   ├── chat-panel.tsx     # Cmd+K slide-over panel (uses shared useChat hook)
+│   ├── action-card.tsx    # Generic action card container
+│   ├── cards/             # Card content renderers (Gmail, Linear, Slack, Config)
 │   ├── tool-panel.tsx     # Right sidebar (resizable)
 │   ├── app-shell.tsx      # Layout wrapper
 │   └── memory-*.tsx       # Memory display components
 │
-└── lib/                   # Core logic
-    ├── ai/                # AI client + context building
-    ├── capabilities/      # Agent capabilities (tools + prompts)
-    │   ├── config/        # Self-modification tools
-    │   └── tasks/         # Linear task management
-    ├── db/                # Database connection + schema
-    ├── linear/            # Linear API client + issues
-    ├── memory/            # Memory operations
-    ├── telegram/          # Telegram integration
-    └── config.ts          # Config management
+├── hooks/                 # React hooks
+│   └── use-chat.ts        # Shared chat engine (SSE, streaming, action cards)
+│
+├── lib/                   # Core logic
+│   ├── ai/                # AI client + context building
+│   ├── capabilities/      # Agent capabilities (tools + prompts)
+│   │   ├── config/        # Self-modification tools
+│   │   └── tasks/         # Linear task management
+│   ├── db/                # Database connection + schema
+│   ├── linear/            # Linear API client + issues
+│   ├── memory/            # Memory operations
+│   ├── slack/             # Slack integration (directory, sending)
+│   ├── telegram/          # Telegram integration
+│   ├── types/             # Shared types (ChatContext, ActionCard, etc.)
+│   └── config.ts          # Config management
 ```
 
 ## Core Systems
@@ -116,25 +127,40 @@ configs           - Versioned configuration (soul, prompts, etc.)
 pending_changes   - Config changes awaiting approval
 ```
 
-### 5. Chat Flow (`api/chat/route.ts`)
+### 5. Unified Chat System
+
+> **Detailed docs:** [docs/systems/unified-chat.md](docs/systems/unified-chat.md)
+
+**One API, one hook, all surfaces.** Every chat surface (main, triage, Cmd+K, Telegram) uses the same pipeline:
 
 ```
-User message
-    ↓
-Load conversation history
-    ↓
-Build memory context (Supermemory)
-    ↓
-Get soul config (personality)
-    ↓
-Stream AI response with tools
-    ↓
-Extract memories if notable
-    ↓
-Save to conversation
-    ↓
-Return streamed response
+┌─────────────┐   ChatContext    ┌──────────────┐
+│  useChat()  │ ──────────────→  │  /api/chat   │
+│  (React)    │   {surface,      │  (streaming)  │
+│             │    triageItem,   │              │
+│  Surfaces:  │    overrides}    │  Pipeline:   │
+│  • Main     │                  │  1. Load history
+│  • Triage   │  ← SSE stream ← │  2. Build context (memory + surface)
+│  • Cmd+K    │   text, tools,   │  3. Stream with tools
+│  • Telegram │   action_cards   │  4. Extract memories
+│             │                  │  5. Save conversation
+└─────────────┘                  └──────────────┘
 ```
+
+**ChatContext** tells the server what surface is calling and what it knows:
+- `surface`: `"main"` | `"triage"` | `"panel"` — determines system prompt additions
+- `triageItem`: Item details for triage chat (connector, sender, subject, content)
+- `overrides`: Feature flags like `skipSupermemory`
+
+**Conversation IDs:**
+- Main chat + Cmd+K + Telegram: shared `00000000-0000-0000-0000-000000000000`
+- Triage chat: per-item UUID (the inbox item's DB ID)
+
+**Key files:**
+- `hooks/use-chat.ts` — Client-side engine: SSE parsing, streaming state, action cards, conversation loading
+- `app/api/chat/route.ts` — Server: context-aware streaming with create-on-first-message for new conversations
+- `lib/ai/context.ts` — `buildAgentContext()` with `buildSurfaceContext()` for surface-specific prompts
+- `lib/types/chat-context.ts` — `ChatContext` type definition
 
 ### 6. Agent Capabilities (`lib/capabilities/`)
 
@@ -215,11 +241,19 @@ api/connectors/granola/
 
 ## UI Architecture
 
-### Web Chat (`app/chat/`)
+### Chat Surfaces
 
-- `page.tsx` - Server component (auth check)
-- `chat-client.tsx` - Client component (state, streaming)
-- Polls every 3s for Telegram message sync
+All chat surfaces share the `useChat` hook (`hooks/use-chat.ts`) for consistent behavior:
+
+| Surface | Component | Conversation ID | Context |
+|---------|-----------|----------------|---------|
+| Main chat | `app/chat/chat-client.tsx` | Shared UUID | `surface: "main"` |
+| Triage modal | `components/aurelius/triage-chat.tsx` | Per-item UUID | `surface: "triage"` + item details |
+| Cmd+K panel | `components/aurelius/chat-panel.tsx` | Shared UUID | `surface: "panel"` + page context |
+| Telegram | `lib/telegram/handler.ts` | Shared UUID | (server-side, no hook) |
+
+- Main chat polls every 3s for Telegram sync
+- Triage conversations create on first message (404 → insert)
 
 ### Tool Panel (`components/aurelius/tool-panel.tsx`)
 
@@ -292,9 +326,11 @@ Follow the Telegram pattern:
 
 ## Key Patterns
 
-- **Streaming**: All AI responses stream via SSE
+- **Unified chat**: All surfaces share `useChat` hook + `/api/chat` with `ChatContext` for surface-specific behavior
+- **Streaming**: All AI responses stream via SSE (text, tool_use, tool_result, action_card events)
 - **Tool loops**: Max 5 iterations to prevent runaway
-- **Memory extraction**: Chat → daily notes + Supermemory. Triage → summary or full mode
+- **Action cards**: DB-persisted structured actions below chat messages (approval, config, confirmation, info patterns). Handler registry dispatches execution.
+- **Memory extraction**: Chat → daily notes + Supermemory (overridable via `context.overrides.skipSupermemory`)
 - **Config approval**: AI proposes, human approves
-- **Shared state**: Web + Telegram use same conversation
+- **Shared state**: Main chat + Cmd+K + Telegram use same conversation; triage uses per-item conversations
 - **Polling sync**: Web polls for external messages (3s interval)
