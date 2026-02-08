@@ -2,6 +2,7 @@
 
 import type { ActionCardData } from "@/lib/types/action-card";
 import { ApprovalCardContent } from "./approval-card";
+import { CodeCardContent } from "./code-card";
 import { ConfigCardContent } from "./config-card";
 import { ConfirmationCardContent } from "./confirmation-card";
 import { InfoCardContent } from "./info-card";
@@ -20,6 +21,8 @@ export function CardContent({ card, onDataChange, onAction }: CardContentProps) 
   switch (card.pattern) {
     case "approval":
       return <ApprovalCardContent card={card} onDataChange={onDataChange} onAction={onAction} />;
+    case "code":
+      return <CodeCardContent card={card} onAction={onAction} />;
     case "config":
       return <ConfigCardContent card={card} onDataChange={onDataChange} />;
     case "confirmation":

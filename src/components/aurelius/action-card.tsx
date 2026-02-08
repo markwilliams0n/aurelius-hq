@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   CheckCircle,
+  Code,
   Settings,
   AlertTriangle,
   Info,
@@ -20,6 +21,7 @@ import {
 
 const PATTERN_META: Record<CardPattern, { icon: typeof CheckCircle; label: string }> = {
   approval: { icon: CheckCircle, label: "Approval" },
+  code: { icon: Code, label: "Code Session" },
   config: { icon: Settings, label: "Configuration" },
   confirmation: { icon: AlertTriangle, label: "Confirmation" },
   info: { icon: Info, label: "Info" },
@@ -43,6 +45,7 @@ const STATUS_LABELS: Record<CardStatus, string> = {
 /** Default actions per pattern */
 const PATTERN_ACTIONS: Record<CardPattern, string[]> = {
   approval: ["send", "cancel"],
+  code: ["confirm", "cancel"],
   config: ["save", "dismiss"],
   confirmation: ["confirm", "cancel"],
   info: ["dismiss"],
