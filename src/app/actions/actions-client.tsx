@@ -35,6 +35,7 @@ function groupByConversation(cards: ActionCardData[]) {
 /** Format a relative time string from an ISO date */
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 0) return "just now";
   const minutes = Math.floor(diff / 60_000);
   if (minutes < 1) return "just now";
   if (minutes < 60) return `${minutes}m ago`;
@@ -57,6 +58,8 @@ export function ActionsClient() {
       if (res.ok) {
         const data = await res.json();
         setCards(data.cards ?? []);
+      } else {
+        toast.error("Failed to load pending actions");
       }
     } catch {
       toast.error("Failed to load pending actions");

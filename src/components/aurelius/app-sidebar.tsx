@@ -57,7 +57,11 @@ export function AppSidebar() {
 
   useEffect(() => {
     fetchPendingCount();
-    const interval = setInterval(fetchPendingCount, 30_000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchPendingCount();
+      }
+    }, 30_000);
     return () => clearInterval(interval);
   }, [fetchPendingCount]);
 
