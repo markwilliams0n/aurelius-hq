@@ -234,7 +234,9 @@ export function VaultWizard({ isOpen, onClose, onItemSaved, editItem }: VaultWiz
         title: data.suggestions?.title || "",
         type: data.suggestions?.type || "fact",
         tags: data.suggestions?.tags || [],
-        summary: data.suggestions?.normalizedContent || data.extractedText || prev.textContent,
+        summary: (data.extractedText || prev.textContent).length <= 500
+          ? (data.suggestions?.normalizedContent || data.extractedText || prev.textContent)
+          : (data.extractedText || prev.textContent),
         sensitive: data.suggestions?.sensitive || false,
         fileName: data.fileName,
         fileContentType: data.fileContentType,
@@ -301,7 +303,9 @@ export function VaultWizard({ isOpen, onClose, onItemSaved, editItem }: VaultWiz
           title: s.title || prev.title,
           type: s.type || prev.type,
           tags: s.tags?.length ? s.tags : prev.tags,
-          summary: s.normalizedContent || prev.summary,
+          summary: prev.summary.length <= 500
+            ? (s.normalizedContent || prev.summary)
+            : prev.summary,
           sensitive: s.sensitive ?? prev.sensitive,
         }));
       }
@@ -341,7 +345,9 @@ export function VaultWizard({ isOpen, onClose, onItemSaved, editItem }: VaultWiz
             title: s?.title || prev.title,
             type: s?.type || prev.type,
             tags: s?.tags || prev.tags,
-            summary: s?.normalizedContent || data.extractedText || prev.summary,
+            summary: (data.extractedText || prev.summary).length <= 500
+              ? (s?.normalizedContent || data.extractedText || prev.summary)
+              : (data.extractedText || prev.summary),
             sensitive: s?.sensitive ?? prev.sensitive,
           }));
 
