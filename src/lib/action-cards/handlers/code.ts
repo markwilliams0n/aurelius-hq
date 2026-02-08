@@ -9,7 +9,7 @@ import {
 } from "@/lib/capabilities/code/worktree";
 import { startSession, type ActiveSession } from "@/lib/capabilities/code/executor";
 import { buildCodePrompt } from "@/lib/capabilities/code/prompts";
-import { updateCard } from "../db";
+import { getCard, updateCard } from "../db";
 
 // ---------------------------------------------------------------------------
 // Active session tracking
@@ -65,80 +65,98 @@ registerCardHandler("code:start", {
       };
     }
 
-    // Create isolated worktree
-    const worktree = createWorktree(branchName, sessionId);
+    // Reserve the session slot atomically to prevent concurrent starts
+    const placeholder = { pid: 0, kill: () => {}, process: null as unknown } as ActiveSession;
+    activeSessions.set(sessionId, placeholder);
 
-    // Build the prompt
-    const prompt = buildCodePrompt(task, context);
+    let worktree: { path: string; branchName: string };
+    try {
+      worktree = createWorktree(branchName, sessionId);
+    } catch (err) {
+      activeSessions.delete(sessionId);
+      const msg = err instanceof Error ? err.message : String(err);
+      return { status: "error", error: `Failed to create worktree: ${msg}` };
+    }
 
-    // Start the session (non-blocking — runs in background)
-    const session = startSession({
-      sessionId,
-      prompt,
-      worktreePath: worktree.path,
-      maxTurns,
-      timeoutMs,
+    let session: ActiveSession;
+    try {
+      const prompt = buildCodePrompt(task, context);
 
-      onProgress(event) {
-        // v1: log to console
-        console.log(`[code-session:${sessionId}] ${event.type}`, event.text ?? event.tool ?? "");
-      },
+      session = startSession({
+        sessionId,
+        prompt,
+        worktreePath: worktree.path,
+        maxTurns,
+        timeoutMs,
 
-      async onComplete(result) {
-        activeSessions.delete(sessionId);
+        onProgress(event) {
+          console.log(`[code-session:${sessionId}] ${event.type}`, event.text ?? event.tool ?? "");
+        },
 
-        // Gather diff stats, changed files, and log from the worktree
-        try {
-          const stats = getWorktreeStats(worktree.path);
-          const changedFiles = getChangedFiles(worktree.path);
-          const log = getWorktreeLog(worktree.path);
+        async onComplete(result) {
+          activeSessions.delete(sessionId);
+
+          try {
+            const stats = getWorktreeStats(worktree.path);
+            const changedFiles = getChangedFiles(worktree.path);
+            const log = getWorktreeLog(worktree.path);
+
+            if (cardId) {
+              // Only update if card is still in "confirmed" (running) state —
+              // user may have clicked Stop, which sets a different status
+              const currentCard = await getCard(cardId);
+              if (currentCard?.status === "confirmed") {
+                await updateCard(cardId, {
+                  data: {
+                    ...data,
+                    worktreePath: worktree.path,
+                    result: {
+                      sessionId: result.sessionId,
+                      turns: result.turns,
+                      durationMs: result.durationMs,
+                      costUsd: result.costUsd,
+                      stats,
+                      changedFiles,
+                      log,
+                    },
+                  },
+                });
+              }
+            }
+          } catch (err) {
+            console.error(`[code-session:${sessionId}] Failed to gather results:`, err);
+          }
+        },
+
+        async onError(error) {
+          activeSessions.delete(sessionId);
+
+          try {
+            cleanupWorktree(worktree.path, branchName);
+          } catch {
+            // ignore cleanup failures
+          }
 
           if (cardId) {
-            await updateCard(cardId, {
-              status: "confirmed",
-              data: {
-                ...data,
-                worktreePath: worktree.path,
-                result: {
-                  sessionId: result.sessionId,
-                  turns: result.turns,
-                  durationMs: result.durationMs,
-                  costUsd: result.costUsd,
-                  stats,
-                  changedFiles,
-                  log,
-                },
-              },
-            });
+            try {
+              await updateCard(cardId, {
+                status: "error",
+                result: { error: error.message },
+              });
+            } catch (err) {
+              console.error(`[code-session:${sessionId}] Failed to update card on error:`, err);
+            }
           }
-        } catch (err) {
-          console.error(`[code-session:${sessionId}] Failed to gather results:`, err);
-        }
-      },
+        },
+      });
+    } catch (err) {
+      activeSessions.delete(sessionId);
+      try { cleanupWorktree(worktree.path, branchName); } catch { /* best effort */ }
+      const msg = err instanceof Error ? err.message : String(err);
+      return { status: "error", error: `Failed to start session: ${msg}` };
+    }
 
-      async onError(error) {
-        activeSessions.delete(sessionId);
-
-        // Best-effort cleanup
-        try {
-          cleanupWorktree(worktree.path, branchName);
-        } catch {
-          // ignore cleanup failures
-        }
-
-        if (cardId) {
-          try {
-            await updateCard(cardId, {
-              status: "error",
-              result: { error: error.message },
-            });
-          } catch (err) {
-            console.error(`[code-session:${sessionId}] Failed to update card on error:`, err);
-          }
-        }
-      },
-    });
-
+    // Replace placeholder with real session handle
     activeSessions.set(sessionId, session);
 
     return { status: "confirmed" };

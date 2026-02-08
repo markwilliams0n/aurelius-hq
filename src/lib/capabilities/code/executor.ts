@@ -259,11 +259,13 @@ export function startSession(options: CodeSessionOptions): ActiveSession {
 
   // Ensure only one terminal callback fires (complete, error, or timeout)
   let settled = false;
+  let sigkillTimer: NodeJS.Timeout | null = null;
 
   const settle = () => {
     if (settled) return false;
     settled = true;
     clearTimeout(timer);
+    if (sigkillTimer) clearTimeout(sigkillTimer);
     return true;
   };
 
@@ -271,8 +273,7 @@ export function startSession(options: CodeSessionOptions): ActiveSession {
   const timer = setTimeout(() => {
     if (!settled) {
       child.kill('SIGTERM');
-      // Give it 5s to clean up, then force-kill
-      setTimeout(() => {
+      sigkillTimer = setTimeout(() => {
         if (!child.killed) {
           child.kill('SIGKILL');
         }
