@@ -736,17 +736,17 @@ export function VaultWizard({ isOpen, onClose, onItemSaved, editItem }: VaultWiz
                 </div>
               </div>
 
-              {/* Summary / Content */}
+              {/* Content preview */}
               <div>
                 <label className="text-xs text-muted-foreground block mb-1">
-                  Summary
+                  Content
                 </label>
                 <textarea
                   value={state.summary}
                   onChange={(e) =>
                     setState((prev) => ({ ...prev, summary: e.target.value }))
                   }
-                  rows={4}
+                  rows={6}
                   className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-gold/50 focus:border-gold/50 resize-y"
                 />
               </div>
