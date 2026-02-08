@@ -265,6 +265,7 @@ export function startSession(options: CodeSessionOptions): ActiveSession {
   const args: string[] = [
     '-p', prompt,
     '--output-format', 'stream-json',
+    '--verbose',
     '--max-turns', String(maxTurns),
     '--permission-mode', 'acceptEdits',
     '--no-session-persistence',
