@@ -17,11 +17,13 @@ import { getCard, updateCard } from "../db";
 
 const activeSessions = new Map<string, ActiveSession>();
 
-function hasActiveSession(): boolean {
-  return activeSessions.size > 0;
-}
-
 export function getActiveSessions(): Map<string, ActiveSession> {
+  // Prune dead sessions (process exited but map entry remains after HMR)
+  for (const [id, session] of activeSessions) {
+    if (session.process && 'exitCode' in session.process && session.process.exitCode !== null) {
+      activeSessions.delete(id);
+    }
+  }
   return activeSessions;
 }
 
@@ -90,13 +92,6 @@ registerCardHandler("code:start", {
   successMessage: "Coding session started",
 
   async execute(data) {
-    if (hasActiveSession()) {
-      return {
-        status: "error",
-        error: "A coding session is already running. Stop it before starting a new one.",
-      };
-    }
-
     const sessionId = data.sessionId as string;
     const task = data.task as string;
     const context = data.context as string | undefined;
