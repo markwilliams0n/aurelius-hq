@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getVaultItem, updateVaultItem } from "@/lib/vault";
+import { getVaultItem, updateVaultItem, deleteVaultItem } from "@/lib/vault";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -110,6 +110,44 @@ export async function PATCH(
     console.error("[Vault API] Update error:", error);
     return NextResponse.json(
       { error: "Failed to update vault item" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * DELETE /api/vault/items/[id] — Delete a vault item
+ *
+ * Returns { success: true }
+ */
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { id } = await params;
+    if (!UUID_RE.test(id)) {
+      return NextResponse.json({ error: "Invalid item ID" }, { status: 400 });
+    }
+
+    const deleted = await deleteVaultItem(id);
+    if (!deleted) {
+      return NextResponse.json(
+        { error: "Vault item not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("[Vault API] Delete error:", error);
+    return NextResponse.json(
+      { error: "Failed to delete vault item" },
       { status: 500 }
     );
   }

@@ -14,7 +14,8 @@ export interface VaultClassification {
 /** Classify a vault item using Ollama + pattern matching */
 export async function classifyVaultItem(
   content: string,
-  hints?: { title?: string; type?: string; sensitive?: boolean }
+  hints?: { title?: string; type?: string; sensitive?: boolean },
+  options?: { model?: string }
 ): Promise<VaultClassification> {
   // Pattern-based sensitive detection as baseline
   const patternSensitive = SENSITIVE_PATTERNS.some((p) => p.test(content));
@@ -73,6 +74,7 @@ Rules:
   const response = await generate(prompt, {
     temperature: 0.1,
     maxTokens: 200,
+    model: options?.model,
   });
 
   try {
