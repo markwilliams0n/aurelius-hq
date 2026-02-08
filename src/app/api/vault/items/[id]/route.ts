@@ -63,6 +63,17 @@ export async function PATCH(
     const body = await request.json();
     const { title, tags, sensitive, type } = body;
 
+    // Validate input types
+    if (tags !== undefined && !Array.isArray(tags)) {
+      return NextResponse.json({ error: "tags must be an array" }, { status: 400 });
+    }
+    if (sensitive !== undefined && typeof sensitive !== "boolean") {
+      return NextResponse.json({ error: "sensitive must be a boolean" }, { status: 400 });
+    }
+    if (type !== undefined && !["document", "fact", "credential", "reference"].includes(type)) {
+      return NextResponse.json({ error: "Invalid type" }, { status: 400 });
+    }
+
     // Build updates object with only provided fields
     const updates: Record<string, unknown> = {};
     if (title !== undefined) updates.title = title;

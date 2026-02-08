@@ -1,6 +1,7 @@
 import { generate, isOllamaAvailable } from "@/lib/memory/ollama";
 import { addMemory } from "@/lib/memory/supermemory";
 import { getVaultItem, updateVaultItem } from "@/lib/vault";
+import { redactSensitiveContent } from "@/lib/vault/patterns";
 
 export type SummaryLevel = "short" | "medium" | "detailed" | "full";
 
@@ -15,7 +16,7 @@ export async function generateSummary(
   // Full level: return content as-is (minus sensitive values)
   if (level === "full") {
     if (item.sensitive) {
-      return `[Vault item: ${item.title}] ${item.content?.replace(/\b\d{3}-\d{2}-\d{4}\b/g, "[REDACTED]").replace(/\b[A-Z]\d{8}\b/g, "[REDACTED]") || item.title}`;
+      return `[Vault item: ${item.title}] ${item.content ? redactSensitiveContent(item.content) : item.title}`;
     }
     return item.content || item.title;
   }
@@ -40,13 +41,19 @@ export async function generateSummary(
     full: "", // handled above
   };
 
+  // Redact sensitive content before sending to Ollama
+  let contentForSummary = item.content?.slice(0, 2000) || "[no text content]";
+  if (item.sensitive) {
+    contentForSummary = redactSensitiveContent(contentForSummary);
+  }
+
   const prompt = `Summarize this vault item for long-term memory storage.
 
 Title: ${item.title}
 Type: ${item.type}
 Tags: ${item.tags.join(", ")}
 Content:
-${item.content?.slice(0, 2000) || "[no text content]"}
+${contentForSummary}
 
 ${levelInstructions[level]}${sensitiveNote}
 

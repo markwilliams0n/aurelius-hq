@@ -1,5 +1,6 @@
 import { generate, isOllamaAvailable } from "@/lib/memory/ollama";
 import { getAllTags } from "@/lib/vault";
+import { SENSITIVE_PATTERNS } from "@/lib/vault/patterns";
 
 export interface VaultClassification {
   title: string;
@@ -7,13 +8,6 @@ export interface VaultClassification {
   tags: string[];
   sensitive: boolean;
 }
-
-const SENSITIVE_PATTERNS = [
-  /\b\d{3}-\d{2}-\d{4}\b/, // SSN
-  /\b\d{9}\b/, // 9-digit numbers (SSN, passport)
-  /\b[A-Z]\d{8}\b/, // US passport
-  /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/, // credit card
-];
 
 /** Classify a vault item using Ollama + pattern matching */
 export async function classifyVaultItem(

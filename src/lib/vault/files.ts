@@ -22,13 +22,24 @@ export async function saveFile(
   return filePath;
 }
 
+/** Validate that a path is within the vault directory */
+function assertWithinVault(filePath: string): void {
+  const resolved = path.resolve(filePath);
+  const vaultDir = path.resolve(VAULT_DIR);
+  if (!resolved.startsWith(vaultDir + path.sep) && resolved !== vaultDir) {
+    throw new Error("Invalid file path: outside vault directory");
+  }
+}
+
 /** Read a file from the vault directory */
 export async function readFile(filePath: string): Promise<Buffer> {
+  assertWithinVault(filePath);
   return fs.readFile(filePath);
 }
 
 /** Delete a file from the vault directory */
 export async function deleteFile(filePath: string): Promise<void> {
+  assertWithinVault(filePath);
   try {
     await fs.unlink(filePath);
   } catch {
