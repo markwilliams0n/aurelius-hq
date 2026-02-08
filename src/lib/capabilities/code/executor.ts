@@ -100,28 +100,43 @@ const ALLOWED_TOOLS = [
 // Safe environment
 // ---------------------------------------------------------------------------
 
-const SAFE_ENV_KEYS = [
-  'PATH',
-  'HOME',
-  'SHELL',
-  'LANG',
-  'NODE_ENV',
-  'TERM',
-] as const;
+/**
+ * Env vars to strip from the child process. We use a blocklist
+ * approach — pass through everything EXCEPT known-dangerous keys.
+ * This preserves macOS Keychain access, credential paths, and other
+ * system vars the CLI needs for authentication.
+ */
+const BLOCKED_ENV_KEYS = [
+  'ANTHROPIC_API_KEY',
+  'OPENAI_API_KEY',
+  'DATABASE_URL',
+  'NEON_DATABASE_URL',
+  'DIRECT_URL',
+  'GMAIL_CLIENT_ID',
+  'GMAIL_CLIENT_SECRET',
+  'GMAIL_REFRESH_TOKEN',
+  'TELEGRAM_BOT_TOKEN',
+  'TELEGRAM_WEBHOOK_SECRET',
+  'SLACK_BOT_TOKEN',
+  'SLACK_SIGNING_SECRET',
+  'SUPERMEMORY_API_KEY',
+  'CLERK_SECRET_KEY',
+  'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+];
 
 /**
- * Build a minimal, safe environment for the child process.
+ * Build a safe environment for the child process.
  *
- * Only passes through known-safe vars from the parent process env.
- * Explicitly omits ANTHROPIC_API_KEY and all other secrets so the
- * CLI authenticates via the user's Max subscription.
+ * Passes through all env vars EXCEPT API keys and secrets.
+ * This ensures the CLI can authenticate via the user's Max
+ * subscription (needs keychain/credential access) while preventing
+ * leakage of server-side secrets.
  */
 function buildSafeEnv(): Record<string, string> {
   const env: Record<string, string> = {};
 
-  for (const key of SAFE_ENV_KEYS) {
-    const value = process.env[key];
-    if (value !== undefined) {
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined && !BLOCKED_ENV_KEYS.includes(key)) {
       env[key] = value;
     }
   }
@@ -182,8 +197,10 @@ function summarizeToolInput(toolName: string, input: unknown): string {
  */
 function parseStream(
   stdout: NodeJS.ReadableStream,
+  log: (level: 'info' | 'error', msg: string) => void,
   onProgress: (event: ProgressEvent) => void,
   onComplete: (result: SessionResult) => void,
+  onError: (error: Error) => void,
 ): void {
   const rl = createInterface({ input: stdout, crlfDelay: Infinity });
 
@@ -212,6 +229,8 @@ function parseStream(
 
       for (const block of contentBlocks) {
         if (block.type === 'text' && typeof block.text === 'string') {
+          // Log text responses so we can debug what Claude says
+          log('info', `Text: ${block.text.slice(0, 500)}`);
           onProgress({
             type: 'thinking',
             text: block.text,
@@ -227,12 +246,24 @@ function parseStream(
         }
       }
     } else if (eventType === 'result') {
-      onComplete({
-        sessionId: event.session_id as string | undefined,
-        turns: (event.num_turns as number | undefined) ?? 0,
-        durationMs: (event.duration_ms as number | undefined) ?? 0,
-        costUsd: (event.total_cost_usd as number | undefined) ?? null,
-      });
+      const isError = event.is_error === true || event.subtype === 'error';
+      const resultText = typeof event.result === 'string' ? event.result : '';
+
+      log('info', `Result event — is_error: ${isError}, subtype: ${event.subtype}, turns: ${event.num_turns}, cost: $${event.total_cost_usd ?? '?'}`);
+      if (resultText) {
+        log('info', `Result text: ${resultText.slice(0, 500)}`);
+      }
+
+      if (isError) {
+        onError(new Error(resultText || 'Claude CLI returned an error result'));
+      } else {
+        onComplete({
+          sessionId: event.session_id as string | undefined,
+          turns: (event.num_turns as number | undefined) ?? 0,
+          durationMs: (event.duration_ms as number | undefined) ?? 0,
+          costUsd: (event.total_cost_usd as number | undefined) ?? null,
+        });
+      }
     }
   });
 }
@@ -318,6 +349,7 @@ export function startSession(options: CodeSessionOptions): ActiveSession {
   if (child.stdout) {
     parseStream(
       child.stdout,
+      log,
       (event) => {
         if (event.type === 'tool_call') {
           log('info', `Tool: ${event.tool} ${event.input ?? ''}`);
@@ -328,6 +360,12 @@ export function startSession(options: CodeSessionOptions): ActiveSession {
         log('info', `Complete — turns: ${result.turns}, duration: ${result.durationMs}ms, cost: $${result.costUsd ?? '?'}`);
         if (settle()) {
           onComplete(result);
+        }
+      },
+      (error) => {
+        log('error', `Stream error: ${error.message}`);
+        if (settle()) {
+          onError(error);
         }
       },
     );
