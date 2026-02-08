@@ -421,6 +421,6 @@ export const vaultCapability: Capability = {
   name: 'vault',
   tools: TOOL_DEFINITIONS,
   prompt: PROMPT,
-  promptVersion: 1,
+  promptVersion: 2,
   handleTool: handleVaultTool,
 };
