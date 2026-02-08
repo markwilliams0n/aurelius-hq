@@ -18,12 +18,14 @@ import { configCapability } from './config';
 import { tasksCapability } from './tasks';
 import { slackCapability } from './slack';
 import { vaultCapability } from './vault';
+import { codeCapability } from './code';
 
 const ALL_CAPABILITIES: Capability[] = [
   configCapability,
   tasksCapability,
   slackCapability,
   vaultCapability,
+  codeCapability,
 ];
 
 /** Get all tool definitions from all capabilities (OpenAI function calling format) */
