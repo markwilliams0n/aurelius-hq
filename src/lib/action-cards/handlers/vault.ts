@@ -27,6 +27,7 @@ registerCardHandler("vault:supermemory", {
 registerCardHandler("vault:delete", {
   label: "Delete",
   successMessage: "Deleted from Vault",
+  confirmMessage: "Delete this vault item? This cannot be undone.",
 
   async execute(data) {
     const itemId = data.vault_item_id as string | undefined;

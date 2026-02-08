@@ -191,16 +191,11 @@ async function handleSave(
     : [];
   const allTags = [...new Set([...userTags, ...classification.tags])];
 
-  // Build stored content: for short items (facts, credentials), use normalized version
+  // For short items (facts, credentials), use normalized version (cleans up dates, etc.)
   // For longer content (documents), always keep the original to avoid truncation
   const storedContent = classification.normalizedContent && content.length <= 500
     ? classification.normalizedContent
     : content;
-  const keywordSuffix = classification.searchKeywords?.length
-    ? `\n\n[keywords: ${classification.searchKeywords.join(', ')}]`
-    : '';
-
-  const fullContent = storedContent + keywordSuffix;
 
   // Check for existing duplicate before creating
   const duplicate = await findDuplicateVaultItem(classification.title, content);
@@ -208,7 +203,7 @@ async function handleSave(
   if (duplicate) {
     // Update existing item instead of creating a new one
     const updated = await updateVaultItem(duplicate.id, {
-      content: fullContent,
+      content: storedContent,
       title: classification.title,
       type: classification.type,
       sensitive: classification.sensitive,
@@ -239,7 +234,7 @@ async function handleSave(
 
   // Create the vault item
   const item = await createVaultItem({
-    content: fullContent,
+    content: storedContent,
     title: classification.title,
     type: classification.type,
     sensitive: classification.sensitive,
@@ -379,10 +374,18 @@ async function handleUpdate(
     return { result: JSON.stringify({ error: `Vault item not found: ${id}` }) };
   }
 
+  const VALID_TYPES = ['document', 'fact', 'credential', 'reference'];
+
   const updates: Record<string, unknown> = {};
   if (toolInput.content !== undefined) updates.content = String(toolInput.content);
   if (toolInput.title !== undefined) updates.title = String(toolInput.title);
-  if (toolInput.type !== undefined) updates.type = String(toolInput.type);
+  if (toolInput.type !== undefined) {
+    const typeStr = String(toolInput.type);
+    if (!VALID_TYPES.includes(typeStr)) {
+      return { result: JSON.stringify({ error: `Invalid type "${typeStr}". Must be one of: ${VALID_TYPES.join(', ')}` }) };
+    }
+    updates.type = typeStr;
+  }
   if (toolInput.tags !== undefined) updates.tags = (toolInput.tags as string[]).map(t => String(t));
   if (toolInput.sensitive !== undefined) updates.sensitive = Boolean(toolInput.sensitive);
 

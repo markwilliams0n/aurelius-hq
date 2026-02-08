@@ -45,6 +45,15 @@ export async function POST(
     const cardData = data ?? card.data ?? {};
     const result = await dispatchCardAction(card.handler, action, cardData);
 
+    // If confirmation needed, return without persisting status
+    if (result.status === "needs_confirmation") {
+      return NextResponse.json({
+        success: true,
+        status: "needs_confirmation",
+        confirmMessage: result.confirmMessage,
+      });
+    }
+
     // Persist status + result to DB
     await updateCard(id, {
       status: result.status,

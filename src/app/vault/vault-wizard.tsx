@@ -36,7 +36,7 @@ interface WizardState {
   title: string;
   type: "document" | "fact" | "credential" | "reference";
   tags: string[];
-  summary: string;
+  content: string;
   sensitive: boolean;
   smLevel: string;
   smPreview: string | null;
@@ -55,7 +55,7 @@ const INITIAL_STATE: WizardState = {
   title: "",
   type: "fact",
   tags: [],
-  summary: "",
+  content: "",
   sensitive: false,
   smLevel: "medium",
   smPreview: null,
@@ -89,7 +89,7 @@ export function VaultWizard({ isOpen, onClose, onItemSaved, editItem }: VaultWiz
         title: editItem.title,
         type: editItem.type,
         tags: editItem.tags,
-        summary: editItem.content || "",
+        content: editItem.content || "",
         sensitive: editItem.sensitive,
         savedItemId: editItem.id,
       };
@@ -115,7 +115,7 @@ export function VaultWizard({ isOpen, onClose, onItemSaved, editItem }: VaultWiz
         title: editItem.title,
         type: editItem.type,
         tags: editItem.tags,
-        summary: editItem.content || "",
+        content: editItem.content || "",
         sensitive: editItem.sensitive,
         savedItemId: editItem.id,
       });
@@ -234,7 +234,7 @@ export function VaultWizard({ isOpen, onClose, onItemSaved, editItem }: VaultWiz
         title: data.suggestions?.title || "",
         type: data.suggestions?.type || "fact",
         tags: data.suggestions?.tags || [],
-        summary: (data.extractedText || prev.textContent).length <= 500
+        content: (data.extractedText || prev.textContent).length <= 500
           ? (data.suggestions?.normalizedContent || data.extractedText || prev.textContent)
           : (data.extractedText || prev.textContent),
         sensitive: data.suggestions?.sensitive || false,
@@ -250,7 +250,7 @@ export function VaultWizard({ isOpen, onClose, onItemSaved, editItem }: VaultWiz
       setState((prev) => ({
         ...prev,
         title: prev.textContent.slice(0, 60).trim() || prev.files[0]?.name || "Untitled",
-        summary: prev.textContent || "",
+        content: prev.textContent || "",
       }));
       setStep("review");
     } finally {
@@ -286,7 +286,7 @@ export function VaultWizard({ isOpen, onClose, onItemSaved, editItem }: VaultWiz
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          content: state.summary || state.extractedText,
+          content: state.content || state.extractedText,
           instructions,
           model: state.model === "ollama" ? undefined : state.model,
         }),
@@ -303,9 +303,9 @@ export function VaultWizard({ isOpen, onClose, onItemSaved, editItem }: VaultWiz
           title: s.title || prev.title,
           type: s.type || prev.type,
           tags: s.tags?.length ? s.tags : prev.tags,
-          summary: prev.summary.length <= 500
-            ? (s.normalizedContent || prev.summary)
-            : prev.summary,
+          content: prev.content.length <= 500
+            ? (s.normalizedContent || prev.content)
+            : prev.content,
           sensitive: s.sensitive ?? prev.sensitive,
         }));
       }
@@ -314,53 +314,49 @@ export function VaultWizard({ isOpen, onClose, onItemSaved, editItem }: VaultWiz
     } finally {
       setIsProcessing(false);
     }
-  }, [chatInput, state.summary, state.extractedText, state.model]);
+  }, [chatInput, state.content, state.extractedText, state.model]);
 
   const handleRerunWithModel = useCallback(
-    (newModel: string) => {
+    async (newModel: string) => {
       setState((prev) => ({ ...prev, model: newModel }));
       setStep("processing");
       setIsProcessing(true);
       setProcessingError(null);
 
-      const run = async () => {
-        try {
-          const content = state.extractedText || state.textContent;
-          const response = await fetch("/api/vault/parse", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              content,
-              model: newModel === "ollama" ? undefined : newModel,
-            }),
-          });
+      try {
+        const content = state.extractedText || state.textContent;
+        const response = await fetch("/api/vault/parse", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content,
+            model: newModel === "ollama" ? undefined : newModel,
+          }),
+        });
 
-          if (!response.ok) throw new Error("Re-run failed");
-          const data = await response.json();
-          const s = data.suggestions;
+        if (!response.ok) throw new Error("Re-run failed");
+        const data = await response.json();
+        const s = data.suggestions;
 
-          setState((prev) => ({
-            ...prev,
-            suggestions: s,
-            title: s?.title || prev.title,
-            type: s?.type || prev.type,
-            tags: s?.tags || prev.tags,
-            summary: (data.extractedText || prev.summary).length <= 500
-              ? (s?.normalizedContent || data.extractedText || prev.summary)
-              : (data.extractedText || prev.summary),
-            sensitive: s?.sensitive ?? prev.sensitive,
-          }));
+        setState((prev) => ({
+          ...prev,
+          suggestions: s,
+          title: s?.title || prev.title,
+          type: s?.type || prev.type,
+          tags: s?.tags || prev.tags,
+          content: (data.extractedText || prev.content).length <= 500
+            ? (s?.normalizedContent || data.extractedText || prev.content)
+            : (data.extractedText || prev.content),
+          sensitive: s?.sensitive ?? prev.sensitive,
+        }));
 
-          setStep("review");
-        } catch {
-          toast.error("Re-run failed");
-          setStep("review");
-        } finally {
-          setIsProcessing(false);
-        }
-      };
-
-      run();
+        setStep("review");
+      } catch {
+        toast.error("Re-run failed");
+        setStep("review");
+      } finally {
+        setIsProcessing(false);
+      }
     },
     [state.extractedText, state.textContent]
   );
@@ -383,11 +379,8 @@ export function VaultWizard({ isOpen, onClose, onItemSaved, editItem }: VaultWiz
         type: state.type,
         tags: state.tags,
         sensitive: state.sensitive,
+        content: state.content || state.extractedText || state.textContent,
       };
-
-      if (!isEdit) {
-        body.content = state.extractedText || state.textContent;
-      }
 
       const response = await fetch(url, {
         method,
@@ -742,9 +735,9 @@ export function VaultWizard({ isOpen, onClose, onItemSaved, editItem }: VaultWiz
                   Content
                 </label>
                 <textarea
-                  value={state.summary}
+                  value={state.content}
                   onChange={(e) =>
-                    setState((prev) => ({ ...prev, summary: e.target.value }))
+                    setState((prev) => ({ ...prev, content: e.target.value }))
                   }
                   rows={6}
                   className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-gold/50 focus:border-gold/50 resize-y"
