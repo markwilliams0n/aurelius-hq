@@ -16,6 +16,8 @@
 
 import { spawn, type ChildProcess } from 'child_process';
 import { createInterface } from 'readline';
+import { mkdirSync, appendFileSync } from 'fs';
+import path from 'path';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -50,6 +52,24 @@ export interface ActiveSession {
   pid: number;
   kill: () => void;
   process: ChildProcess;
+}
+
+// ---------------------------------------------------------------------------
+// Session log — file-based so we can debug from CLI
+// ---------------------------------------------------------------------------
+
+const LOG_DIR = path.resolve(process.cwd(), 'logs', 'code-sessions');
+
+/** Append a timestamped line to a session's log file. */
+function sessionLog(sessionId: string, level: 'info' | 'error', message: string): void {
+  try {
+    mkdirSync(LOG_DIR, { recursive: true });
+    const ts = new Date().toISOString();
+    const line = `[${ts}] [${level}] ${message}\n`;
+    appendFileSync(path.join(LOG_DIR, `${sessionId}.log`), line);
+  } catch {
+    // Best effort — don't crash if logging fails
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -230,6 +250,7 @@ function parseStream(
  */
 export function startSession(options: CodeSessionOptions): ActiveSession {
   const {
+    sessionId,
     prompt,
     worktreePath,
     maxTurns,
@@ -238,6 +259,8 @@ export function startSession(options: CodeSessionOptions): ActiveSession {
     onComplete,
     onError,
   } = options;
+
+  const log = (level: 'info' | 'error', msg: string) => sessionLog(sessionId, level, msg);
 
   const args: string[] = [
     '-p', prompt,
@@ -251,11 +274,17 @@ export function startSession(options: CodeSessionOptions): ActiveSession {
     args.push('--allowedTools', tool);
   }
 
+  log('info', `Starting session in ${worktreePath}`);
+  log('info', `Prompt: ${prompt.slice(0, 200)}${prompt.length > 200 ? '...' : ''}`);
+  log('info', `Max turns: ${maxTurns}, timeout: ${timeoutMs}ms`);
+
   const child = spawn('claude', args, {
     cwd: worktreePath,
     env: buildSafeEnv() as NodeJS.ProcessEnv,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+
+  log('info', `Spawned claude CLI, PID: ${child.pid ?? 'unknown'}`);
 
   // Ensure only one terminal callback fires (complete, error, or timeout)
   let settled = false;
@@ -286,40 +315,49 @@ export function startSession(options: CodeSessionOptions): ActiveSession {
   }, timeoutMs);
 
   if (child.stdout) {
-    parseStream(child.stdout, onProgress, (result) => {
-      if (settle()) {
-        onComplete(result);
-      }
-    });
+    parseStream(
+      child.stdout,
+      (event) => {
+        if (event.type === 'tool_call') {
+          log('info', `Tool: ${event.tool} ${event.input ?? ''}`);
+        }
+        onProgress(event);
+      },
+      (result) => {
+        log('info', `Complete — turns: ${result.turns}, duration: ${result.durationMs}ms, cost: $${result.costUsd ?? '?'}`);
+        if (settle()) {
+          onComplete(result);
+        }
+      },
+    );
   }
 
   if (child.stderr) {
     const stderrRl = createInterface({ input: child.stderr, crlfDelay: Infinity });
     stderrRl.on('line', (line: string) => {
+      log('error', `stderr: ${line}`);
       console.error(`[code-executor:stderr] ${line}`);
     });
   }
 
   child.on('error', (err) => {
+    log('error', `Spawn error: ${err.message}`);
     if (settle()) {
       onError(new Error(`Failed to spawn claude CLI: ${err.message}`));
     }
   });
 
   child.on('exit', (code, signal) => {
+    log('info', `Process exited — code: ${code}, signal: ${signal}`);
     if (settle()) {
-      // If we get here without having fired onComplete from the
-      // stream, it means the process exited before emitting a
-      // result event. Treat non-zero as an error.
       if (code !== 0) {
         const reason = signal
           ? `killed by signal ${signal}`
           : `exited with code ${code}`;
+        log('error', `Session failed: ${reason}`);
         onError(new Error(`Claude CLI ${reason}`));
       } else {
-        // Exited cleanly but no result event — unusual but not fatal.
-        // Fire onComplete with zero values so the caller isn't left
-        // hanging.
+        log('info', 'Session exited cleanly (no result event)');
         onComplete({
           sessionId: undefined,
           turns: 0,
