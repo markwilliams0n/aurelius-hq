@@ -16,6 +16,7 @@ export const cardPatternEnum = pgEnum("card_pattern", [
   "confirmation",
   "info",
   "vault",
+  "code",
 ]);
 
 // Card lifecycle status
