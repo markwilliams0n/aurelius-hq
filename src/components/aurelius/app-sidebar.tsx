@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
@@ -13,6 +13,7 @@ import {
   CheckSquare,
   Archive,
   Settings,
+  Bell,
   Sun,
   Moon,
   Monitor,
@@ -23,6 +24,7 @@ import { useMemoryDebug } from "./memory-debug-provider";
 const navItems = [
   { href: "/chat", icon: MessageSquare, label: "Chat" },
   { href: "/triage", icon: Inbox, label: "Triage" },
+  { href: "/actions", icon: Bell, label: "Actions" },
   { href: "/tasks", icon: CheckSquare, label: "Tasks" },
   { href: "/vault", icon: Archive, label: "Vault" },
   { href: "/memory", icon: Brain, label: "Memory" },
@@ -35,10 +37,29 @@ export function AppSidebar() {
   const { theme, setTheme } = useTheme();
   const { debugMode } = useMemoryDebug();
   const [mounted, setMounted] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const fetchPendingCount = useCallback(async () => {
+    try {
+      const res = await fetch("/api/action-cards/pending");
+      if (res.ok) {
+        const { cards } = await res.json();
+        setPendingCount(Array.isArray(cards) ? cards.length : 0);
+      }
+    } catch {
+      // Silently fail — badge just won't update
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPendingCount();
+    const interval = setInterval(fetchPendingCount, 30_000);
+    return () => clearInterval(interval);
+  }, [fetchPendingCount]);
 
   const cycleTheme = () => {
     if (theme === "dark") {
@@ -90,6 +111,11 @@ export function AppSidebar() {
               <span className="text-[10px]">{item.label}</span>
               {item.href === "/memory" && debugMode && (
                 <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-gold animate-pulse" />
+              )}
+              {item.href === "/actions" && pendingCount > 0 && (
+                <span className="absolute -top-0.5 right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-black px-1">
+                  {pendingCount > 99 ? "99+" : pendingCount}
+                </span>
               )}
             </Link>
           );
