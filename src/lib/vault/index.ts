@@ -108,3 +108,9 @@ export async function getAllTags(): Promise<string[]> {
   const rows = result as unknown as Array<{ tag: string }>;
   return rows.map((r) => r.tag);
 }
+
+/** Delete a vault item by ID */
+export async function deleteVaultItem(id: string): Promise<boolean> {
+  const result = await db.delete(vaultItems).where(eq(vaultItems.id, id)).returning();
+  return result.length > 0;
+}
