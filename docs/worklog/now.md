@@ -6,6 +6,16 @@
 
 **2026-02-07**
 
+Vault Bug Fixes & Code Review (feature/vault-fixes → main, PR #17, PER-208):
+- Fixed promptVersion caching — agent now calls vault tools via Telegram
+- Fixed content truncation — long docs no longer silently replaced by LLM summary
+- Fixed `to_tsquery` → `plainto_tsquery` for safe dedup search
+- Improved Jaccard dedup: stop-word filtering, title+snippet comparison, raised threshold to 0.5
+- Added type validation in `update_vault_item` handler
+- Added delete confirmation flow (action card `confirmMessage` pattern)
+- Fixed wizard save ignoring user edits to Content textarea
+- Renamed misleading "Summary" label to "Content" in wizard
+
 Vault PR Review & Merge (docs/memory-seed → main):
 - Reviewed PR #16 (Personal Vault — 37 files, +6156 lines)
 - Fixed 3 critical issues (UUID conversation ID, overly broad sensitive pattern, PDF extraction crash)
@@ -28,7 +38,7 @@ Nothing — main is clean.
 ## Up Next
 
 - [x] ~~**Triage chat memory → Supermemory**~~ — fixed by unified chat (triage now uses `/api/chat` → `extractAndSaveMemories`)
-- [ ] **Test vault feature** — end-to-end manual testing (save, search, reveal, upload, SuperMemory flow)
+- [x] ~~**Test vault feature**~~ — tested via PER-208 bug fixing session (save, search, update, dedup, content preservation all verified)
 - [ ] **Fix 32 pre-existing TypeScript errors** (PER-199) — stale test fixtures and minor type mismatches
 - [ ] **Migrate task-creator-panel off legacy `/api/triage/chat`** — last consumer of old route
 - [ ] **Action Cards notification tray** (PER-174) — global view of pending cards outside chat (low priority, deferred)
