@@ -2,19 +2,11 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { AppShell } from "@/components/aurelius/app-shell";
-import { ActionCard } from "@/components/aurelius/action-card";
-import { CardContent } from "@/components/aurelius/cards/card-content";
-import { useChat } from "@/hooks/use-chat";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   Search,
-  Upload,
-  Send,
   FileText,
-  Key,
-  Hash,
-  Link,
   Lock,
   Loader2,
   ChevronDown,
@@ -25,8 +17,13 @@ import {
   Check,
   Cloud,
   CloudOff,
+  Plus,
+  Trash2,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { TYPE_ICONS } from "@/components/aurelius/cards/vault-card";
+import { VaultWizard } from "./vault-wizard";
+import type { VaultWizardEditItem } from "./vault-wizard";
 
 // ============================================================
 // Types
@@ -78,16 +75,17 @@ function VaultItemCard({
   isExpanded,
   onToggle,
   onUpdate,
+  onEdit,
+  onDelete,
 }: {
   item: VaultItem;
   isExpanded: boolean;
   onToggle: () => void;
   onUpdate: (updated: VaultItem) => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
   const TypeIcon = TYPE_ICONS[item.type] || FileText;
-  const [isEditing, setIsEditing] = useState(false);
-  const [editTitle, setEditTitle] = useState(item.title);
-  const [editTags, setEditTags] = useState(item.tags.join(", "));
   const [revealedContent, setRevealedContent] = useState<string | null>(null);
   const [isRevealing, setIsRevealing] = useState(false);
 
@@ -95,29 +93,6 @@ function VaultItemCard({
   const [smLevel, setSmLevel] = useState<string | null>(null);
   const [smPreview, setSmPreview] = useState<string | null>(null);
   const [smLoading, setSmLoading] = useState(false);
-
-  const handleSave = async () => {
-    try {
-      const res = await fetch(`/api/vault/items/${item.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: editTitle,
-          tags: editTags
-            .split(",")
-            .map((t) => t.trim())
-            .filter(Boolean),
-        }),
-      });
-      if (!res.ok) throw new Error("Update failed");
-      const { item: updated } = await res.json();
-      onUpdate(updated);
-      setIsEditing(false);
-      toast.success("Item updated");
-    } catch {
-      toast.error("Failed to update item");
-    }
-  };
 
   const handleReveal = async () => {
     setIsRevealing(true);
@@ -248,88 +223,51 @@ function VaultItemCard({
             )}
           </div>
 
-          {/* Edit controls */}
-          {isEditing ? (
-            <div className="space-y-2">
-              <div>
-                <label className="text-xs text-muted-foreground">Title</label>
-                <input
-                  type="text"
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full mt-1 px-3 py-1.5 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-gold/50 focus:border-gold/50"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">
-                  Tags (comma-separated)
-                </label>
-                <input
-                  type="text"
-                  value={editTags}
-                  onChange={(e) => setEditTags(e.target.value)}
-                  className="w-full mt-1 px-3 py-1.5 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-gold/50 focus:border-gold/50"
-                />
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleSave}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-gold/20 text-gold text-xs font-medium hover:bg-gold/30 transition-colors"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  Save
-                </button>
-                <button
-                  onClick={() => {
-                    setIsEditing(false);
-                    setEditTitle(item.title);
-                    setEditTags(item.tags.join(", "));
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-muted-foreground text-xs hover:text-foreground hover:bg-muted transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsEditing(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-muted-foreground text-xs hover:text-foreground hover:bg-muted transition-colors"
-              >
-                <Pencil className="w-3.5 h-3.5" />
-                Edit
-              </button>
+          {/* Action buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onEdit}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-muted-foreground text-xs hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              Edit
+            </button>
+            <button
+              onClick={onDelete}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-muted-foreground text-xs hover:text-red-400 hover:bg-red-400/10 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete
+            </button>
 
-              {/* SuperMemory status + controls */}
-              {item.supermemoryStatus === "sent" ? (
-                <span className="flex items-center gap-1 text-xs text-green-400">
-                  <Cloud className="w-3.5 h-3.5" />
-                  In SuperMemory ({item.supermemoryLevel})
-                </span>
-              ) : (
-                <>
-                  {!smLevel ? (
-                    <div className="flex items-center gap-1">
-                      <CloudOff className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground mr-1">
-                        SM:
-                      </span>
-                      {["short", "medium", "detailed", "full"].map((level) => (
-                        <button
-                          key={level}
-                          onClick={() => handleSmPreview(level)}
-                          className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors capitalize"
-                        >
-                          {level}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </>
-              )}
-            </div>
-          )}
+            {/* SuperMemory status + controls */}
+            {item.supermemoryStatus === "sent" ? (
+              <span className="flex items-center gap-1 text-xs text-green-400 ml-auto">
+                <Cloud className="w-3.5 h-3.5" />
+                In SuperMemory ({item.supermemoryLevel})
+              </span>
+            ) : (
+              <>
+                {!smLevel ? (
+                  <div className="flex items-center gap-1 ml-auto">
+                    <CloudOff className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground mr-1">
+                      SM:
+                    </span>
+                    {["short", "medium", "detailed", "full"].map((level) => (
+                      <button
+                        key={level}
+                        onClick={() => handleSmPreview(level)}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors capitalize"
+                      >
+                        {level}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </>
+            )}
+          </div>
 
           {/* SM preview area */}
           {smLevel && smPreview !== null && (
@@ -412,57 +350,19 @@ function VaultItemCard({
 // Main VaultClient Component
 // ============================================================
 
-const VAULT_CONVERSATION_ID = "00000000-0000-0000-0000-000000000001";
-
 export default function VaultClient() {
   const [items, setItems] = useState<VaultItem[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [chatInput, setChatInput] = useState("");
   const [isItemsLoading, setIsItemsLoading] = useState(true);
-  const [isUploading, setIsUploading] = useState(false);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
+
+  // Wizard state
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<VaultWizardEditItem | null>(null);
 
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Refresh items list when the AI saves/searches vault items
-  // Empty deps is correct: fetchItemsFn and fetchTagsFn are stable (useCallback with [])
-  const refreshItems = useCallback(() => {
-    fetchItemsFn();
-    fetchTagsFn();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const refreshItemsRef = useRef(refreshItems);
-  refreshItemsRef.current = refreshItems;
-
-  // ----------------------------------------------------------
-  // Unified chat via useChat hook
-  // ----------------------------------------------------------
-
-  const {
-    messages,
-    isStreaming,
-    actionCards,
-    send,
-    handleCardAction,
-    updateCardData,
-  } = useChat({
-    conversationId: VAULT_CONVERSATION_ID,
-    context: {
-      surface: "vault",
-      overrides: { skipSupermemory: true },
-    },
-    loadOnMount: true,
-    onToolResult: (_toolName) => {
-      // When a vault tool completes, refresh the items list
-      refreshItemsRef.current();
-    },
-  });
 
   // ----------------------------------------------------------
   // Data fetching
@@ -493,13 +393,15 @@ export default function VaultClient() {
       const data = await res.json();
       setTags(data.tags || []);
     } catch {
-      // Tags are non-critical; don't toast
+      // Tags are non-critical
     }
   }, []);
 
   // Initial load
   useEffect(() => {
-    Promise.all([fetchItemsFn(), fetchTagsFn()]).then(() => setIsItemsLoading(false));
+    Promise.all([fetchItemsFn(), fetchTagsFn()]).then(() =>
+      setIsItemsLoading(false)
+    );
   }, [fetchItemsFn, fetchTagsFn]);
 
   // ----------------------------------------------------------
@@ -510,7 +412,10 @@ export default function VaultClient() {
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
 
     searchTimeoutRef.current = setTimeout(() => {
-      fetchItemsFn(searchQuery || undefined, selectedTags.length ? selectedTags : undefined);
+      fetchItemsFn(
+        searchQuery || undefined,
+        selectedTags.length ? selectedTags : undefined
+      );
     }, 300);
 
     return () => {
@@ -533,79 +438,7 @@ export default function VaultClient() {
   };
 
   // ----------------------------------------------------------
-  // AI chat
-  // ----------------------------------------------------------
-
-  const handleChatSend = () => {
-    const message = chatInput.trim();
-    if (!message || isStreaming) return;
-    setChatInput("");
-    send(message);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      handleChatSend();
-    }
-  };
-
-  // ----------------------------------------------------------
-  // File upload
-  // ----------------------------------------------------------
-
-  const uploadFile = async (file: File) => {
-    setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch("/api/vault/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) throw new Error("Upload failed");
-      const data = await res.json();
-
-      // Add to items list at top
-      setItems((prev) => [data.item, ...prev]);
-      // Refresh tags
-      fetchTagsFn();
-      toast.success(`Uploaded: ${data.item.title}`);
-    } catch {
-      toast.error("Failed to upload file");
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) uploadFile(file);
-    // Reset input so same file can be re-selected
-    e.target.value = "";
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) uploadFile(file);
-  };
-
-  // ----------------------------------------------------------
-  // Item update handler
+  // Item handlers
   // ----------------------------------------------------------
 
   const handleItemUpdate = (updated: VaultItem) => {
@@ -615,132 +448,71 @@ export default function VaultClient() {
     fetchTagsFn();
   };
 
+  const handleEdit = (item: VaultItem) => {
+    setEditingItem({
+      id: item.id,
+      title: item.title,
+      type: item.type,
+      tags: item.tags,
+      content: item.content,
+      sensitive: item.sensitive,
+      supermemoryStatus: item.supermemoryStatus,
+    });
+    setWizardOpen(true);
+  };
+
+  const handleDelete = async (itemId: string) => {
+    if (!confirm("Delete this vault item?")) return;
+    try {
+      const res = await fetch(`/api/vault/items/${itemId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Delete failed");
+      setItems((prev) => prev.filter((item) => item.id !== itemId));
+      fetchTagsFn();
+      toast.success("Item deleted");
+    } catch {
+      toast.error("Failed to delete item");
+    }
+  };
+
+  const handleWizardClose = () => {
+    setWizardOpen(false);
+    setEditingItem(null);
+  };
+
+  const handleItemSaved = () => {
+    fetchItemsFn();
+    fetchTagsFn();
+  };
+
   // ----------------------------------------------------------
   // Render
   // ----------------------------------------------------------
-
-  // Get recent messages for the chat history display
-  const recentMessages = messages.slice(-6);
 
   return (
     <AppShell>
       <div className="flex-1 overflow-y-auto">
         {/* Header */}
-        <div className="border-b border-border px-6 py-4">
-          <h1 className="font-serif text-2xl text-gold">Vault</h1>
-          <p className="text-sm text-muted-foreground">
-            Store and retrieve important documents, facts, and credentials
-          </p>
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+          <div>
+            <h1 className="font-serif text-2xl text-gold">Vault</h1>
+            <p className="text-sm text-muted-foreground">
+              Store and retrieve important documents, facts, and credentials
+            </p>
+          </div>
+          <Button
+            onClick={() => {
+              setEditingItem(null);
+              setWizardOpen(true);
+            }}
+          >
+            <Plus className="w-4 h-4 mr-1.5" />
+            Vault
+          </Button>
         </div>
 
         <div className="p-6 space-y-6">
-          {/* AI Input area */}
-          <div
-            className={cn(
-              "border rounded-lg p-4 transition-colors",
-              isDragOver
-                ? "border-gold bg-gold/5"
-                : "border-border bg-card"
-            )}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            <div className="flex gap-3">
-              <textarea
-                ref={textareaRef}
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Ask the vault anything, or paste content to save..."
-                rows={2}
-                className="flex-1 px-3 py-2 rounded-md border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-gold/50 focus:border-gold/50 resize-none"
-              />
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={handleChatSend}
-                  disabled={isStreaming || !chatInput.trim()}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-md bg-gold/20 text-gold text-sm font-medium hover:bg-gold/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isStreaming ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Send className="w-4 h-4" />
-                  )}
-                </button>
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploading}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-md border border-border text-muted-foreground text-sm hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
-                >
-                  {isUploading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Upload className="w-4 h-4" />
-                  )}
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="hidden"
-                  onChange={handleFileSelect}
-                />
-              </div>
-            </div>
-            {isDragOver && (
-              <div className="mt-2 text-center text-sm text-gold">
-                Drop file to upload
-              </div>
-            )}
-            <div className="mt-2 text-[10px] text-muted-foreground">
-              Cmd+Enter to send | Drag and drop files to upload
-            </div>
-          </div>
-
-          {/* Chat history (last few messages + action cards) */}
-          {recentMessages.length > 0 && (
-            <div className="space-y-2">
-              {recentMessages.map((msg) => {
-                const cards = actionCards.get(msg.id);
-                return (
-                  <div key={msg.id}>
-                    <div
-                      className={cn(
-                        "text-sm rounded-lg px-3 py-2",
-                        msg.role === "user"
-                          ? "bg-muted/50 text-foreground ml-8"
-                          : "bg-card border border-border/50 text-foreground mr-8"
-                      )}
-                    >
-                      <span className="text-[10px] text-muted-foreground uppercase tracking-wide block mb-0.5">
-                        {msg.role === "user" ? "You" : "Vault AI"}
-                      </span>
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
-                    </div>
-                    {cards?.map((card) => (
-                      <div key={card.id} className="mt-2">
-                        <ActionCard
-                          card={card}
-                          onAction={(action, editedData) =>
-                            handleCardAction(card.id, action, editedData ?? card.data)
-                          }
-                        >
-                          <CardContent
-                            card={card}
-                            onDataChange={(newData) => updateCardData(card.id, newData)}
-                            onAction={(action, data) =>
-                              handleCardAction(card.id, action, data ?? card.data)
-                            }
-                          />
-                        </ActionCard>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
           {/* Search + tag filter bar */}
           <div className="space-y-3">
             {/* Search input */}
@@ -814,7 +586,7 @@ export default function VaultClient() {
               <p className="text-muted-foreground text-center max-w-md text-sm">
                 {searchQuery || selectedTags.length > 0
                   ? "Try a different search or clear your filters."
-                  : "Use the input above to store documents, facts, credentials, and references."}
+                  : "Click + Vault to store documents, facts, credentials, and references."}
               </p>
             </div>
           ) : (
@@ -830,6 +602,8 @@ export default function VaultClient() {
                     )
                   }
                   onUpdate={handleItemUpdate}
+                  onEdit={() => handleEdit(item)}
+                  onDelete={() => handleDelete(item.id)}
                 />
               ))}
 
@@ -845,6 +619,14 @@ export default function VaultClient() {
           )}
         </div>
       </div>
+
+      {/* Wizard drawer */}
+      <VaultWizard
+        isOpen={wizardOpen}
+        onClose={handleWizardClose}
+        onItemSaved={handleItemSaved}
+        editItem={editingItem ?? undefined}
+      />
     </AppShell>
   );
 }

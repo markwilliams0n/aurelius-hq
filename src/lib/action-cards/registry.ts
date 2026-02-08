@@ -51,7 +51,10 @@ export async function dispatchCardAction(
     return { status: "confirmed" };
   }
 
-  const handler = handlers.get(handlerId);
+  // Try action-specific handler first (e.g. "vault:supermemory" handler + "delete" action → try "vault:delete")
+  const prefix = handlerId.split(":")[0];
+  const actionHandlerId = `${prefix}:${action}`;
+  const handler = handlers.get(actionHandlerId) ?? handlers.get(handlerId);
   if (!handler) {
     return {
       status: "error",
