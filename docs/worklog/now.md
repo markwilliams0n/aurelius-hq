@@ -6,6 +6,15 @@
 
 **2026-02-08**
 
+Pending Actions Page (feature/per-174-action-cards-notification-tray → main, PR #18, PER-174):
+- API route `GET /api/action-cards/pending` — wired up existing `getPendingCards()` DB function
+- `/actions` page — lists all pending cards grouped by conversation, full inline actions
+- Sidebar "Actions" nav item with Bell icon + amber badge (30s polling, visibility-aware)
+- Click-through from card groups to source conversation
+- Reused existing ActionCard + CardContent — zero new UI primitives, 4 files +323 lines
+- Created backlog issues for transitioning Linear (PER-210) and Gmail (PER-211) to action card approval flow
+- Testing issue: PER-212
+
 Supermemory ChatGPT Import:
 - Imported 252 memories from ChatGPT history export into Supermemory
 - Fixed timestamps (original file had all items dated to export day; mapped `original_date_tag` to real dates)
@@ -51,7 +60,8 @@ Nothing — main is clean.
 - [x] ~~**Test vault feature**~~ — tested via PER-208 bug fixing session (save, search, update, dedup, content preservation all verified)
 - [ ] **Fix 32 pre-existing TypeScript errors** (PER-199) — stale test fixtures and minor type mismatches
 - [ ] **Migrate task-creator-panel off legacy `/api/triage/chat`** — last consumer of old route
-- [ ] **Action Cards notification tray** (PER-174) — global view of pending cards outside chat (low priority, deferred)
+- [x] ~~**Action Cards notification tray** (PER-174)~~ — merged, testing issue PER-212
+- [ ] **Transition Linear/Gmail to action card approval flow** (PER-209) — parent issue with PER-210 (Linear) and PER-211 (Gmail)
 - [ ] **Connector-aware memory extraction** — `extractEmailMemory` is used for ALL connectors but the prompt is email-specific. Need connector-aware prompts. Key file: `src/lib/memory/ollama.ts:extractEmailMemory`
 - [ ] Test Gmail sync with real inbox
 - [ ] **Test triage enhancements** (PER-178) — full manual test plan with sub-issues in Linear
