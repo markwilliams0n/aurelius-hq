@@ -26,6 +26,7 @@ import {
   Cloud,
   CloudOff,
 } from "lucide-react";
+import { TYPE_ICONS } from "@/components/aurelius/cards/vault-card";
 
 // ============================================================
 // Types
@@ -52,13 +53,6 @@ interface VaultItem {
 // ============================================================
 // Helpers
 // ============================================================
-
-const TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  document: FileText,
-  credential: Key,
-  fact: Hash,
-  reference: Link,
-};
 
 function formatRelativeDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -418,7 +412,7 @@ function VaultItemCard({
 // Main VaultClient Component
 // ============================================================
 
-const VAULT_CONVERSATION_ID = "vault";
+const VAULT_CONVERSATION_ID = "00000000-0000-0000-0000-000000000001";
 
 export default function VaultClient() {
   const [items, setItems] = useState<VaultItem[]>([]);
@@ -436,9 +430,11 @@ export default function VaultClient() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Refresh items list when the AI saves/searches vault items
+  // Empty deps is correct: fetchItemsFn and fetchTagsFn are stable (useCallback with [])
   const refreshItems = useCallback(() => {
     fetchItemsFn();
     fetchTagsFn();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const refreshItemsRef = useRef(refreshItems);

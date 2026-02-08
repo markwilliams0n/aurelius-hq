@@ -1,7 +1,6 @@
 "use client";
 
 import type { ActionCardData } from "@/lib/types/action-card";
-import { VaultCardContent } from "./vault-card";
 
 interface InfoCardContentProps {
   card: ActionCardData;
@@ -12,11 +11,6 @@ interface InfoCardContentProps {
  * Renders markdown content or structured data.
  */
 export function InfoCardContent({ card }: InfoCardContentProps) {
-  // Route vault-specific cards to dedicated renderer
-  if (card.data.vault_item_id || card.data.reveal_available || card.data.first_sensitive_id) {
-    return <VaultCardContent card={card} />;
-  }
-
   const content = (card.data.content || card.data.message || card.data.body) as string | undefined;
   const items = card.data.items as string[] | undefined;
 

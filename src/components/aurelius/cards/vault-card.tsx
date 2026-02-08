@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { ActionCardData } from "@/lib/types/action-card";
 import { Key, FileText, Hash, Link, Lock, Loader2, Eye } from "lucide-react";
 
-const TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+export const TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   document: FileText,
   credential: Key,
   fact: Hash,

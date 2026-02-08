@@ -6,6 +6,8 @@ import {
   type SummaryLevel,
 } from "@/lib/vault/supermemory";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * POST /api/vault/items/[id]/supermemory
  *
@@ -25,6 +27,9 @@ export async function POST(
 
   try {
     const { id } = await params;
+    if (!UUID_RE.test(id)) {
+      return NextResponse.json({ error: "Invalid item ID" }, { status: 400 });
+    }
     const { action, level, summary: editedSummary } = await request.json();
 
     if (!level || !["short", "medium", "detailed", "full"].includes(level)) {

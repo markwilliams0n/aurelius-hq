@@ -1,6 +1,7 @@
 CREATE TYPE "public"."supermemory_status" AS ENUM('none', 'pending', 'sent');--> statement-breakpoint
 CREATE TYPE "public"."vault_item_type" AS ENUM('document', 'fact', 'credential', 'reference');--> statement-breakpoint
 ALTER TYPE "public"."config_key" ADD VALUE 'capability:vault';--> statement-breakpoint
+ALTER TYPE "public"."card_pattern" ADD VALUE 'vault';--> statement-breakpoint
 CREATE TABLE "vault_items" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"type" "vault_item_type" NOT NULL,

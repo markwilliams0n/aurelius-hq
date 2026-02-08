@@ -156,7 +156,7 @@ async function handleSave(
   return {
     result: JSON.stringify({
       action_card: {
-        pattern: 'info',
+        pattern: 'vault',
         handler: null,
         title: `Saved to Vault: ${item.title}`,
         data: {
@@ -189,7 +189,7 @@ async function handleSearch(
       return {
         result: JSON.stringify({
           action_card: {
-            pattern: 'info',
+            pattern: 'vault',
             handler: null,
             title: `Vault: ${item.title}`,
             data: {
@@ -250,7 +250,7 @@ async function handleSearch(
     return {
       result: JSON.stringify({
         action_card: {
-          pattern: 'info',
+          pattern: 'vault',
           handler: null,
           title: `Vault search: ${items.length} result${items.length === 1 ? '' : 's'}`,
           data: {

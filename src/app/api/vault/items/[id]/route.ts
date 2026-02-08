@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getVaultItem, updateVaultItem } from "@/lib/vault";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * GET /api/vault/items/[id] — Get a single vault item
  *
@@ -19,6 +21,9 @@ export async function GET(
 
   try {
     const { id } = await params;
+    if (!UUID_RE.test(id)) {
+      return NextResponse.json({ error: "Invalid item ID" }, { status: 400 });
+    }
     const item = await getVaultItem(id);
 
     if (!item) {
@@ -60,6 +65,9 @@ export async function PATCH(
 
   try {
     const { id } = await params;
+    if (!UUID_RE.test(id)) {
+      return NextResponse.json({ error: "Invalid item ID" }, { status: 400 });
+    }
     const body = await request.json();
     const { title, tags, sensitive, type } = body;
 

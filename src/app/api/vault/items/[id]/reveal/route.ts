@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getVaultItemForReveal } from "@/lib/vault";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * GET /api/vault/items/[id]/reveal — Get sensitive content for display
  *
@@ -19,6 +21,9 @@ export async function GET(
 
   try {
     const { id } = await params;
+    if (!UUID_RE.test(id)) {
+      return NextResponse.json({ error: "Invalid item ID" }, { status: 400 });
+    }
     const result = await getVaultItemForReveal(id);
 
     if (!result) {

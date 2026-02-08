@@ -105,5 +105,6 @@ export async function getAllTags(): Promise<string[]> {
   const result = await db.execute(
     sql`SELECT DISTINCT unnest(tags) as tag FROM vault_items ORDER BY tag`
   );
-  return (result as unknown as { tag: string }[]).map((r) => r.tag);
+  const rows = result as unknown as Array<{ tag: string }>;
+  return rows.map((r) => r.tag);
 }

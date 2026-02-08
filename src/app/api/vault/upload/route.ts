@@ -27,8 +27,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
+    // File size limit: 10MB
+    const MAX_SIZE = 10 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      return NextResponse.json(
+        { error: "File too large (max 10MB)" },
+        { status: 400 }
+      );
+    }
+
+    // File type allowlist
+    const ALLOWED_TYPES = [
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "text/plain",
+      "text/markdown",
+      "text/csv",
+      "image/png",
+      "image/jpeg",
+    ];
     const contentType = file.type || "application/octet-stream";
+    if (!ALLOWED_TYPES.includes(contentType)) {
+      return NextResponse.json(
+        { error: `File type not supported: ${contentType}` },
+        { status: 400 }
+      );
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
     const fileName = file.name;
 
     // Save file to disk

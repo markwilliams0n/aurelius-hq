@@ -1,6 +1,6 @@
 import { generate, isOllamaAvailable } from "@/lib/memory/ollama";
 import { getAllTags } from "@/lib/vault";
-import { SENSITIVE_PATTERNS } from "@/lib/vault/patterns";
+import { SENSITIVE_PATTERNS, redactSensitiveContent } from "@/lib/vault/patterns";
 
 export interface VaultClassification {
   title: string;
@@ -32,10 +32,15 @@ export async function classifyVaultItem(
     };
   }
 
+  // Redact sensitive content before sending to Ollama
+  const contentForClassification = patternSensitive
+    ? redactSensitiveContent(content.slice(0, 500))
+    : content.slice(0, 500);
+
   const prompt = `Classify this item for a personal vault/filing system.
 
 Content (first 500 chars):
-${content.slice(0, 500)}
+${contentForClassification}
 
 Existing tags in the system: [${existingTags.join(", ")}]
 ${hints?.title ? `User-provided title: ${hints.title}` : ""}
