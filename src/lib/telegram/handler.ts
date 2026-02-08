@@ -14,6 +14,7 @@ import {
   sendMessage,
   sendTypingAction,
   splitMessage,
+  setOwnerChatId,
   type TelegramUpdate,
   type TelegramMessage,
 } from './client';
@@ -394,6 +395,9 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
   if (!message || !message.text) {
     return;
   }
+
+  // Remember the owner's chat ID for proactive notifications
+  setOwnerChatId(message.chat.id);
 
   const text = message.text.trim();
 

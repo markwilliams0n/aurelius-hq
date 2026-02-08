@@ -10,6 +10,7 @@ import {
 import { startSession, type ActiveSession } from "@/lib/capabilities/code/executor";
 import { buildCodePrompt } from "@/lib/capabilities/code/prompts";
 import { getCard, updateCard } from "../db";
+import { notifyOwner } from "@/lib/telegram/client";
 
 // ---------------------------------------------------------------------------
 // Active session tracking
@@ -78,6 +79,15 @@ async function finalizeSession(
         },
       });
     }
+
+    // Notify via Telegram
+    const task = (data.task as string) || 'Unknown task';
+    const truncatedTask = task.length > 50 ? task.slice(0, 47) + '...' : task;
+    const costStr = totalCostUsd !== null ? `$${totalCostUsd.toFixed(2)}` : '?';
+    const filesChanged = changedFiles?.length ?? 0;
+    notifyOwner(
+      `🟢 Coding session completed\n\nTask: ${truncatedTask}\nTurns: ${totalTurns} · Cost: ${costStr}\nFiles changed: ${filesChanged}`
+    ).catch(() => {});
   } catch (err) {
     console.error(`[code-session:${sessionId}] Failed to gather results:`, err);
   }
@@ -170,6 +180,18 @@ registerCardHandler("code:start", {
               console.error(`[code-session:${sessionId}] Failed to update card:`, err);
             }
           }
+
+          // Notify via Telegram — session needs a response
+          const truncatedTask = task.length > 50 ? task.slice(0, 47) + '...' : task;
+          const costStr = totalCostUsd !== null ? `$${totalCostUsd.toFixed(2)}` : '?';
+          let telegramMsg = `🔵 Coding session needs your response\n\n`;
+          telegramMsg += `Task: ${truncatedTask}\n`;
+          telegramMsg += `Turns: ${totalTurns} · Cost: ${costStr}\n\n`;
+          if (result.text) {
+            const msgPreview = result.text.length > 1000 ? result.text.slice(0, 997) + '...' : result.text;
+            telegramMsg += `Claude says:\n${msgPreview}`;
+          }
+          notifyOwner(telegramMsg).catch(() => {});
         },
 
         async onError(error) {
@@ -191,6 +213,10 @@ registerCardHandler("code:start", {
               console.error(`[code-session:${sessionId}] Failed to update card on error:`, err);
             }
           }
+
+          // Notify via Telegram
+          const truncatedTask = task.length > 50 ? task.slice(0, 47) + '...' : task;
+          notifyOwner(`🔴 Coding session failed\n\nTask: ${truncatedTask}\nError: ${error.message}`).catch(() => {});
         },
       });
     } catch (err) {

@@ -194,6 +194,55 @@ export async function getMe(): Promise<TelegramUser> {
   return data.result!;
 }
 
+// ---------------------------------------------------------------------------
+// Owner chat ID — for proactive notifications (coding sessions, alerts, etc.)
+// ---------------------------------------------------------------------------
+
+/** Cached chat ID from the most recent incoming Telegram message. */
+let ownerChatId: number | null = null;
+
+/** Call this whenever you receive a Telegram message to remember the chat ID. */
+export function setOwnerChatId(chatId: number): void {
+  ownerChatId = chatId;
+}
+
+/**
+ * Get the owner's chat ID. Checks (in order):
+ * 1. In-memory cache (set from last incoming Telegram message)
+ * 2. TELEGRAM_CHAT_ID env var
+ *
+ * Returns null if neither is available.
+ */
+export function getOwnerChatId(): number | null {
+  if (ownerChatId) return ownerChatId;
+  const envId = process.env.TELEGRAM_CHAT_ID;
+  if (envId) return parseInt(envId, 10);
+  return null;
+}
+
+/**
+ * Send a proactive notification to the owner.
+ * Silently fails if no chat ID is available.
+ */
+export async function notifyOwner(
+  text: string,
+  options?: { parseMode?: 'Markdown' | 'MarkdownV2' | 'HTML' },
+): Promise<void> {
+  const chatId = getOwnerChatId();
+  if (!chatId) {
+    console.warn('[telegram] Cannot notify owner — no chat ID available. Set TELEGRAM_CHAT_ID or send a Telegram message first.');
+    return;
+  }
+  try {
+    const chunks = splitMessage(text);
+    for (const chunk of chunks) {
+      await sendMessage(chatId, chunk, options);
+    }
+  } catch (err) {
+    console.error('[telegram] Failed to notify owner:', err);
+  }
+}
+
 /**
  * Split a long message into chunks that fit Telegram's 4096 character limit
  */
