@@ -380,7 +380,7 @@ export function VaultWizard({ isOpen, onClose, onItemSaved, editItem }: VaultWiz
       };
 
       if (!isEdit) {
-        body.content = state.summary || state.extractedText || state.textContent;
+        body.content = state.extractedText || state.textContent;
       }
 
       const response = await fetch(url, {

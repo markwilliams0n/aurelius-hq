@@ -191,8 +191,11 @@ async function handleSave(
     : [];
   const allTags = [...new Set([...userTags, ...classification.tags])];
 
-  // Build stored content: use normalized version if available, append search keywords
-  const storedContent = classification.normalizedContent || content;
+  // Build stored content: for short items (facts, credentials), use normalized version
+  // For longer content (documents), always keep the original to avoid truncation
+  const storedContent = classification.normalizedContent && content.length <= 500
+    ? classification.normalizedContent
+    : content;
   const keywordSuffix = classification.searchKeywords?.length
     ? `\n\n[keywords: ${classification.searchKeywords.join(', ')}]`
     : '';
