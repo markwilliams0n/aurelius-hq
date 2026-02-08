@@ -100,6 +100,80 @@ export async function updateVaultItem(
   return updated ?? null;
 }
 
+// Common English stop words to exclude from Jaccard similarity scoring
+const STOP_WORDS = new Set([
+  "the", "and", "for", "are", "but", "not", "you", "all", "can", "her",
+  "was", "one", "our", "out", "has", "have", "had", "its", "this", "that",
+  "with", "from", "they", "been", "will", "would", "could", "should",
+  "what", "when", "where", "which", "their", "there", "then", "than",
+  "them", "these", "those", "each", "every", "about", "into", "over",
+  "also", "just", "more", "some", "such", "only", "other", "does",
+]);
+
+/** Extract meaningful words from text, filtering stop words */
+function extractWords(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, "")
+      .split(/\s+/)
+      .filter((w) => w.length > 2 && !STOP_WORDS.has(w))
+  );
+}
+
+/**
+ * Find a duplicate vault item by fuzzy title match.
+ * Returns the best match if similarity is above threshold.
+ */
+export async function findDuplicateVaultItem(
+  title: string,
+  content: string,
+): Promise<VaultItem | null> {
+  if (!title.trim()) return null;
+
+  try {
+    // Use plainto_tsquery for safe natural-language search
+    const candidates = await db
+      .select()
+      .from(vaultItems)
+      .where(
+        sql`to_tsvector('english', ${vaultItems.title} || ' ' || COALESCE(${vaultItems.content}, '')) @@ plainto_tsquery('english', ${title})`
+      )
+      .orderBy(desc(vaultItems.createdAt))
+      .limit(5);
+
+    if (candidates.length === 0) return null;
+
+    // Score by word overlap on title + first 200 chars of content (avoids
+    // common-vocabulary false positives on long documents)
+    const snippet = content.slice(0, 200);
+    const inputWords = extractWords(`${title} ${snippet}`);
+    if (inputWords.size === 0) return null;
+
+    let bestMatch: VaultItem | null = null;
+    let bestScore = 0;
+
+    for (const item of candidates) {
+      const itemSnippet = (item.content || "").slice(0, 200);
+      const itemWords = extractWords(`${item.title} ${itemSnippet}`);
+      const intersection = [...inputWords].filter((w) => itemWords.has(w)).length;
+      const union = new Set([...inputWords, ...itemWords]).size;
+      const jaccard = union > 0 ? intersection / union : 0;
+
+      if (jaccard > bestScore) {
+        bestScore = jaccard;
+        bestMatch = item;
+      }
+    }
+
+    // 0.5 threshold — stricter than before to reduce false positives
+    return bestScore >= 0.5 ? bestMatch : null;
+  } catch {
+    // FTS query might fail on edge cases — not critical, skip dedup
+    return null;
+  }
+}
+
 /** Get all unique tags across vault items */
 export async function getAllTags(): Promise<string[]> {
   const result = await db.execute(
@@ -107,4 +181,10 @@ export async function getAllTags(): Promise<string[]> {
   );
   const rows = result as unknown as Array<{ tag: string }>;
   return rows.map((r) => r.tag);
+}
+
+/** Delete a vault item by ID */
+export async function deleteVaultItem(id: string): Promise<boolean> {
+  const result = await db.delete(vaultItems).where(eq(vaultItems.id, id)).returning();
+  return result.length > 0;
 }

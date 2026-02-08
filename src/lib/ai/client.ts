@@ -87,6 +87,14 @@ export async function* chatStreamWithTools(
 
     let response: Response;
     try {
+      const toolDefs = getAllTools();
+      const requestBody = {
+        model: TOOL_MODEL,
+        messages: conversationMessages,
+        tools: toolDefs,
+        tool_choice: "auto",
+      };
+
       response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -94,12 +102,7 @@ export async function* chatStreamWithTools(
           "Content-Type": "application/json",
           "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
         },
-        body: JSON.stringify({
-          model: TOOL_MODEL,
-          messages: conversationMessages,
-          tools: getAllTools(),
-          tool_choice: "auto",
-        }),
+        body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
     } catch (error) {

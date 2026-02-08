@@ -11,6 +11,8 @@ export type CardHandler = {
   label: string;
   /** Toast message on success */
   successMessage: string;
+  /** If set, client should confirm before executing (destructive actions) */
+  confirmMessage?: string;
 };
 
 const handlers = new Map<string, CardHandler>();
@@ -37,7 +39,7 @@ export async function dispatchCardAction(
   handlerId: string | null | undefined,
   action: string,
   data: Record<string, unknown>
-): Promise<{ status: "pending" | "confirmed" | "dismissed" | "error"; result?: Record<string, unknown>; successMessage?: string }> {
+): Promise<{ status: "pending" | "confirmed" | "dismissed" | "error" | "needs_confirmation"; result?: Record<string, unknown>; successMessage?: string; confirmMessage?: string }> {
   // Generic status-only actions
   if (action === "cancel" || action === "dismiss") {
     return { status: "dismissed" };
@@ -51,11 +53,22 @@ export async function dispatchCardAction(
     return { status: "confirmed" };
   }
 
-  const handler = handlers.get(handlerId);
+  // Try action-specific handler first (e.g. "vault:supermemory" handler + "delete" action → try "vault:delete")
+  const prefix = handlerId.split(":")[0];
+  const actionHandlerId = `${prefix}:${action}`;
+  const handler = handlers.get(actionHandlerId) ?? handlers.get(handlerId);
   if (!handler) {
     return {
       status: "error",
       result: { error: `No handler registered for "${handlerId}"` },
+    };
+  }
+
+  // If handler requires confirmation and client hasn't confirmed yet
+  if (handler.confirmMessage && !data._confirmed) {
+    return {
+      status: "needs_confirmation",
+      confirmMessage: handler.confirmMessage,
     };
   }
 
