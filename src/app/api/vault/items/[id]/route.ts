@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getVaultItem, updateVaultItem } from "@/lib/vault";
+import { getVaultItem, updateVaultItem, deleteVaultItem } from "@/lib/vault";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -51,7 +51,7 @@ export async function GET(
 /**
  * PATCH /api/vault/items/[id] — Update a vault item
  *
- * Body: { title?, tags?, sensitive?, type? }
+ * Body: { title?, content?, tags?, sensitive?, type? }
  * Returns { item: VaultItem }
  */
 export async function PATCH(
@@ -69,9 +69,12 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid item ID" }, { status: 400 });
     }
     const body = await request.json();
-    const { title, tags, sensitive, type } = body;
+    const { title, content, tags, sensitive, type } = body;
 
     // Validate input types
+    if (content !== undefined && typeof content !== "string") {
+      return NextResponse.json({ error: "content must be a string" }, { status: 400 });
+    }
     if (tags !== undefined && !Array.isArray(tags)) {
       return NextResponse.json({ error: "tags must be an array" }, { status: 400 });
     }
@@ -85,6 +88,7 @@ export async function PATCH(
     // Build updates object with only provided fields
     const updates: Record<string, unknown> = {};
     if (title !== undefined) updates.title = title;
+    if (content !== undefined) updates.content = content;
     if (tags !== undefined) updates.tags = tags;
     if (sensitive !== undefined) updates.sensitive = sensitive;
     if (type !== undefined) updates.type = type;
@@ -110,6 +114,44 @@ export async function PATCH(
     console.error("[Vault API] Update error:", error);
     return NextResponse.json(
       { error: "Failed to update vault item" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * DELETE /api/vault/items/[id] — Delete a vault item
+ *
+ * Returns { success: true }
+ */
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { id } = await params;
+    if (!UUID_RE.test(id)) {
+      return NextResponse.json({ error: "Invalid item ID" }, { status: 400 });
+    }
+
+    const deleted = await deleteVaultItem(id);
+    if (!deleted) {
+      return NextResponse.json(
+        { error: "Vault item not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("[Vault API] Delete error:", error);
+    return NextResponse.json(
+      { error: "Failed to delete vault item" },
       { status: 500 }
     );
   }

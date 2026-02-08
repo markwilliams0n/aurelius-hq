@@ -8,6 +8,7 @@ import "@/lib/action-cards/handlers/slack";
 import "@/lib/action-cards/handlers/gmail";
 import "@/lib/action-cards/handlers/linear";
 import "@/lib/action-cards/handlers/config";
+import "@/lib/action-cards/handlers/vault";
 
 export async function POST(
   request: NextRequest,
@@ -43,6 +44,15 @@ export async function POST(
     // Dispatch action through registry
     const cardData = data ?? card.data ?? {};
     const result = await dispatchCardAction(card.handler, action, cardData);
+
+    // If confirmation needed, return without persisting status
+    if (result.status === "needs_confirmation") {
+      return NextResponse.json({
+        success: true,
+        status: "needs_confirmation",
+        confirmMessage: result.confirmMessage,
+      });
+    }
 
     // Persist status + result to DB
     await updateCard(id, {

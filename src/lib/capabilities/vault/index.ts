@@ -1,5 +1,5 @@
 import type { Capability, ToolDefinition, ToolResult } from '../types';
-import { createVaultItem, getVaultItem, searchVaultItems } from '@/lib/vault';
+import { createVaultItem, getVaultItem, searchVaultItems, updateVaultItem, findDuplicateVaultItem } from '@/lib/vault';
 import { classifyVaultItem } from '@/lib/vault/classify';
 import type { VaultItem } from '@/lib/db/schema/vault';
 
@@ -20,11 +20,24 @@ You can save and search items in the user's personal vault using these tools.
 - Present sensitive results with a "Reveal" action card — the client will handle showing the value directly to the user
 - For non-sensitive items: full content is returned and you can reference it in your response
 
+## update_vault_item
+- Use when the user says something stored in the vault is wrong or needs updating
+- Search first to find the item, then update it with corrected information
+- Can update: content, title, type, tags, sensitivity
+- Always confirm what was changed
+
+## IMPORTANT: You MUST call tools to make changes
+- NEVER claim you updated or saved something without actually calling the tool
+- To correct an item: call search_vault first, then call update_vault_item with the item ID
+- To save something new: call save_to_vault
+- If you respond without calling a tool, the data has NOT changed
+
 ## When to use
 - User says "remember this", "save this", "store this"
 - User shares a specific ID, number, or credential
 - User asks "what's my...", "find my...", "do you have my..."
-- User asks to look something up from their vault`;
+- User asks to look something up from their vault
+- User says something in the vault is wrong: "that's the wrong date", "update my...", "change it to..."`;
 
 const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
@@ -92,6 +105,42 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
       },
     },
   },
+  {
+    name: 'update_vault_item',
+    description:
+      'Update an existing vault item. Use search_vault first to find the item ID, then update it with corrected information.',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'The vault item ID to update',
+        },
+        content: {
+          type: 'string',
+          description: 'Updated content (replaces existing content)',
+        },
+        title: {
+          type: 'string',
+          description: 'Updated title',
+        },
+        type: {
+          type: 'string',
+          description: 'Updated type: "document", "fact", "credential", or "reference"',
+        },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Updated tags (replaces existing tags)',
+        },
+        sensitive: {
+          type: 'boolean',
+          description: 'Updated sensitivity flag',
+        },
+      },
+      required: ['id'],
+    },
+  },
 ];
 
 /** Format a vault item for the tool result, redacting sensitive content */
@@ -142,9 +191,50 @@ async function handleSave(
     : [];
   const allTags = [...new Set([...userTags, ...classification.tags])];
 
+  // For short items (facts, credentials), use normalized version (cleans up dates, etc.)
+  // For longer content (documents), always keep the original to avoid truncation
+  const storedContent = classification.normalizedContent && content.length <= 500
+    ? classification.normalizedContent
+    : content;
+
+  // Check for existing duplicate before creating
+  const duplicate = await findDuplicateVaultItem(classification.title, content);
+
+  if (duplicate) {
+    // Update existing item instead of creating a new one
+    const updated = await updateVaultItem(duplicate.id, {
+      content: storedContent,
+      title: classification.title,
+      type: classification.type,
+      sensitive: classification.sensitive,
+      tags: [...new Set([...allTags, ...duplicate.tags])],
+    });
+
+    const item = updated || duplicate;
+
+    return {
+      result: JSON.stringify({
+        action_card: {
+          pattern: 'vault',
+          handler: 'vault:supermemory',
+          title: `Updated in Vault: ${item.title}`,
+          data: {
+            vault_item_id: item.id,
+            title: item.title,
+            type: item.type,
+            tags: item.tags,
+            sensitive: item.sensitive,
+            supermemoryStatus: item.supermemoryStatus,
+          },
+        },
+        summary: `Updated existing "${item.title}" in vault (was "${duplicate.title}")`,
+      }),
+    };
+  }
+
   // Create the vault item
   const item = await createVaultItem({
-    content,
+    content: storedContent,
     title: classification.title,
     type: classification.type,
     sensitive: classification.sensitive,
@@ -157,7 +247,7 @@ async function handleSave(
     result: JSON.stringify({
       action_card: {
         pattern: 'vault',
-        handler: null,
+        handler: 'vault:supermemory',
         title: `Saved to Vault: ${item.title}`,
         data: {
           vault_item_id: item.id,
@@ -271,6 +361,52 @@ async function handleSearch(
   };
 }
 
+async function handleUpdate(
+  toolInput: Record<string, unknown>,
+): Promise<ToolResult> {
+  const id = String(toolInput.id || '');
+  if (!id) {
+    return { result: JSON.stringify({ error: '"id" is required' }) };
+  }
+
+  const existing = await getVaultItem(id);
+  if (!existing) {
+    return { result: JSON.stringify({ error: `Vault item not found: ${id}` }) };
+  }
+
+  const VALID_TYPES = ['document', 'fact', 'credential', 'reference'];
+
+  const updates: Record<string, unknown> = {};
+  if (toolInput.content !== undefined) updates.content = String(toolInput.content);
+  if (toolInput.title !== undefined) updates.title = String(toolInput.title);
+  if (toolInput.type !== undefined) {
+    const typeStr = String(toolInput.type);
+    if (!VALID_TYPES.includes(typeStr)) {
+      return { result: JSON.stringify({ error: `Invalid type "${typeStr}". Must be one of: ${VALID_TYPES.join(', ')}` }) };
+    }
+    updates.type = typeStr;
+  }
+  if (toolInput.tags !== undefined) updates.tags = (toolInput.tags as string[]).map(t => String(t));
+  if (toolInput.sensitive !== undefined) updates.sensitive = Boolean(toolInput.sensitive);
+
+  if (Object.keys(updates).length === 0) {
+    return { result: JSON.stringify({ error: 'No fields to update' }) };
+  }
+
+  const updated = await updateVaultItem(id, updates);
+  if (!updated) {
+    return { result: JSON.stringify({ error: 'Update failed' }) };
+  }
+
+  const changedFields = Object.keys(updates).join(', ');
+  return {
+    result: JSON.stringify({
+      item: formatVaultItem(updated),
+      summary: `Updated "${updated.title}" — changed: ${changedFields}`,
+    }),
+  };
+}
+
 async function handleVaultTool(
   toolName: string,
   toolInput: Record<string, unknown>,
@@ -280,6 +416,8 @@ async function handleVaultTool(
       return handleSave(toolInput);
     case 'search_vault':
       return handleSearch(toolInput);
+    case 'update_vault_item':
+      return handleUpdate(toolInput);
     default:
       return null;
   }
@@ -289,6 +427,6 @@ export const vaultCapability: Capability = {
   name: 'vault',
   tools: TOOL_DEFINITIONS,
   prompt: PROMPT,
-  promptVersion: 1,
+  promptVersion: 2,
   handleTool: handleVaultTool,
 };

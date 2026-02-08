@@ -46,7 +46,7 @@ const PATTERN_ACTIONS: Record<CardPattern, string[]> = {
   config: ["save", "dismiss"],
   confirmation: ["confirm", "cancel"],
   info: ["dismiss"],
-  vault: [],
+  vault: ["supermemory", "delete", "dismiss"],
 };
 
 function getButtonProps(action: string): {
@@ -56,6 +56,8 @@ function getButtonProps(action: string): {
   switch (action) {
     case "send":
       return { variant: "default", label: "Send" };
+    case "supermemory":
+      return { variant: "default", label: "Send to SuperMemory" };
     case "confirm":
       return { variant: "default", label: "Confirm" };
     case "save":
@@ -64,6 +66,8 @@ function getButtonProps(action: string): {
       return { variant: "ghost", label: "Cancel" };
     case "dismiss":
       return { variant: "ghost", label: "Dismiss" };
+    case "delete":
+      return { variant: "destructive", label: "Delete" };
     case "edit":
       return { variant: "outline", label: "Edit" };
     default:

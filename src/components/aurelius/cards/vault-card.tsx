@@ -129,10 +129,10 @@ function VaultSingleItem({
         </div>
       )}
 
-      {/* SM status (save confirmation cards) */}
-      {data.supermemoryStatus && data.supermemoryStatus !== "sent" && (
-        <p className="text-xs text-muted-foreground">
-          Not yet in SuperMemory — visit the Vault page to send.
+      {/* SM status — shown after card is confirmed */}
+      {data.supermemoryStatus === "sent" && (
+        <p className="text-xs text-green-400">
+          Saved to SuperMemory
         </p>
       )}
     </div>

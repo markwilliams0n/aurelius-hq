@@ -348,6 +348,14 @@ export function useChat(options: UseChatOptions) {
           return next;
         });
 
+        if (result.status === "needs_confirmation") {
+          if (confirm(result.confirmMessage || "Are you sure?")) {
+            // Re-send with confirmation flag
+            return handleCardAction(cardId, actionName, { ...editedData, _confirmed: true });
+          }
+          return;
+        }
+
         if (result.status === "confirmed") {
           toast.success(result.successMessage || "Done!");
         } else if (result.status === "error") {
