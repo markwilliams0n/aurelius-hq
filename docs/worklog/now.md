@@ -4,6 +4,16 @@
 
 ## Just Completed
 
+**2026-02-08**
+
+Supermemory ChatGPT Import:
+- Imported 252 memories from ChatGPT history export into Supermemory
+- Fixed timestamps (original file had all items dated to export day; mapped `original_date_tag` to real dates)
+- Removed 1 duplicate, final count: 252 items (~7.5K content tokens, 3% of free tier)
+- Research: Supermemory decay is semantic (static/dynamic), not time-based — no backdating API exists
+- Manifest with all IDs saved for rollback: `docs/research/supermemory-import-manifest.json`
+- Import script: `scripts/import-chatgpt-to-supermemory.ts` (supports `--dry-run` and `--rollback`)
+
 **2026-02-07**
 
 Vault Bug Fixes & Code Review (feature/vault-fixes → main, PR #17, PER-208):
