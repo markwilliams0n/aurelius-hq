@@ -6,22 +6,25 @@ import { generateCardId } from "@/lib/action-cards/db";
 // ── Default configs per batch type ──────────────────────────────────────────
 
 const BATCH_CONFIGS: Record<string, { title: string; explanation: string }> = {
-  archive: {
-    title: "Archive these",
-    explanation:
-      "Routine notifications and messages that don't need your attention.",
+  notifications: {
+    title: "Notifications",
+    explanation: "Tool alerts, CI/CD updates, and system notifications.",
   },
-  "note-archive": {
-    title: "Note & archive",
-    explanation: "Worth knowing about but no action needed.",
+  finance: {
+    title: "Finance",
+    explanation: "Invoices, payments, billing alerts, and purchase orders.",
+  },
+  newsletters: {
+    title: "Newsletters",
+    explanation: "Industry digests, marketing emails, and subscriptions.",
+  },
+  calendar: {
+    title: "Calendar",
+    explanation: "Meeting invites, acceptances, and scheduling updates.",
   },
   spam: {
-    title: "Likely spam",
-    explanation: "These look like spam or unsolicited marketing.",
-  },
-  attention: {
-    title: "Quick review",
-    explanation: "These need attention but can be reviewed as a group.",
+    title: "Spam",
+    explanation: "Cold outreach, junk mail, and unsolicited sales pitches.",
   },
 };
 

@@ -7,9 +7,50 @@ export type OllamaClassificationResult = {
   reason: string;
 };
 
+/** Sender patterns that indicate automated/system messages */
+const AUTO_SENDER_PATTERNS = [
+  "noreply", "no-reply", "donotreply", "do-not-reply",
+  "notifications@", "notification@", "notify@",
+  "mailer@", "mailer-daemon", "postmaster@",
+  "alerts@", "alert@", "monitoring@",
+  "support@", "helpdesk@", "help@",
+  "team@", "info@", "hello@",
+  "updates@", "digest@", "newsletter@",
+  "github.com", "linear.app", "figma.com", "slack.com",
+  "intercom", "airtable.com", "resend.com",
+  "beehiiv", "substack.com", "mailchimp",
+];
+
+/**
+ * Check if the sender looks like an automated system rather than a real person.
+ * This pre-filter prevents Ollama from misclassifying real people's emails.
+ */
+function looksAutomated(sender: string, senderName: string | null, subject: string): boolean {
+  const senderLower = sender.toLowerCase();
+
+  // Check sender email against known automated patterns
+  if (AUTO_SENDER_PATTERNS.some(p => senderLower.includes(p))) {
+    return true;
+  }
+
+  // GitHub CI notifications
+  if (senderLower.includes("github") && subject.includes("run failed")) {
+    return true;
+  }
+
+  // Connector-specific: Linear and Granola items are already structured
+  // They don't come through email sender patterns
+
+  return false;
+}
+
 /**
  * Classify an inbox item using local Ollama LLM.
- * Returns null if Ollama is unavailable or the response can't be parsed.
+ * Returns null if Ollama is unavailable, the sender looks like a real person,
+ * or the response can't be parsed.
+ *
+ * Ollama is only used for items that look automated. Real people's emails
+ * skip Ollama entirely and go to Kimi (or surface individually).
  */
 export async function classifyWithOllama(
   item: {
@@ -26,19 +67,27 @@ export async function classifyWithOllama(
     return null;
   }
 
+  // Pre-filter: only classify items that look automated.
+  // Real people's emails are too nuanced for a small local model.
+  if (!looksAutomated(item.sender, item.senderName, item.subject)) {
+    return null;
+  }
+
   const guidanceBlock =
     guidanceNotes.length > 0
       ? `\nGUIDANCE NOTES (use these to inform your classification):\n${guidanceNotes.map((g) => `- ${g}`).join("\n")}\n`
       : "";
 
-  const prompt = `You are a triage classifier for an inbox system. Classify this item into one of the following batch types, or null if it needs individual attention.
+  const prompt = `This is an automated/system message. Classify it into the most appropriate group.
 
-Batch types:
-- "archive": Low-value, no action needed (newsletters you never read, automated notifications, marketing)
-- "note-archive": Worth a quick note/summary but no action needed (FYI updates, status reports)
-- "spam": Junk, phishing, unwanted solicitation
-- "attention": Needs your attention but not urgent (can be batched for review)
-- null: Needs individual attention — important, urgent, or requires a specific response
+Groups:
+- "notifications": CI/CD failures, tool alerts, system status, device sign-ins, OAuth notifications, deployment updates
+- "finance": Invoices, purchase orders, payment confirmations, billing alerts, credit card charges, payroll reminders, insurance
+- "newsletters": Marketing emails, industry digests, subscription content, press releases, analytics reports
+- "calendar": Meeting invites, calendar acceptances, RSVPs, scheduling changes
+- "spam": Cold outreach, junk, unsolicited sales pitches
+- null: If unsure or doesn't fit any group
+
 ${guidanceBlock}
 ITEM:
 - Source: ${item.connector}
@@ -46,8 +95,8 @@ ITEM:
 - Subject: ${item.subject}
 - Content: ${item.content.slice(0, 500)}
 
-Respond with ONLY valid JSON, no markdown fences or explanation:
-{"batchType": "archive"|"note-archive"|"spam"|"attention"|null, "confidence": 0.0-1.0, "reason": "brief explanation"}`;
+Respond with ONLY valid JSON, no markdown fences:
+{"batchType": "notifications"|"finance"|"newsletters"|"calendar"|"spam"|null, "confidence": 0.0-1.0, "reason": "brief explanation"}`;
 
   try {
     const response = await generate(prompt, { temperature: 0.1 });

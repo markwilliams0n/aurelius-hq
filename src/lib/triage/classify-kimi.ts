@@ -33,18 +33,21 @@ export async function classifyWithKimi(
       ? `\nGUIDANCE NOTES (use these to inform your classification):\n${guidanceNotes.map((g) => `- ${g}`).join("\n")}\n`
       : "";
 
-  const systemPrompt = `You are a triage classifier for an inbox system. Classify items and provide enrichment data.
+  const systemPrompt = `You are a conservative triage classifier. Classify items into groups or return null for individual attention. When in doubt, return null.
 
-Batch types:
-- "archive": Low-value, no action needed (newsletters you never read, automated notifications, marketing)
-- "note-archive": Worth a quick note/summary but no action needed (FYI updates, status reports)
-- "spam": Junk, phishing, unwanted solicitation
-- "attention": Needs your attention but not urgent (can be batched for review)
-- null: Needs individual attention — important, urgent, or requires a specific response
+Groups:
+- "notifications": ONLY for clearly automated tool/system messages: CI/CD failures, bot alerts, deployment notifications, device sign-ins, OAuth alerts, Figma thread notifications, Slack confirmation codes. NOT for messages from real people.
+- "finance": Automated financial notifications: invoice alerts, purchase order confirmations, payment processed notifications, credit card charges, billing reminders, payroll alerts. Must be system-generated (from noreply/automated addresses), not personal financial discussions.
+- "newsletters": Marketing emails, industry digests, subscription content, press releases, analytics reports (beehiiv, Substack, etc.). NOT for personal emails even if they contain news.
+- "calendar": Meeting invites, calendar acceptances/declines, RSVPs, scheduling changes. System-generated calendar notifications.
+- "spam": Cold outreach from unknown senders, junk mail, unsolicited sales pitches, phishing attempts.
+- null: DEFAULT. Use for anything from a real person writing a real message, anything you're unsure about, anything that needs a personal response. If in doubt, return null.
+
+CRITICAL: Real people writing real messages = null. Always.
 ${guidanceBlock}
-Respond with ONLY valid JSON, no markdown fences or explanation:
+Respond with ONLY valid JSON, no markdown fences:
 {
-  "batchType": "archive"|"note-archive"|"spam"|"attention"|null,
+  "batchType": "notifications"|"finance"|"newsletters"|"calendar"|"spam"|null,
   "confidence": 0.0-1.0,
   "reason": "brief explanation",
   "enrichment": {
