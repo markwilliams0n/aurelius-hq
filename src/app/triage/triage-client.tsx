@@ -1076,7 +1076,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           {/* Card stack effect - show next items behind (only for individual cards) */}
           {!isOnBatchCard && filteredItems.slice(individualItemIndex + 1, individualItemIndex + 3).map((item, idx) => (
             <div
-              key={item.id}
+              key={`${item.id}-stack-${idx}`}
               className="absolute"
               style={{
                 transform: `scale(${0.95 - idx * 0.03}) translateY(${(idx + 1) * 8}px)`,
