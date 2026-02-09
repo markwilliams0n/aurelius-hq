@@ -4,7 +4,6 @@ import {
   fetchViewerContext,
   fetchTeamMembers,
   fetchWorkflowStates,
-  createIssue,
   updateIssue,
   getOwnerUserId,
 } from "@/lib/linear/issues";
@@ -311,40 +310,36 @@ export async function handleTaskTool(
           }
         }
 
-        const result = await createIssue({
-          title,
-          description,
-          teamId: team.id,
-          projectId,
-          assigneeId,
-          priority,
-        });
+        // Find display names for the card
+        const projectDisplay = projectId
+          ? context.projects.find((p) => p.id === projectId)?.name
+          : undefined;
+        const assigneeDisplay = assigneeName
+          || (assigneeId ? members.find((m) => m.id === assigneeId)?.name : undefined)
+          || 'Mark';
 
-        if (!result.success || !result.issue) {
-          return {
-            result: JSON.stringify({
-              error: "Failed to create task in Linear",
-            }),
-          };
-        }
+        const truncatedTitle = title.length > 60 ? title.slice(0, 57) + '...' : title;
 
         return {
-          result: JSON.stringify(
-            {
-              success: true,
-              task: {
-                id: result.issue.id,
-                identifier: result.issue.identifier,
-                title: result.issue.title,
-                team: result.issue.team?.name,
-                project: result.issue.project?.name,
-                assignee: result.issue.assignee?.name,
-                url: result.issue.url,
+          result: JSON.stringify({
+            action_card: {
+              pattern: 'approval',
+              handler: 'linear:create-issue',
+              title: `Create task: ${truncatedTitle}`,
+              data: {
+                title,
+                description,
+                teamId: team.id,
+                teamName: team.name,
+                projectId,
+                projectName: projectDisplay,
+                assigneeId,
+                assigneeName: assigneeDisplay,
+                priority,
               },
             },
-            null,
-            2,
-          ),
+            summary: `Drafted Linear task: ${truncatedTitle}`,
+          }),
         };
       } catch (error) {
         return {
