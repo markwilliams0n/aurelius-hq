@@ -24,6 +24,14 @@ export async function POST(request: Request) {
       );
     }
 
+    const VALID_BATCH_TYPES = ["notifications", "finance", "newsletters", "calendar", "spam"];
+    if (!VALID_BATCH_TYPES.includes(toBatchType)) {
+      return NextResponse.json(
+        { error: "Invalid batchType" },
+        { status: 400 }
+      );
+    }
+
     // 1. Get or create the target batch card
     const newCardId = await getOrCreateBatchCard(toBatchType);
 
@@ -39,18 +47,21 @@ export async function POST(request: Request) {
     }
 
     const existingClassification = (item.classification as Record<string, unknown>) || {};
+    const isFromIndividual = fromBatchType === "individual";
     await db
       .update(inboxItems)
       .set({
         classification: {
+          ...existingClassification,
           tier: "rule",
           confidence: 1,
           reason: `User reclassified from ${fromBatchType} to ${toBatchType}`,
           classifiedAt: new Date().toISOString(),
-          ...existingClassification,
           batchType: toBatchType,
           batchCardId: newCardId,
         } as typeof item.classification,
+        // Archive the item when classifying from individual triage
+        ...(isFromIndividual ? { status: "archived" as const } : {}),
         updatedAt: new Date(),
       })
       .where(eq(inboxItems.id, itemId));

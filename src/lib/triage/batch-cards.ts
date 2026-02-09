@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { actionCards, inboxItems } from "@/lib/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { generateCardId } from "@/lib/action-cards/db";
 import { logActivity } from "@/lib/activity";
 import { syncArchiveToGmail, syncSpamToGmail } from "@/lib/gmail/actions";
@@ -49,42 +49,44 @@ function getConfigForBatchType(batchType: string) {
 export async function getOrCreateBatchCard(
   batchType: string
 ): Promise<string> {
-  // Look for existing pending batch card with matching batchType
-  const [existing] = await db
-    .select({ id: actionCards.id })
-    .from(actionCards)
-    .where(
-      and(
-        eq(actionCards.pattern, "batch"),
-        eq(actionCards.status, "pending"),
-        sql`${actionCards.data}->>'batchType' = ${batchType}`
+  return await db.transaction(async (tx) => {
+    // Look for existing pending batch card with matching batchType
+    const [existing] = await tx
+      .select({ id: actionCards.id })
+      .from(actionCards)
+      .where(
+        and(
+          eq(actionCards.pattern, "batch"),
+          eq(actionCards.status, "pending"),
+          sql`${actionCards.data}->>'batchType' = ${batchType}`
+        )
       )
-    )
-    .limit(1);
+      .limit(1);
 
-  if (existing) {
-    return existing.id;
-  }
+    if (existing) {
+      return existing.id;
+    }
 
-  // Create a new batch card
-  const config = getConfigForBatchType(batchType);
-  const id = generateCardId();
+    // Create a new batch card
+    const config = getConfigForBatchType(batchType);
+    const id = generateCardId();
 
-  await db.insert(actionCards).values({
-    id,
-    pattern: "batch",
-    status: "pending",
-    title: config.title,
-    handler: "batch:action",
-    data: {
-      batchType,
-      action: config.action || "archive",
-      explanation: config.explanation,
-      itemCount: 0,
-    },
+    await tx.insert(actionCards).values({
+      id,
+      pattern: "batch",
+      status: "pending",
+      title: config.title,
+      handler: "batch:action",
+      data: {
+        batchType,
+        action: config.action || "archive",
+        explanation: config.explanation,
+        itemCount: 0,
+      },
+    });
+
+    return id;
   });
-
-  return id;
 }
 
 // ── Assign classified items to batch cards ──────────────────────────────────
@@ -296,7 +298,7 @@ export async function actionBatchCard(
     const checkedItems = await db
       .select({ id: inboxItems.id, connector: inboxItems.connector })
       .from(inboxItems)
-      .where(sql`${inboxItems.id} IN ${checkedItemIds}`);
+      .where(inArray(inboxItems.id, checkedItemIds));
     const connectorById = new Map(checkedItems.map((i) => [i.id, i.connector]));
 
     const batchType = (cardData.batchType as string) || "";
@@ -338,13 +340,21 @@ export async function actionBatchCard(
     }
   }
 
-  // Process unchecked items — clear classification
+  // Process unchecked items — mark as user-excluded so they appear individually
+  // (non-null classification prevents re-classification by pipeline)
   if (uncheckedItemIds.length > 0) {
     for (const itemId of uncheckedItemIds) {
       await db
         .update(inboxItems)
         .set({
-          classification: null,
+          classification: {
+            tier: "rule" as const,
+            confidence: 1,
+            reason: "User excluded from batch — kept for individual review",
+            classifiedAt: new Date().toISOString(),
+            batchType: null,
+            batchCardId: null,
+          },
           updatedAt: new Date(),
         })
         .where(eq(inboxItems.id, itemId));

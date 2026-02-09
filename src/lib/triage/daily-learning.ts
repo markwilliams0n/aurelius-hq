@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { activityLog, actionCards } from "@/lib/db/schema";
-import { eq, gte, desc } from "drizzle-orm";
+import { eq, gte, desc, and } from "drizzle-orm";
 import { chat } from "@/lib/ai/client";
 import { getAllRules } from "./rules";
 import { logAiCost } from "./ai-cost";
@@ -38,19 +38,16 @@ export async function runDailyLearning(): Promise<DailyLearningResult> {
   // 1. Query last 24h of triage actions
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-  const actions = await db
+  const recentActions = await db
     .select()
     .from(activityLog)
     .where(
-      eq(activityLog.eventType, "triage_action"),
+      and(
+        eq(activityLog.eventType, "triage_action"),
+        gte(activityLog.createdAt, since),
+      )
     )
-    .orderBy(desc(activityLog.createdAt))
-    .limit(200);
-
-  // Filter to last 24h in JS (drizzle AND with enum column + gte is cleaner this way)
-  const recentActions = actions.filter(
-    (a) => a.createdAt >= since
-  );
+    .orderBy(desc(activityLog.createdAt));
 
   // 2. If no actions, return early
   if (recentActions.length === 0) {
