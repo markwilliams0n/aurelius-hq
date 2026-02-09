@@ -1,101 +1,98 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock dependencies
-vi.mock('../route', () => ({
-  getInboxItemsFromDb: vi.fn(),
+// --- Mock data ---
+const mockEmailItem = {
+  id: 'uuid-email-1',
+  connector: 'gmail',
+  externalId: 'email-1',
+  sender: 'john@acme.io',
+  senderName: 'John Doe',
+  subject: 'Project Update',
+  content: 'Here is the project update...',
+  status: 'new',
+  priority: 'normal',
+  tags: [],
+  rawPayload: null,
+  enrichment: null,
+};
+
+const mockLinearItem = {
+  id: 'uuid-linear-1',
+  connector: 'linear',
+  externalId: 'linear-1',
+  sender: 'Mobile App v2',
+  senderName: 'Alex',
+  subject: '[Bug] Critical issue',
+  content: 'Something is broken',
+  status: 'new',
+  priority: 'urgent',
+  tags: [],
+  rawPayload: null,
+  enrichment: null,
+};
+
+// --- DB mock: chainable select ---
+let dbSelectResult: unknown[] = [mockEmailItem];
+
+const mockLimit = vi.fn(() => Promise.resolve(dbSelectResult));
+const mockSelectWhere = vi.fn(() => ({ limit: mockLimit }));
+const mockSelectFrom = vi.fn(() => ({ where: mockSelectWhere }));
+const mockSelect = vi.fn(() => ({ from: mockSelectFrom }));
+
+const mockUpdateWhere = vi.fn(() => Promise.resolve());
+const mockUpdateSet = vi.fn(() => ({ where: mockUpdateWhere }));
+const mockUpdate = vi.fn(() => ({ set: mockUpdateSet }));
+
+vi.mock('@/lib/db', () => ({
+  db: {
+    select: () => mockSelect(),
+    update: () => mockUpdate(),
+  },
 }));
 
-vi.mock('@/lib/memory/entities', () => ({
-  upsertEntity: vi.fn(),
+vi.mock('@/lib/db/schema', () => ({
+  inboxItems: { externalId: 'externalId' },
+  activityLog: { id: 'id' },
 }));
 
-vi.mock('@/lib/memory/facts', () => ({
-  createFact: vi.fn(),
+vi.mock('drizzle-orm', () => ({
+  eq: vi.fn(),
 }));
 
+// Mock daily notes
 vi.mock('@/lib/memory/daily-notes', () => ({
-  appendToDailyNote: vi.fn(),
+  appendToDailyNote: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Mock crypto.randomUUID
-vi.stubGlobal('crypto', {
-  randomUUID: () => 'test-uuid-' + Math.random().toString(36).substring(7),
-});
+// Mock Supermemory
+vi.mock('@/lib/memory/supermemory', () => ({
+  addMemory: vi.fn().mockResolvedValue(undefined),
+}));
 
-// Import after mocking
+// Mock Ollama
+vi.mock('@/lib/memory/ollama', () => ({
+  isOllamaAvailable: vi.fn().mockResolvedValue(false),
+  generate: vi.fn().mockResolvedValue(null),
+}));
+
+// Mock activity logging
+vi.mock('@/lib/activity', () => ({
+  logActivity: vi.fn().mockResolvedValue({ id: 'activity-1' }),
+}));
+
 import { POST } from '../[id]/memory/route';
-import { getInboxItemsFromDb } from '../route';
-import { upsertEntity } from '@/lib/memory/entities';
-import { createFact } from '@/lib/memory/facts';
 import { appendToDailyNote } from '@/lib/memory/daily-notes';
+import { addMemory } from '@/lib/memory/supermemory';
+import { logActivity } from '@/lib/activity';
 
 describe('Triage Memory API Route', () => {
-  const mockEmailItem = {
-    connector: 'gmail',
-    externalId: 'email-1',
-    sender: 'john@acme.io',
-    senderName: 'John Doe',
-    subject: 'Project Update',
-    content: 'Here is the project update...',
-    status: 'new',
-    priority: 'normal',
-    tags: [],
-  } as any;
-
-  const mockSlackItem = {
-    connector: 'slack',
-    externalId: 'slack-1',
-    sender: '#engineering',
-    senderName: 'Jane Smith',
-    subject: 'Build notification',
-    content: 'Build passed',
-    status: 'new',
-    priority: 'normal',
-    tags: [],
-  } as any;
-
-  const mockLinearItem = {
-    connector: 'linear',
-    externalId: 'linear-1',
-    sender: 'Mobile App v2',
-    senderName: 'Alex',
-    subject: '[Bug] Critical issue',
-    content: 'Something is broken',
-    status: 'new',
-    priority: 'urgent',
-    tags: [],
-  } as any;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(getInboxItemsFromDb).mockResolvedValue([mockEmailItem, mockSlackItem, mockLinearItem]);
-    vi.mocked(upsertEntity).mockResolvedValue({
-      id: 'entity-1',
-      name: 'Test Entity',
-      type: 'person',
-      metadata: {},
-      summary: null,
-      summaryEmbedding: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-    vi.mocked(createFact).mockResolvedValue({
-      id: 'fact-1',
-      entityId: 'entity-1',
-      content: 'Test fact',
-      embedding: null,
-      category: 'context',
-      status: 'active',
-      supersededBy: null,
-      sourceType: 'chat',
-      sourceId: 'test-1',
-      createdAt: new Date(),
-    });
-    vi.mocked(appendToDailyNote).mockResolvedValue();
+    dbSelectResult = [mockEmailItem];
   });
 
   describe('POST /api/triage/[id]/memory', () => {
-    it('extracts memory from email item', async () => {
+    it('returns success with queued status for email item', async () => {
       const request = new Request('http://localhost/api/triage/email-1/memory', {
         method: 'POST',
       });
@@ -107,10 +104,10 @@ describe('Triage Memory API Route', () => {
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
       expect(data.itemId).toBe('email-1');
-      expect(Array.isArray(data.facts)).toBe(true);
+      expect(data.status).toBe('queued');
     });
 
-    it('creates entity for email sender', async () => {
+    it('logs activity for memory save', async () => {
       const request = new Request('http://localhost/api/triage/email-1/memory', {
         method: 'POST',
       });
@@ -118,124 +115,18 @@ describe('Triage Memory API Route', () => {
 
       await POST(request, { params });
 
-      expect(upsertEntity).toHaveBeenCalledWith(
-        'John Doe',
-        'person',
+      expect(logActivity).toHaveBeenCalledWith(
         expect.objectContaining({
-          email: 'john@acme.io',
-          connector: 'gmail',
+          eventType: 'triage_action',
+          actor: 'user',
+          description: expect.stringContaining('Project Update'),
         })
-      );
-    });
-
-    it('extracts company from email domain', async () => {
-      const request = new Request('http://localhost/api/triage/email-1/memory', {
-        method: 'POST',
-      });
-      const params = Promise.resolve({ id: 'email-1' });
-
-      await POST(request, { params });
-
-      // Should create company entity for acme.io domain
-      expect(upsertEntity).toHaveBeenCalledWith(
-        'Acme',
-        'company',
-        expect.objectContaining({
-          domain: 'acme.io',
-        })
-      );
-    });
-
-    it('does not extract company from personal email domains', async () => {
-      vi.mocked(getInboxItemsFromDb).mockResolvedValue([{
-        ...mockEmailItem,
-        externalId: 'personal-email',
-        sender: 'john@gmail.com',
-      }]);
-
-      const request = new Request('http://localhost/api/triage/personal-email/memory', {
-        method: 'POST',
-      });
-      const params = Promise.resolve({ id: 'personal-email' });
-
-      await POST(request, { params });
-
-      // Should not create company entity for gmail.com
-      const companyCalls = vi.mocked(upsertEntity).mock.calls.filter(
-        call => call[1] === 'company'
-      );
-      expect(companyCalls).toHaveLength(0);
-    });
-
-    it('creates fact for sender contact', async () => {
-      const request = new Request('http://localhost/api/triage/email-1/memory', {
-        method: 'POST',
-      });
-      const params = Promise.resolve({ id: 'email-1' });
-
-      await POST(request, { params });
-
-      expect(createFact).toHaveBeenCalledWith(
-        'entity-1',
-        expect.stringContaining('John Doe contacted us about'),
-        'context',
-        'chat',
-        'email-1'
-      );
-    });
-
-    it('creates priority status fact for urgent items', async () => {
-      vi.mocked(getInboxItemsFromDb).mockResolvedValue([mockLinearItem]);
-
-      const request = new Request('http://localhost/api/triage/linear-1/memory', {
-        method: 'POST',
-      });
-      const params = Promise.resolve({ id: 'linear-1' });
-
-      await POST(request, { params });
-
-      expect(createFact).toHaveBeenCalledWith(
-        'entity-1',
-        expect.stringContaining('High priority'),
-        'status',
-        'chat',
-        'linear-1'
-      );
-    });
-
-    it('extracts project entity from Linear items', async () => {
-      vi.mocked(getInboxItemsFromDb).mockResolvedValue([mockLinearItem]);
-
-      const request = new Request('http://localhost/api/triage/linear-1/memory', {
-        method: 'POST',
-      });
-      const params = Promise.resolve({ id: 'linear-1' });
-
-      await POST(request, { params });
-
-      expect(upsertEntity).toHaveBeenCalledWith(
-        'Mobile App v2',
-        'project',
-        expect.objectContaining({
-          source: 'linear',
-        })
-      );
-    });
-
-    it('appends to daily notes', async () => {
-      const request = new Request('http://localhost/api/triage/email-1/memory', {
-        method: 'POST',
-      });
-      const params = Promise.resolve({ id: 'email-1' });
-
-      await POST(request, { params });
-
-      expect(appendToDailyNote).toHaveBeenCalledWith(
-        expect.stringContaining('Triage: Project Update')
       );
     });
 
     it('returns 404 when item not found', async () => {
+      dbSelectResult = [];
+
       const request = new Request('http://localhost/api/triage/non-existent/memory', {
         method: 'POST',
       });
@@ -248,9 +139,7 @@ describe('Triage Memory API Route', () => {
       expect(data.error).toBe('Item not found');
     });
 
-    it('falls back gracefully when database fails', async () => {
-      vi.mocked(upsertEntity).mockRejectedValue(new Error('Database error'));
-
+    it('defaults to summary mode', async () => {
       const request = new Request('http://localhost/api/triage/email-1/memory', {
         method: 'POST',
       });
@@ -259,21 +148,24 @@ describe('Triage Memory API Route', () => {
       const response = await POST(request, { params });
       const data = await response.json();
 
-      // Should still return a successful response even with database failures
-      expect(response.status).toBe(200);
-      expect(data.success).toBe(true);
-      expect(Array.isArray(data.facts)).toBe(true);
-    });
-  });
-
-  describe('fallback behavior', () => {
-    beforeEach(() => {
-      // Reset mocks - set up for fallback mode where database ops fail
-      vi.mocked(getInboxItemsFromDb).mockResolvedValue([mockEmailItem, mockSlackItem, mockLinearItem]);
-      vi.mocked(upsertEntity).mockRejectedValue(new Error('Database error'));
+      expect(data.mode).toBe('summary');
     });
 
-    it('returns facts even when database operations fail', async () => {
+    it('accepts full mode via body', async () => {
+      const request = new Request('http://localhost/api/triage/email-1/memory', {
+        method: 'POST',
+        body: JSON.stringify({ mode: 'full' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const params = Promise.resolve({ id: 'email-1' });
+
+      const response = await POST(request, { params });
+      const data = await response.json();
+
+      expect(data.mode).toBe('full');
+    });
+
+    it('returns activity ID for tracking', async () => {
       const request = new Request('http://localhost/api/triage/email-1/memory', {
         method: 'POST',
       });
@@ -282,14 +174,11 @@ describe('Triage Memory API Route', () => {
       const response = await POST(request, { params });
       const data = await response.json();
 
-      // Should still return success with facts (either real or simulated)
-      expect(response.status).toBe(200);
-      expect(data.success).toBe(true);
-      expect(Array.isArray(data.facts)).toBe(true);
+      expect(data.activityId).toBe('activity-1');
     });
 
-    it('handles database failure gracefully', async () => {
-      vi.mocked(getInboxItemsFromDb).mockResolvedValue([mockLinearItem]);
+    it('handles linear items', async () => {
+      dbSelectResult = [mockLinearItem];
 
       const request = new Request('http://localhost/api/triage/linear-1/memory', {
         method: 'POST',
@@ -301,6 +190,7 @@ describe('Triage Memory API Route', () => {
 
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
+      expect(data.itemId).toBe('linear-1');
     });
   });
 });

@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-// Mock next/headers before importing auth
+// Mock next/headers
 vi.mock('next/headers', () => ({
   cookies: vi.fn(() => Promise.resolve({
     get: vi.fn(() => undefined),
@@ -9,21 +9,61 @@ vi.mock('next/headers', () => ({
   })),
 }))
 
+// Mock database - getSession uses db in production mode
+vi.mock('@/lib/db', () => ({
+  db: {
+    select: vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        innerJoin: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([]),
+        }),
+      }),
+    }),
+    insert: vi.fn().mockReturnValue({
+      values: vi.fn().mockResolvedValue(undefined),
+    }),
+    update: vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue(undefined),
+      }),
+    }),
+    delete: vi.fn().mockReturnValue({
+      where: vi.fn().mockResolvedValue(undefined),
+    }),
+  },
+}))
+
+vi.mock('@/lib/db/schema', () => ({
+  users: {},
+  sessions: {},
+  magicLinks: {},
+}))
+
+vi.mock('drizzle-orm', () => ({
+  eq: vi.fn(),
+  and: vi.fn(),
+  gt: vi.fn(),
+  isNull: vi.fn(),
+}))
+
+vi.mock('nanoid', () => ({
+  nanoid: vi.fn(() => 'test-token-123'),
+}))
+
+import { getSession } from '../auth'
+
 describe('auth', () => {
-  const originalEnv = process.env.NODE_ENV
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   afterEach(() => {
-    Object.defineProperty(process.env, 'NODE_ENV', { value: originalEnv, writable: true })
-    vi.resetModules()
-    vi.clearAllMocks()
+    vi.unstubAllEnvs()
   })
 
   describe('getSession', () => {
     it('returns mock session in development mode', async () => {
-      Object.defineProperty(process.env, 'NODE_ENV', { value: 'development', writable: true })
-
-      // Dynamic import to get fresh module with new env
-      const { getSession } = await import('../auth')
+      vi.stubEnv('NODE_ENV', 'development')
 
       const session = await getSession()
 
@@ -32,14 +72,11 @@ describe('auth', () => {
     })
 
     it('returns null in production mode without valid cookie', async () => {
-      Object.defineProperty(process.env, 'NODE_ENV', { value: 'production', writable: true })
+      vi.stubEnv('NODE_ENV', 'production')
 
-      // Dynamic import to get fresh module with new env
-      const { getSession } = await import('../auth')
-
-      // Without a valid cookie (mocked to return undefined), should return null
       const session = await getSession()
 
+      // Without a valid cookie (mocked to return undefined), should return null
       expect(session).toBeNull()
     })
   })
