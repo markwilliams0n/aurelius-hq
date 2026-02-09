@@ -9,7 +9,7 @@ import { classifyWithOllama } from "./classify-ollama";
 import { classifyWithKimi } from "./classify-kimi";
 
 /** Confidence threshold for accepting Ollama classification */
-const OLLAMA_CONFIDENCE_THRESHOLD = 0.7;
+const OLLAMA_CONFIDENCE_THRESHOLD = 0.85;
 
 /** Result of classifying a single item */
 export type ClassificationResult = {
@@ -133,61 +133,60 @@ export async function classifyNewItems(): Promise<{
     .from(inboxItems)
     .where(and(eq(inboxItems.status, "new"), isNull(inboxItems.classification)));
 
-  if (items.length === 0) {
-    return { classified: 0, byTier: { rule: 0, ollama: 0, kimi: 0 } };
-  }
-
-  // Fetch rules once for all items
-  const rules = await getActiveRules();
-
   const byTier = { rule: 0, ollama: 0, kimi: 0 };
 
-  for (const item of items) {
-    try {
-      const result = await classifyItem(item, rules);
-      byTier[result.tier]++;
+  if (items.length > 0) {
+    // Fetch rules once for all items
+    const rules = await getActiveRules();
 
-      // Build classification data for the DB column
-      const classification = {
-        batchCardId: null,
-        batchType: result.batchType,
-        tier: result.tier,
-        confidence: result.confidence,
-        reason: result.reason,
-        classifiedAt: new Date().toISOString(),
-        ...(result.ruleId ? { ruleId: result.ruleId } : {}),
-      };
+    for (const item of items) {
+      try {
+        const result = await classifyItem(item, rules);
+        byTier[result.tier]++;
 
-      // Build the update — classification + optional enrichment merge
-      const updateData: Record<string, unknown> = {
-        classification,
-        updatedAt: new Date(),
-      };
-
-      // If Kimi returned enrichment, merge it into existing enrichment
-      if (result.enrichment) {
-        const existingEnrichment =
-          (item.enrichment as Record<string, unknown>) || {};
-        updateData.enrichment = {
-          ...existingEnrichment,
-          ...result.enrichment,
+        // Build classification data for the DB column
+        const classification = {
+          batchCardId: null,
+          batchType: result.batchType,
+          tier: result.tier,
+          confidence: result.confidence,
+          reason: result.reason,
+          classifiedAt: new Date().toISOString(),
+          ...(result.ruleId ? { ruleId: result.ruleId } : {}),
         };
-      }
 
-      await db
-        .update(inboxItems)
-        .set(updateData)
-        .where(eq(inboxItems.id, item.id));
-    } catch (error) {
-      console.error(
-        `[Classify] Failed to classify item ${item.id}:`,
-        error
-      );
-      // Continue with remaining items
+        // Build the update — classification + optional enrichment merge
+        const updateData: Record<string, unknown> = {
+          classification,
+          updatedAt: new Date(),
+        };
+
+        // If Kimi returned enrichment, merge it into existing enrichment
+        if (result.enrichment) {
+          const existingEnrichment =
+            (item.enrichment as Record<string, unknown>) || {};
+          updateData.enrichment = {
+            ...existingEnrichment,
+            ...result.enrichment,
+          };
+        }
+
+        await db
+          .update(inboxItems)
+          .set(updateData)
+          .where(eq(inboxItems.id, item.id));
+      } catch (error) {
+        console.error(
+          `[Classify] Failed to classify item ${item.id}:`,
+          error
+        );
+        // Continue with remaining items
+      }
     }
   }
 
-  // Assign classified items to batch cards
+  // Always assign classified items to batch cards — handles both newly
+  // classified items and any orphaned items from previous runs
   const batchResult = await assignItemsToBatchCards();
   if (batchResult.assigned > 0) {
     console.log(`[Classify] Assigned ${batchResult.assigned} items to batch cards:`, batchResult.cards);

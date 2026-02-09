@@ -59,6 +59,7 @@ export interface ParsedEmail {
   labels: string[];
   attachments: GmailAttachment[];
   hasUnsubscribe: boolean;
+  hasListId: boolean;
   unsubscribeUrl?: string;
 }
 

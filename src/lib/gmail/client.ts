@@ -216,6 +216,9 @@ function parseMessage(message: GmailMessage): ParsedEmail {
     }
   }
 
+  // Check for List-Id header (strong mailing list indicator)
+  const hasListId = !!getHeader(headers, 'List-Id');
+
   return {
     messageId: message.id,
     rfc822MessageId: getHeader(headers, 'Message-ID') || getHeader(headers, 'Message-Id'),
@@ -232,6 +235,7 @@ function parseMessage(message: GmailMessage): ParsedEmail {
     labels: message.labelIds || [],
     attachments,
     hasUnsubscribe,
+    hasListId,
     unsubscribeUrl,
   };
 }

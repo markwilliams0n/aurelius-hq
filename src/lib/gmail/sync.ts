@@ -92,9 +92,24 @@ function analyzeSender(email: ParsedEmail, userDomain: string): string[] {
     tags.push('Auto');
   }
 
-  // Newsletter
+  // Newsletter — require more than just an unsubscribe header.
+  // Many transactional emails (purchase orders, invoices) include List-Unsubscribe
+  // for CAN-SPAM compliance but aren't newsletters.
   if (email.hasUnsubscribe) {
-    tags.push('Newsletter');
+    const subject = email.subject.toLowerCase();
+    const transactionalKeywords = [
+      'order', 'invoice', 'receipt', 'purchase', 'payment',
+      'confirm', 'verification', 'reset', 'account', 'shipping',
+      'delivery', 'tracking', 'refund',
+    ];
+    const isTransactional = transactionalKeywords.some(kw => subject.includes(kw));
+    const isFromInternal = senderDomain === userDomain;
+
+    // Tag as Newsletter only if it has a List-Id header (strong signal)
+    // OR has unsubscribe and isn't transactional/internal
+    if (email.hasListId || (!isTransactional && !isFromInternal)) {
+      tags.push('Newsletter');
+    }
   }
 
   // Group (many recipients)
