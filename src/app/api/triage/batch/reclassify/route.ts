@@ -43,6 +43,10 @@ export async function POST(request: Request) {
       .update(inboxItems)
       .set({
         classification: {
+          tier: "rule",
+          confidence: 1,
+          reason: `User reclassified from ${fromBatchType} to ${toBatchType}`,
+          classifiedAt: new Date().toISOString(),
           ...existingClassification,
           batchType: toBatchType,
           batchCardId: newCardId,
