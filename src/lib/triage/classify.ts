@@ -4,6 +4,7 @@ import type { InboxItem, TriageRule } from "@/lib/db/schema";
 import { eq, isNull, and } from "drizzle-orm";
 import { matchRule, getActiveRules, incrementRuleMatchCount } from "./rules";
 import { getGuidanceNotes } from "./rules";
+import { assignItemsToBatchCards } from "./batch-cards";
 import { classifyWithOllama } from "./classify-ollama";
 import { classifyWithKimi } from "./classify-kimi";
 
@@ -149,6 +150,7 @@ export async function classifyNewItems(): Promise<{
       // Build classification data for the DB column
       const classification = {
         batchCardId: null,
+        batchType: result.batchType,
         tier: result.tier,
         confidence: result.confidence,
         reason: result.reason,
@@ -183,6 +185,12 @@ export async function classifyNewItems(): Promise<{
       );
       // Continue with remaining items
     }
+  }
+
+  // Assign classified items to batch cards
+  const batchResult = await assignItemsToBatchCards();
+  if (batchResult.assigned > 0) {
+    console.log(`[Classify] Assigned ${batchResult.assigned} items to batch cards:`, batchResult.cards);
   }
 
   return { classified: items.length, byTier };

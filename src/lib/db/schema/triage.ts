@@ -137,6 +137,7 @@ export const inboxItems = pgTable(
     // Classification from pre-processing pipeline
     classification: jsonb("classification").$type<{
       batchCardId: string | null;
+      batchType: string | null;
       tier: "rule" | "ollama" | "kimi";
       confidence: number;
       reason: string;
