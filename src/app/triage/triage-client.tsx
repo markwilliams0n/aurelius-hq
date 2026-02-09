@@ -14,6 +14,7 @@ import { TriageChat } from "@/components/aurelius/triage-chat";
 import { SuggestedTasksBox } from "@/components/aurelius/suggested-tasks-box";
 import { TriageSnoozeMenu } from "@/components/aurelius/triage-snooze-menu";
 import { TaskCreatorPanel } from "@/components/aurelius/task-creator-panel";
+import { TriageGroupPicker } from "@/components/aurelius/triage-group-picker";
 import { ActionCard } from "@/components/aurelius/action-card";
 import { CardContent } from "@/components/aurelius/cards/card-content";
 import type { ActionCardData } from "@/lib/types/action-card";
@@ -31,7 +32,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type ViewMode = "triage" | "action" | "reply" | "detail" | "chat" | "snooze" | "create-task" | "quick-task";
+type ViewMode = "triage" | "action" | "reply" | "detail" | "chat" | "snooze" | "create-task" | "quick-task" | "group-picker";
 type ConnectorFilter = "all" | "gmail" | "slack" | "linear" | "granola";
 type TriageView = "card" | "list";
 
@@ -871,6 +872,10 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           e.preventDefault();
           handleActionNeeded();
           break;
+        case "g":
+          e.preventDefault();
+          setViewMode("group-picker");
+          break;
         case "l":
         case "L":
           // Open in Linear (if Linear item with URL)
@@ -1130,6 +1135,17 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
         <TriageActionMenu
           item={currentItem}
           onAction={handleActionComplete}
+          onClose={handleCloseOverlay}
+        />
+      )}
+
+      {/* Group picker overlay */}
+      {viewMode === "group-picker" && currentItem && (
+        <TriageGroupPicker
+          item={currentItem}
+          onSelect={async (batchType) => {
+            await handleActionComplete("classify", { batchType });
+          }}
           onClose={handleCloseOverlay}
         />
       )}
