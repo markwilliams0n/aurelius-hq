@@ -3,6 +3,7 @@ import { actionCards, inboxItems } from "@/lib/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { generateCardId } from "@/lib/action-cards/db";
 import { logActivity } from "@/lib/activity";
+import { syncArchiveToGmail, syncSpamToGmail } from "@/lib/gmail/actions";
 
 // ── Default configs per batch type ──────────────────────────────────────────
 
@@ -291,8 +292,17 @@ export async function actionBatchCard(
 
   // Process checked items — apply the action
   if (checkedItemIds.length > 0) {
+    // Look up connectors for all checked items so we know which are Gmail
+    const checkedItems = await db
+      .select({ id: inboxItems.id, connector: inboxItems.connector })
+      .from(inboxItems)
+      .where(sql`${inboxItems.id} IN ${checkedItemIds}`);
+    const connectorById = new Map(checkedItems.map((i) => [i.id, i.connector]));
+
+    const batchType = (cardData.batchType as string) || "";
+
     for (const itemId of checkedItemIds) {
-      // All actions archive the item
+      // All actions archive the item in DB
       await db
         .update(inboxItems)
         .set({
@@ -300,6 +310,19 @@ export async function actionBatchCard(
           updatedAt: new Date(),
         })
         .where(eq(inboxItems.id, itemId));
+
+      // Sync to Gmail if it's a gmail item
+      if (connectorById.get(itemId) === "gmail") {
+        if (batchType === "spam") {
+          syncSpamToGmail(itemId).catch((err) =>
+            console.error(`[Batch Cards] Failed to sync spam to Gmail for ${itemId}:`, err)
+          );
+        } else {
+          syncArchiveToGmail(itemId).catch((err) =>
+            console.error(`[Batch Cards] Failed to sync archive to Gmail for ${itemId}:`, err)
+          );
+        }
+      }
     }
 
     // Calendar accept: log attendance in activity
