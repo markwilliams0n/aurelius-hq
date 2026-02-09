@@ -471,12 +471,19 @@ registerCardHandler("code:approve", {
   async execute(data) {
     const worktreePath = data.worktreePath as string;
     const branchName = data.branchName as string;
+    const cardId = data._cardId as string | undefined;
 
     if (!worktreePath || !branchName) {
       return { status: "error", error: "Missing worktreePath or branchName" };
     }
 
     mergeWorktree(worktreePath, branchName);
+
+    // Mark as terminal so it stops showing in pending lists
+    if (cardId) {
+      await updateCard(cardId, { data: { ...data, state: 'merged' } });
+    }
+
     return { status: "confirmed" };
   },
 });
@@ -492,6 +499,7 @@ registerCardHandler("code:reject", {
   async execute(data) {
     const worktreePath = data.worktreePath as string;
     const branchName = data.branchName as string;
+    const cardId = data._cardId as string | undefined;
 
     if (!worktreePath || !branchName) {
       return { status: "error", error: "Missing worktreePath or branchName" };
@@ -502,6 +510,11 @@ registerCardHandler("code:reject", {
       cleanupWorktree(worktreePath, branchName);
     } catch {
       // ignore
+    }
+
+    // Mark as terminal so it stops showing in pending lists
+    if (cardId) {
+      await updateCard(cardId, { data: { ...data, state: 'rejected' } });
     }
 
     return { status: "confirmed" };
@@ -521,6 +534,7 @@ registerCardHandler("code:stop", {
     const sessionId = data.sessionId as string;
     const worktreePath = data.worktreePath as string;
     const branchName = data.branchName as string;
+    const cardId = data._cardId as string | undefined;
 
     if (!sessionId) {
       return { status: "error", error: "Missing sessionId" };
@@ -540,6 +554,11 @@ registerCardHandler("code:stop", {
       } catch {
         // ignore
       }
+    }
+
+    // Mark as terminal so it stops showing in pending lists
+    if (cardId) {
+      await updateCard(cardId, { data: { ...data, state: 'stopped' } });
     }
 
     return { status: "confirmed" };
