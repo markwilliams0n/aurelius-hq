@@ -73,7 +73,7 @@ describe('Gmail Actions', () => {
     it('archives Gmail item in Gmail', async () => {
       await syncArchiveToGmail('item-123');
 
-      expect(archiveEmail).toHaveBeenCalledWith('msg-123');
+      expect(archiveEmail).toHaveBeenCalledWith('thread-123');
     });
 
     it('skips non-Gmail items', async () => {
@@ -93,9 +93,22 @@ describe('Gmail Actions', () => {
       expect(archiveEmail).not.toHaveBeenCalled();
     });
 
-    it('handles missing messageId gracefully', async () => {
+    it('falls back to rawPayload.threadId when externalId is null', async () => {
       mockFindInboxItem.mockResolvedValue({
         ...mockGmailItem,
+        externalId: null,
+        rawPayload: { threadId: 'fallback-thread-456' },
+      });
+
+      await syncArchiveToGmail('item-123');
+
+      expect(archiveEmail).toHaveBeenCalledWith('fallback-thread-456');
+    });
+
+    it('handles missing threadId gracefully', async () => {
+      mockFindInboxItem.mockResolvedValue({
+        ...mockGmailItem,
+        externalId: null,
         rawPayload: {},
       });
 
@@ -116,7 +129,7 @@ describe('Gmail Actions', () => {
     it('marks Gmail item as spam in Gmail', async () => {
       await syncSpamToGmail('item-123');
 
-      expect(markAsSpam).toHaveBeenCalledWith('msg-123');
+      expect(markAsSpam).toHaveBeenCalledWith('thread-123');
     });
 
     it('skips non-Gmail items', async () => {

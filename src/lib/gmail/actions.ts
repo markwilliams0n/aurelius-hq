@@ -14,8 +14,26 @@ import {
 import { findInboxItem } from './queries';
 
 /**
+ * Resolve a triage item to its Gmail threadId.
+ * Returns null if the item is not found, not a Gmail item, or has no threadId.
+ */
+async function resolveGmailThreadId(itemId: string): Promise<string | null> {
+  const item = await findInboxItem(itemId);
+  if (!item || item.connector !== 'gmail') return null;
+
+  // threadId is stored as externalId on the inbox item
+  const threadId = item.externalId
+    || ((item.rawPayload as Record<string, unknown>)?.threadId as string | undefined);
+  if (!threadId) {
+    console.warn(`[Gmail] No threadId found for item ${itemId}`);
+    return null;
+  }
+  return threadId;
+}
+
+/**
  * Resolve a triage item to its Gmail messageId.
- * Returns null if the item is not found, not a Gmail item, or has no messageId.
+ * Used for per-message operations like labels.
  */
 async function resolveGmailMessageId(itemId: string): Promise<string | null> {
   const item = await findInboxItem(itemId);
@@ -30,15 +48,16 @@ async function resolveGmailMessageId(itemId: string): Promise<string | null> {
 }
 
 /**
- * Archive in Gmail when archived in triage
+ * Archive in Gmail when archived in triage.
+ * Uses threads.modify to archive the entire thread.
  */
 export async function syncArchiveToGmail(itemId: string): Promise<void> {
-  const messageId = await resolveGmailMessageId(itemId);
-  if (!messageId) return;
+  const threadId = await resolveGmailThreadId(itemId);
+  if (!threadId) return;
 
   try {
-    await archiveEmail(messageId);
-    console.log(`[Gmail] Archived message ${messageId} in Gmail`);
+    await archiveEmail(threadId);
+    console.log(`[Gmail] Archived thread ${threadId} in Gmail`);
   } catch (error) {
     console.error(`[Gmail] Failed to archive in Gmail:`, error);
     throw error;
@@ -46,15 +65,15 @@ export async function syncArchiveToGmail(itemId: string): Promise<void> {
 }
 
 /**
- * Mark as spam in Gmail
+ * Mark as spam in Gmail (thread-level)
  */
 export async function syncSpamToGmail(itemId: string): Promise<void> {
-  const messageId = await resolveGmailMessageId(itemId);
-  if (!messageId) return;
+  const threadId = await resolveGmailThreadId(itemId);
+  if (!threadId) return;
 
   try {
-    await markAsSpam(messageId);
-    console.log(`[Gmail] Marked message ${messageId} as spam in Gmail`);
+    await markAsSpam(threadId);
+    console.log(`[Gmail] Marked thread ${threadId} as spam in Gmail`);
   } catch (error) {
     console.error(`[Gmail] Failed to mark as spam in Gmail:`, error);
     throw error;

@@ -316,12 +316,13 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     if (!currentItem) return;
 
     const itemToArchive = currentItem;
+    const apiId = itemToArchive.dbId || itemToArchive.id;
     setAnimatingOut("left");
     setLastAction({ type: "archive", itemId: itemToArchive.id, item: itemToArchive });
 
-    // Fire API calls in background immediately
-    fetch(`/api/triage/${itemToArchive.id}/tasks`, { method: "DELETE" }).catch(() => {});
-    fetch(`/api/triage/${itemToArchive.id}`, {
+    // Fire API calls in background immediately (use dbId for reliable lookup)
+    fetch(`/api/triage/${apiId}/tasks`, { method: "DELETE" }).catch(() => {});
+    fetch(`/api/triage/${apiId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "archive" }),
@@ -349,7 +350,8 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
   const handleMemory = useCallback(async () => {
     if (!currentItem) return;
 
-    fetch(`/api/triage/${currentItem.id}/memory`, {
+    const apiId = currentItem.dbId || currentItem.id;
+    fetch(`/api/triage/${apiId}/memory`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mode: "summary" }),
@@ -366,7 +368,8 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
   const handleMemoryFull = useCallback(async () => {
     if (!currentItem) return;
 
-    fetch(`/api/triage/${currentItem.id}/memory`, {
+    const apiId = currentItem.dbId || currentItem.id;
+    fetch(`/api/triage/${apiId}/memory`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mode: "full" }),
@@ -416,8 +419,8 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     setViewMode("snooze");
   }, [currentItem]);
 
-  // Action Needed (a) - 3-day snooze + Gmail label, swipe animation + optimistic
-  const handleActionNeeded = useCallback((targetItem?: TriageItem) => {
+  // Action Needed (a) - 3-day snooze + Gmail label, swipe animation + await API
+  const handleActionNeeded = useCallback(async (targetItem?: TriageItem) => {
     const itemToAction = targetItem || currentItem;
     if (!itemToAction) return;
 
@@ -426,26 +429,31 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
       return;
     }
 
+    // Use dbId for reliable DB lookup
+    const apiId = itemToAction.dbId || itemToAction.id;
+
     setAnimatingOut("right");
     setLastAction({ type: "action-needed", itemId: itemToAction.id, item: itemToAction });
 
-    // Fire API calls in background immediately
-    fetch(`/api/triage/${itemToAction.id}/tasks`, { method: "DELETE" }).catch(() => {});
-    fetch(`/api/triage/${itemToAction.id}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "action-needed" }),
-    }).catch((error) => {
+    // Await the API call to ensure DB is updated before any refetch can occur
+    try {
+      fetch(`/api/triage/${apiId}/tasks`, { method: "DELETE" }).catch(() => {});
+      const res = await fetch(`/api/triage/${apiId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "action-needed" }),
+      });
+      if (!res.ok) throw new Error(`API returned ${res.status}`);
+    } catch (error) {
       console.error("Failed to mark action needed:", error);
       toast.error("Failed to mark for action - item restored");
-      setItems((prev) => [itemToAction, ...prev]);
-    });
-
-    // Remove from list after brief animation
-    setTimeout(() => {
-      setItems((prev) => prev.filter((i) => i.id !== itemToAction.id));
       setAnimatingOut(null);
-    }, 150);
+      return;
+    }
+
+    // Remove from list after API confirms
+    setItems((prev) => prev.filter((i) => i.id !== itemToAction.id));
+    setAnimatingOut(null);
 
     toast.success("Marked for action (3 days)", {
       action: {
@@ -460,12 +468,13 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     if (!currentItem) return;
 
     const itemToSpam = currentItem;
+    const apiId = itemToSpam.dbId || itemToSpam.id;
     setAnimatingOut("left");
     setLastAction({ type: "spam", itemId: itemToSpam.id, item: itemToSpam });
 
-    // Fire API calls in background immediately
-    fetch(`/api/triage/${itemToSpam.id}/tasks`, { method: "DELETE" }).catch(() => {});
-    fetch(`/api/triage/${itemToSpam.id}`, {
+    // Fire API calls in background immediately (use dbId for reliable lookup)
+    fetch(`/api/triage/${apiId}/tasks`, { method: "DELETE" }).catch(() => {});
+    fetch(`/api/triage/${apiId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "spam" }),
@@ -494,13 +503,14 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     if (!currentItem) return;
 
     const itemToSnooze = currentItem;
+    const apiId = itemToSnooze.dbId || itemToSnooze.id;
     setViewMode("triage");
     setAnimatingOut("right");
     setLastAction({ type: "snooze", itemId: itemToSnooze.id, item: itemToSnooze });
 
-    // Fire API calls in background immediately
-    fetch(`/api/triage/${itemToSnooze.id}/tasks`, { method: "DELETE" }).catch(() => {});
-    fetch(`/api/triage/${itemToSnooze.id}`, {
+    // Fire API calls in background immediately (use dbId for reliable lookup)
+    fetch(`/api/triage/${apiId}/tasks`, { method: "DELETE" }).catch(() => {});
+    fetch(`/api/triage/${apiId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "snooze", snoozeUntil: until.toISOString() }),
@@ -574,8 +584,9 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
       return;
     }
 
+    const apiId = currentItem.dbId || currentItem.id;
     try {
-      await fetch(`/api/triage/${currentItem.id}`, {
+      await fetch(`/api/triage/${apiId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, ...data }),
@@ -608,9 +619,10 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
       setItems((prev) => [...itemsToRestore, ...prev]);
       setCurrentIndex(0);
 
-      // Restore all via API
+      // Restore all via API (use dbId for reliable lookup)
       itemsToRestore.forEach((item) => {
-        fetch(`/api/triage/${item.id}`, {
+        const restoreId = item.dbId || item.id;
+        fetch(`/api/triage/${restoreId}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "restore" }),
@@ -631,8 +643,9 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
       setItems((prev) => [itemToRestore, ...prev]);
       setCurrentIndex(0);
 
-      // Fire restore API in background, pass previousAction so server can clean up enrichment
-      fetch(`/api/triage/${action.itemId}`, {
+      // Fire restore API in background (use dbId for reliable lookup)
+      const restoreId = action.item.dbId || action.itemId;
+      fetch(`/api/triage/${restoreId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "restore", previousAction: action.type }),
@@ -693,10 +706,11 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     setItems((prev) => prev.filter((i) => !selectedIds.has(i.id)));
     setSelectedIds(new Set());
 
-    // Fire archive API calls (fire-and-forget)
-    idsToArchive.forEach((id) => {
-      fetch(`/api/triage/${id}/tasks`, { method: "DELETE" }).catch(() => {});
-      fetch(`/api/triage/${id}`, {
+    // Fire archive API calls (fire-and-forget, use dbId for reliable lookup)
+    itemsToArchive.forEach((item) => {
+      const apiId = item.dbId || item.id;
+      fetch(`/api/triage/${apiId}/tasks`, { method: "DELETE" }).catch(() => {});
+      fetch(`/api/triage/${apiId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "archive" }),
@@ -859,7 +873,8 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           e.preventDefault();
           if (currentItem) {
             // Create a pre-filled Linear issue action card
-            fetch(`/api/triage/${currentItem.id}/quick-task`, { method: "POST" })
+            const taskApiId = currentItem.dbId || currentItem.id;
+            fetch(`/api/triage/${taskApiId}/quick-task`, { method: "POST" })
               .then((res) => res.json())
               .then((data) => {
                 if (data.card) {
@@ -1076,7 +1091,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           {/* Card stack effect - show next items behind (only for individual cards) */}
           {!isOnBatchCard && filteredItems.slice(individualItemIndex + 1, individualItemIndex + 3).map((item, idx) => (
             <div
-              key={item.id}
+              key={`${item.id}-stack-${idx}`}
               className="absolute"
               style={{
                 transform: `scale(${0.95 - idx * 0.03}) translateY(${(idx + 1) * 8}px)`,
@@ -1122,8 +1137,8 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
                 {/* Suggested tasks box */}
                 {!animatingOut && (
                   <SuggestedTasksBox
-                    itemId={currentItem.id}
-                    initialTasks={tasksByItemId[currentItem.id]}
+                    itemId={currentItem.dbId || currentItem.id}
+                    initialTasks={tasksByItemId[currentItem.dbId || currentItem.id]}
                   />
                 )}
               </>

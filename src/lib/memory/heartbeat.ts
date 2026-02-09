@@ -7,6 +7,7 @@ import { createBackup, type BackupResult } from './backup';
 import { logConnectorSync } from '@/lib/system-events';
 import { classifyNewItems } from '@/lib/triage/classify';
 import { runDailyLearning, type DailyLearningResult } from '@/lib/triage/daily-learning';
+import { seedDefaultRules } from '@/lib/triage/rules';
 
 export type HeartbeatStep = 'backup' | 'granola' | 'gmail' | 'linear' | 'slack' | 'classify' | 'learning';
 export type HeartbeatStepStatus = 'start' | 'done' | 'skip' | 'error';
@@ -267,6 +268,8 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
     progress?.('classify', 'start');
     const classifyStart = Date.now();
     try {
+      // Ensure seed rules exist before classifying
+      await seedDefaultRules();
       const classifyResult = await classifyNewItems();
       if (classifyResult.classified > 0) {
         console.log(

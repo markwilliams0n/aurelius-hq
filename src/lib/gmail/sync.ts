@@ -43,11 +43,12 @@ ${email.body.slice(0, 2000)}`;
 }
 
 /**
- * Check if a thread is already in triage
+ * Check if a thread is already in triage.
+ * Returns the existing item's id and status, or null if not found.
  */
-async function threadExists(threadId: string): Promise<boolean> {
+async function findExistingThread(threadId: string): Promise<{ id: string; status: string } | null> {
   const existing = await db
-    .select({ id: inboxItems.id })
+    .select({ id: inboxItems.id, status: inboxItems.status })
     .from(inboxItems)
     .where(
       and(
@@ -57,7 +58,7 @@ async function threadExists(threadId: string): Promise<boolean> {
     )
     .limit(1);
 
-  return existing.length > 0;
+  return existing.length > 0 ? existing[0] : null;
 }
 
 /**
@@ -326,8 +327,9 @@ export async function syncGmailMessages(): Promise<GmailSyncResult> {
 
     for (const [threadId, email] of threadMap) {
       try {
-        // Skip if already imported
-        if (await threadExists(threadId)) {
+        // Skip if thread already exists in triage (any status)
+        const existing = await findExistingThread(threadId);
+        if (existing) {
           result.skipped++;
           continue;
         }

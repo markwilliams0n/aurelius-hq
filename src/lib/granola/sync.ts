@@ -236,11 +236,12 @@ async function saveExtractedMemory(
 }
 
 /**
- * Check if a meeting is already in triage
+ * Check if a meeting is already in triage.
+ * Returns the existing item's id and status, or null if not found.
  */
-async function meetingExists(externalId: string): Promise<boolean> {
+async function findExistingMeeting(externalId: string): Promise<{ id: string; status: string } | null> {
   const existing = await db
-    .select({ id: inboxItems.id })
+    .select({ id: inboxItems.id, status: inboxItems.status })
     .from(inboxItems)
     .where(
       and(
@@ -250,7 +251,7 @@ async function meetingExists(externalId: string): Promise<boolean> {
     )
     .limit(1);
 
-  return existing.length > 0;
+  return existing.length > 0 ? existing[0] : null;
 }
 
 /**
@@ -290,8 +291,12 @@ export async function syncGranolaMeetings(): Promise<GranolaSyncResult> {
 
     for (const doc of documents) {
       try {
-        // Skip if already imported
-        if (await meetingExists(doc.id)) {
+        // Skip if already imported (any status — respect user's archive/snooze)
+        const existing = await findExistingMeeting(doc.id);
+        if (existing) {
+          if (existing.status !== 'new') {
+            console.log(`[Granola] Skipping ${existing.status} meeting: ${doc.title}`);
+          }
           result.skipped++;
           continue;
         }

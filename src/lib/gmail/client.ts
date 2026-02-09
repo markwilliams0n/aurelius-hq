@@ -287,62 +287,35 @@ export async function fetchUnarchived(options?: {
  * Gmail archiving = removing the INBOX label. The message stays in "All Mail"
  * and any other labels it has, but disappears from the inbox.
  */
-export async function archiveEmail(messageId: string): Promise<void> {
-  debugLog(`Archiving message ${messageId}...`);
+export async function archiveEmail(threadId: string): Promise<void> {
+  debugLog(`Archiving thread ${threadId}...`);
   const gmail = await getGmailClient();
 
   try {
-    // First, get the current message to see its labels
-    const before = await gmail.users.messages.get({
+    // Use threads.modify to archive the entire thread (removes INBOX from all messages)
+    const result = await gmail.users.threads.modify({
       userId: 'me',
-      id: messageId,
-      format: 'minimal',
-    });
-    debugLog(`Before archive - labels:`, before.data.labelIds);
-
-    // Check if already archived
-    if (!before.data.labelIds?.includes('INBOX')) {
-      debugLog(`Message ${messageId} already archived (no INBOX label)`);
-      return;
-    }
-
-    const result = await gmail.users.messages.modify({
-      userId: 'me',
-      id: messageId,
+      id: threadId,
       requestBody: {
         removeLabelIds: ['INBOX'],
       },
     });
-    debugLog(`Archive result for ${messageId}:`, result.status);
-
-    // Verify the archive took effect
-    if (DEBUG) {
-      const verify = await gmail.users.messages.get({
-        userId: 'me',
-        id: messageId,
-        format: 'minimal',
-      });
-      if (verify.data.labelIds?.includes('INBOX')) {
-        console.error(`[Gmail] WARNING: INBOX label still present after archive!`);
-      } else {
-        debugLog(`Verified: INBOX label removed successfully`);
-      }
-    }
+    debugLog(`Archive result for thread ${threadId}:`, result.status);
   } catch (error: any) {
-    console.error(`[Gmail] Archive failed for ${messageId}:`, error?.message || error);
+    console.error(`[Gmail] Archive failed for thread ${threadId}:`, error?.message || error);
     throw error;
   }
 }
 
 /**
- * Mark email as spam in Gmail
+ * Mark thread as spam in Gmail
  */
-export async function markAsSpam(messageId: string): Promise<void> {
+export async function markAsSpam(threadId: string): Promise<void> {
   const gmail = await getGmailClient();
 
-  await gmail.users.messages.modify({
+  await gmail.users.threads.modify({
     userId: 'me',
-    id: messageId,
+    id: threadId,
     requestBody: {
       removeLabelIds: ['INBOX'],
       addLabelIds: ['SPAM'],

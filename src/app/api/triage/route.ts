@@ -95,8 +95,18 @@ export async function GET(request: Request) {
     getBatchCardsWithItems(),
   ]);
 
-  // Sort by priority then date
-  const queue = getTriageQueue(dbItems);
+  // Collect IDs of items already shown in batch cards so they don't also
+  // appear as individual triage items
+  const batchItemIds = new Set<string>();
+  for (const card of batchCards) {
+    for (const item of card.items) {
+      batchItemIds.add(item.id);
+    }
+  }
+
+  // Sort by priority then date, excluding items already in batch cards
+  const individualItems = dbItems.filter((i) => !batchItemIds.has(i.id));
+  const queue = getTriageQueue(individualItems);
 
   // Build stats from aggregated counts
   const statsByStatus: Record<string, number> = {};
