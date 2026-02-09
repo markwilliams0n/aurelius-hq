@@ -4,6 +4,13 @@
 
 ## Just Completed
 
+**2026-02-09**
+
+Test suite fix (feature/test-fixes branch, PER-218):
+- Fixed 39 failing tests across 7 test files — all caused by implementation drift
+- 233/233 tests now pass, TypeScript clean
+- Key fixes: chainable DB mocks for drizzle, remocked gmail queries abstraction, added missing action-card/capability mocks to telegram handler
+
 **2026-02-08 (overnight session)**
 
 Backlog sweep — worked through Linear project issues autonomously:
@@ -31,7 +38,7 @@ Pending Actions Page (PR #18, PER-174):
 
 ## In Progress
 
-Nothing — main is clean.
+- `feature/test-fixes` branch — ready to merge to main
 
 ## Up Next
 
