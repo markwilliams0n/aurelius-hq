@@ -148,34 +148,31 @@ async function handleClearCommand(message: TelegramMessage): Promise<void> {
  * Handle a /help command
  */
 async function handleHelpCommand(message: TelegramMessage): Promise<void> {
-  const helpText = `*Aurelius Help*
+  const helpText = `Aurelius Help
 
-I'm your AI assistant with full access to HQ:
-
-*Memory:* I remember our conversations and can search your knowledge base
-
-*Coding Sessions:* I can start coding tasks, and you control them here
-
-*Commands:*
-/sessions - Show active sessions & pending actions
+Commands:
+/pending - Show all pending actions & sessions
+/approve - Approve most recent (or /approve 2 for #2)
+/reject - Reject most recent (or /reject 2 for #2)
 /clear - Clear conversation history
-/help - This help message
 
-*Session Control:*
-Reply to a session message to answer Claude's questions.
-Use the inline buttons to stop, approve, or reject.
+Session Control:
+- Reply to a session message to answer Claude
+- Use inline buttons to stop, approve, or reject
+- /pending to recall all active sessions
 
-Just chat naturally - I have the same capabilities as the web interface.`;
+Just chat naturally for anything else.`;
 
-  await sendMessage(message.chat.id, helpText, { parseMode: 'Markdown' });
+  await sendMessage(message.chat.id, helpText);
 }
 
 // ---------------------------------------------------------------------------
 // Action card support — format cards as Telegram text, handle text approval
 // ---------------------------------------------------------------------------
 
-const APPROVE_WORDS = new Set(['approve', 'start', 'confirm', 'yes']);
-const DISMISS_WORDS = new Set(['reject', 'dismiss', 'cancel', 'no']);
+// ---------------------------------------------------------------------------
+// Action card rendering — plain text + inline buttons (NO MarkdownV2)
+// ---------------------------------------------------------------------------
 
 /** Pattern-specific emoji for card messages */
 const PATTERN_EMOJI: Record<string, string> = {
@@ -184,70 +181,104 @@ const PATTERN_EMOJI: Record<string, string> = {
   config: '\u{2699}',      // ⚙
   vault: '\u{1F512}',      // 🔒
   info: '\u{2139}',        // ℹ
+  slack: '\u{1F4AC}',      // 💬
+  gmail: '\u{1F4E7}',      // 📧
+  linear: '\u{1F4CB}',     // 📋
 };
 
-/**
- * Format an action card as a decorated Telegram message.
- */
-function formatCardForTelegram(card: ActionCardData): string {
-  const emoji = PATTERN_EMOJI[card.pattern] ?? '\u{1F4CB}'; // 📋 fallback
+/** Format any action card as plain text (no Markdown — never breaks). */
+function formatCardPlainText(card: ActionCardData): string {
+  const emoji = PATTERN_EMOJI[card.pattern] ?? '\u{1F4CB}';
   const data = card.data as Record<string, unknown>;
   const lines: string[] = [];
 
-  lines.push('━━━━━━━━━━━━━━━━━━━━');
-  lines.push(`${emoji} *${escapeMd(card.title)}*`);
-  lines.push('');
+  lines.push(`${emoji} ${card.title}`);
 
-  // Pattern-specific details
   if (card.pattern === 'code') {
-    if (data.task) lines.push(`Task: ${escapeMd(String(data.task))}`);
-    if (data.branchName) lines.push(`Branch: \`${data.branchName}\``);
+    if (data.task) {
+      const task = String(data.task);
+      lines.push(`Task: ${task.length > 100 ? task.slice(0, 97) + '...' : task}`);
+    }
+    if (data.branchName) lines.push(`Branch: ${data.branchName}`);
   } else if (data.message) {
-    // Slack / approval cards with a message body
     const preview = String(data.message);
-    lines.push(`Message: ${escapeMd(preview.length > 200 ? preview.slice(0, 197) + '...' : preview)}`);
-    if (data.recipientName) lines.push(`To: ${escapeMd(String(data.recipientName))}`);
+    lines.push(preview.length > 200 ? preview.slice(0, 197) + '...' : preview);
+    if (data.recipientName) lines.push(`To: ${data.recipientName}`);
   } else if (data.key) {
-    // Config cards
-    lines.push(`Key: \`${data.key}\``);
-    if (data.value !== undefined) lines.push(`Value: \`${String(data.value)}\``);
+    lines.push(`Key: ${data.key}`);
+    if (data.value !== undefined) lines.push(`Value: ${data.value}`);
   }
-
-  lines.push('');
-  lines.push('Reply *approve* to confirm or *dismiss* to cancel.');
-  lines.push('━━━━━━━━━━━━━━━━━━━━');
 
   return lines.join('\n');
 }
 
-/** Escape special Markdown characters for Telegram Markdown mode */
-function escapeMd(text: string): string {
-  return text.replace(/([_*\[\]()~`>#+\-=|{}.!])/g, '\\$1');
+/** Build inline keyboard for any pending action card. */
+function getCardKeyboard(cardId: string): InlineKeyboardMarkup {
+  return {
+    inline_keyboard: [[
+      { text: '\u{2705} Approve', callback_data: `card:approve:${cardId}` },
+      { text: '\u{274C} Reject', callback_data: `card:reject:${cardId}` },
+    ]],
+  };
 }
 
-/**
- * Handle text-based card approval/rejection from Telegram.
- * Finds the most recent pending card and dispatches the action.
- */
-async function handleCardCommand(
+// ---------------------------------------------------------------------------
+// /approve [n] and /reject [n] — targeted card commands
+// ---------------------------------------------------------------------------
+
+/** Stored from last /pending call so /approve N works. */
+const pendingListStore = globalThis as unknown as { __pendingCardList?: ActionCardData[] };
+
+async function handleApproveRejectCommand(
   message: TelegramMessage,
-  command: string,
+  action: 'approve' | 'reject',
+  arg?: string,
 ): Promise<void> {
   const chatId = message.chat.id;
-  const isApprove = APPROVE_WORDS.has(command);
 
   try {
     const pendingCards = await getPendingCards();
-    if (pendingCards.length === 0) {
-      await sendMessage(chatId, 'No pending actions to approve.');
+    const codingSessions = await getActionableCodingSessions();
+    const allActionable = [...pendingCards, ...codingSessions];
+
+    if (allActionable.length === 0) {
+      await sendMessage(chatId, 'Nothing pending to approve or reject.');
       return;
     }
 
-    const card = pendingCards[0]; // Most recent
-    const action = isApprove ? 'confirm' : 'dismiss';
-    const cardData = { ...card.data, _cardId: card.id, _confirmed: true };
+    // Determine which card to act on
+    let card: ActionCardData;
+    if (arg && /^\d+$/.test(arg)) {
+      const idx = parseInt(arg, 10) - 1; // 1-indexed
+      const list = pendingListStore.__pendingCardList ?? allActionable;
+      if (idx < 0 || idx >= list.length) {
+        await sendMessage(chatId, `Invalid number. Use 1-${list.length}.`);
+        return;
+      }
+      card = list[idx];
+    } else {
+      card = allActionable[0]; // Most recent
+    }
 
-    const result = await dispatchCardAction(card.handler, action, cardData);
+    const isCodeSession = card.pattern === 'code' && card.status === 'confirmed';
+    const data = card.data as Record<string, unknown>;
+
+    // Route to appropriate handler
+    let handler: string;
+    let dispatchAction: string;
+    if (isCodeSession && action === 'approve') {
+      handler = 'code:approve';
+      dispatchAction = 'confirm';
+    } else if (isCodeSession && action === 'reject') {
+      handler = 'code:reject';
+      dispatchAction = 'confirm';
+    } else {
+      handler = card.handler || '';
+      dispatchAction = action === 'approve' ? 'confirm' : 'dismiss';
+    }
+
+    const cardData = { ...data, _cardId: card.id, _confirmed: true };
+    const result = await dispatchCardAction(handler, dispatchAction, cardData);
 
     await updateCard(card.id, {
       status: result.status === 'needs_confirmation' ? 'pending' : result.status,
@@ -256,16 +287,15 @@ async function handleCardCommand(
 
     if (result.status === 'error') {
       const err = (result.result?.error as string) || 'Unknown error';
-      await sendMessage(chatId, `Action failed: ${err}`);
+      await sendMessage(chatId, `Failed: ${err}`);
     } else if (result.status === 'dismissed') {
-      await sendMessage(chatId, `Dismissed: ${card.title}`);
+      await sendMessage(chatId, `\u{274C} Rejected: ${card.title}`);
     } else {
-      const msg = result.successMessage || 'Action confirmed';
-      await sendMessage(chatId, `\u{2705} ${msg}`); // ✅
+      await sendMessage(chatId, `\u{2705} ${result.successMessage || 'Done'}: ${card.title}`);
     }
   } catch (error) {
-    console.error('[telegram] Card command error:', error);
-    await sendMessage(chatId, 'Failed to process action. Check the web UI.');
+    console.error('[telegram] Approve/reject error:', error);
+    await sendMessage(chatId, 'Failed to process. Try /pending to refresh.');
   }
 }
 
@@ -380,15 +410,11 @@ The user is ${message.from?.first_name || 'a user'}${message.from?.username ? ` 
       await sendMessage(chatId, chunk);
     }
 
-    // Send formatted card messages for any action cards created
+    // Send action cards with plain text + inline buttons (never fails)
     for (const card of collectedCards) {
-      try {
-        await sendMessage(chatId, formatCardForTelegram(card), { parseMode: 'MarkdownV2' });
-      } catch (err) {
-        // Fall back to plain text if Markdown formatting fails
-        console.error('[telegram] Failed to send card with Markdown, retrying plain:', err);
-        await sendMessage(chatId, `Action pending: ${card.title}\nReply "approve" to confirm or "dismiss" to cancel.`);
-      }
+      const text = formatCardPlainText(card);
+      const keyboard = getCardKeyboard(card.id);
+      await sendMessage(chatId, text, { replyMarkup: keyboard });
     }
   } catch (error) {
     console.error('Error processing Telegram message:', error);
@@ -403,90 +429,96 @@ The user is ${message.from?.first_name || 'a user'}${message.from?.username ? ` 
 }
 
 // ---------------------------------------------------------------------------
-// /sessions command — recall all active/actionable coding sessions with buttons
+// /pending (or /sessions, /status) — show ALL actionable items with buttons
 // ---------------------------------------------------------------------------
 
-async function handleSessionsCommand(message: TelegramMessage): Promise<void> {
+async function handlePendingCommand(message: TelegramMessage): Promise<void> {
   const chatId = message.chat.id;
 
   try {
-    // Get pending action cards (any pattern)
     const pendingCards = await getPendingCards();
-
-    // Get active coding sessions from DB (confirmed cards with actionable states)
     const codingSessions = await getActionableCodingSessions();
-
-    // Also check in-memory active sessions for live state
     const liveSessionMap = getActiveSessions();
 
-    if (pendingCards.length === 0 && codingSessions.length === 0) {
-      await sendMessage(chatId, 'No active sessions or pending actions.');
+    // Build a unified numbered list of all actionable items
+    const allItems: ActionCardData[] = [];
+
+    // Coding sessions first (most time-sensitive)
+    for (const card of codingSessions) {
+      allItems.push(card);
+    }
+
+    // Then pending cards (excluding code cards already shown as sessions)
+    const sessionCardIds = new Set(codingSessions.map(c => c.id));
+    for (const card of pendingCards) {
+      if (!sessionCardIds.has(card.id)) {
+        allItems.push(card);
+      }
+    }
+
+    // Store for /approve N targeting
+    pendingListStore.__pendingCardList = allItems;
+
+    if (allItems.length === 0) {
+      await sendMessage(chatId, 'Nothing pending. All clear.');
       return;
     }
 
-    // Send pending action cards first (non-code)
-    const nonCodePending = pendingCards.filter(c => c.pattern !== 'code');
-    for (const card of nonCodePending) {
-      try {
-        await sendMessage(chatId, formatCardForTelegram(card), { parseMode: 'MarkdownV2' });
-      } catch {
-        await sendMessage(chatId, `Pending: ${card.title}\nReply "approve" to confirm or "dismiss" to cancel.`);
-      }
-    }
+    // Send header
+    await sendMessage(chatId, `\u{1F4CB} ${allItems.length} actionable item${allItems.length > 1 ? 's' : ''}:`);
 
-    // Send coding session status messages with keyboards
-    for (const card of codingSessions) {
+    // Send each item as its own message with buttons
+    for (let i = 0; i < allItems.length; i++) {
+      const card = allItems[i];
       const data = card.data as Record<string, unknown>;
-      const state = data.state as 'running' | 'waiting' | 'completed' | 'error';
-      const task = (data.task as string) || 'Unknown task';
-      const totalTurns = (data.totalTurns as number) || 0;
-      const totalCostUsd = (data.totalCostUsd as number) ?? null;
-      const sessionId = data.sessionId as string;
+      const num = i + 1;
 
-      // Check live session for real-time state
-      const liveSession = sessionId ? liveSessionMap.get(sessionId) : null;
-      const effectiveState = liveSession
-        ? (liveSession.state === 'waiting_for_input' ? 'waiting' : 'running')
-        : state;
+      if (card.pattern === 'code' && card.status === 'confirmed') {
+        // Coding session — use rich session format with session-specific buttons
+        const state = data.state as 'running' | 'waiting' | 'completed' | 'error';
+        const task = (data.task as string) || 'Unknown task';
+        const totalTurns = (data.totalTurns as number) || 0;
+        const totalCostUsd = (data.totalCostUsd as number) ?? null;
+        const sessionId = data.sessionId as string;
 
-      const text = formatSessionTelegram(
-        effectiveState as 'running' | 'waiting' | 'completed' | 'error',
-        task,
-        totalTurns,
-        totalCostUsd,
-        {
-          lastMessage: effectiveState === 'waiting' ? (data.lastMessage as string) : undefined,
-          filesChanged: effectiveState === 'completed'
-            ? ((data.result as Record<string, unknown>)?.changedFiles as unknown[])?.length ?? 0
-            : undefined,
-        },
-      );
+        const liveSession = sessionId ? liveSessionMap.get(sessionId) : null;
+        const effectiveState = liveSession
+          ? (liveSession.state === 'waiting_for_input' ? 'waiting' : 'running')
+          : state;
 
-      const keyboard = getSessionKeyboard(
-        effectiveState as 'running' | 'waiting' | 'completed' | 'error',
-        card.id,
-      );
+        const text = `#${num} ` + formatSessionTelegram(
+          effectiveState as 'running' | 'waiting' | 'completed' | 'error',
+          task,
+          totalTurns,
+          totalCostUsd,
+          {
+            lastMessage: effectiveState === 'waiting' ? (data.lastMessage as string) : undefined,
+            filesChanged: effectiveState === 'completed'
+              ? ((data.result as Record<string, unknown>)?.changedFiles as unknown[])?.length ?? 0
+              : undefined,
+          },
+        );
 
-      const msg = await sendMessage(chatId, text, { replyMarkup: keyboard });
+        const keyboard = getSessionKeyboard(
+          effectiveState as 'running' | 'waiting' | 'completed' | 'error',
+          card.id,
+        );
 
-      // Track this message for reply-to-session detection
-      if (sessionId && msg) {
-        telegramToSession.set(msg.message_id, sessionId);
-      }
-    }
+        const msg = await sendMessage(chatId, text, { replyMarkup: keyboard });
 
-    // Also show pending code cards (not yet started)
-    const pendingCodeCards = pendingCards.filter(c => c.pattern === 'code');
-    for (const card of pendingCodeCards) {
-      try {
-        await sendMessage(chatId, formatCardForTelegram(card), { parseMode: 'MarkdownV2' });
-      } catch {
-        await sendMessage(chatId, `Pending: ${card.title}\nReply "approve" to confirm or "dismiss" to cancel.`);
+        if (sessionId && msg) {
+          telegramToSession.set(msg.message_id, sessionId);
+        }
+      } else {
+        // General pending card — plain text + approve/reject buttons
+        const text = `#${num} ${formatCardPlainText(card)}`;
+        const keyboard = getCardKeyboard(card.id);
+        await sendMessage(chatId, text, { replyMarkup: keyboard });
       }
     }
   } catch (err) {
-    console.error('[telegram] /sessions error:', err);
-    await sendMessage(chatId, 'Failed to fetch sessions. Try again.');
+    console.error('[telegram] /pending error:', err);
+    await sendMessage(chatId, 'Failed to fetch pending items. Try again.');
   }
 }
 
@@ -500,27 +532,40 @@ async function handleCallbackQuery(
   chatId: number,
   messageId: number,
 ): Promise<void> {
-  // Format: "code:<action>:<cardId>"
+  // Format: "code:<action>:<cardId>" or "card:<action>:<cardId>"
   const parts = data.split(':');
-  if (parts.length < 3 || parts[0] !== 'code') {
+  if (parts.length < 3) {
     await answerCallbackQuery(callbackQueryId, { text: 'Unknown action' });
     return;
   }
 
+  const prefix = parts[0]; // "code" or "card"
   const action = parts[1]; // stop, approve, reject
-  const cardId = parts.slice(2).join(':'); // rejoin in case cardId has colons
+  const cardId = parts.slice(2).join(':');
 
   try {
     const card = await getCard(cardId);
     if (!card) {
-      await answerCallbackQuery(callbackQueryId, { text: 'Session not found' });
+      await answerCallbackQuery(callbackQueryId, { text: 'Card not found' });
       return;
     }
 
     const cardData = { ...card.data, _cardId: cardId, _confirmed: true };
-    const handler = `code:${action}`;
 
-    const result = await dispatchCardAction(handler, 'confirm', cardData);
+    let handler: string;
+    let dispatchAction: string;
+
+    if (prefix === 'code') {
+      // Code session buttons — route to code:stop, code:approve, code:reject
+      handler = `code:${action}`;
+      dispatchAction = 'confirm';
+    } else {
+      // General card buttons — approve or reject
+      handler = card.handler || '';
+      dispatchAction = action === 'approve' ? 'confirm' : 'dismiss';
+    }
+
+    const result = await dispatchCardAction(handler, dispatchAction, cardData);
 
     if (result.status === 'error') {
       const err = (result.result?.error as string) || 'Unknown error';
@@ -528,16 +573,27 @@ async function handleCallbackQuery(
     } else {
       const labels: Record<string, string> = {
         stop: 'Session stopped',
-        approve: 'Changes merged!',
-        reject: 'Changes discarded',
+        approve: result.successMessage || 'Approved!',
+        reject: result.successMessage || 'Rejected',
       };
       await answerCallbackQuery(callbackQueryId, { text: labels[action] || 'Done' });
 
-      // Update card status
       await updateCard(cardId, {
         status: result.status === 'needs_confirmation' ? 'pending' : result.status,
         ...(result.result && { result: result.result }),
       });
+
+      // Edit the message to show it's been handled
+      const ownerChatId = getOwnerChatId();
+      if (ownerChatId) {
+        try {
+          const emoji = action === 'approve' ? '\u{2705}' : '\u{274C}';
+          const label = action === 'approve' ? 'Approved' : 'Rejected';
+          await editMessage(ownerChatId, messageId, `${emoji} ${label}: ${card.title}`);
+        } catch {
+          // Best effort — message may be too old
+        }
+      }
     }
   } catch (err) {
     console.error('[telegram] Callback query error:', err);
@@ -627,13 +683,22 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
   if (text.startsWith('/')) {
     const command = text.split(' ')[0].toLowerCase();
 
+    const arg = text.split(/\s+/)[1]; // optional argument after command
+
     switch (command) {
       case '/start':
         await handleStartCommand(message);
         return;
+      case '/pending':
       case '/sessions':
       case '/status':
-        await handleSessionsCommand(message);
+        await handlePendingCommand(message);
+        return;
+      case '/approve':
+        await handleApproveRejectCommand(message, 'approve', arg);
+        return;
+      case '/reject':
+        await handleApproveRejectCommand(message, 'reject', arg);
         return;
       case '/clear':
         await handleClearCommand(message);
@@ -645,13 +710,6 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
         // Unknown command - treat as regular message
         break;
     }
-  }
-
-  // Check for card action commands (approve/dismiss pending actions)
-  const lower = text.toLowerCase();
-  if (APPROVE_WORDS.has(lower) || DISMISS_WORDS.has(lower)) {
-    await handleCardCommand(message, lower);
-    return;
   }
 
   // Handle regular chat message
