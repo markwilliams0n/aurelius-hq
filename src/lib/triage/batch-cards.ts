@@ -2,10 +2,11 @@ import { db } from "@/lib/db";
 import { actionCards, inboxItems } from "@/lib/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { generateCardId } from "@/lib/action-cards/db";
+import { logActivity } from "@/lib/activity";
 
 // ── Default configs per batch type ──────────────────────────────────────────
 
-const BATCH_CONFIGS: Record<string, { title: string; explanation: string }> = {
+const BATCH_CONFIGS: Record<string, { title: string; explanation: string; action?: string }> = {
   notifications: {
     title: "Notifications",
     explanation: "Tool alerts, CI/CD updates, and system notifications.",
@@ -21,6 +22,7 @@ const BATCH_CONFIGS: Record<string, { title: string; explanation: string }> = {
   calendar: {
     title: "Calendar",
     explanation: "Meeting invites, acceptances, and scheduling updates.",
+    action: "accept & archive",
   },
   spam: {
     title: "Spam",
@@ -75,7 +77,7 @@ export async function getOrCreateBatchCard(
     handler: "batch:action",
     data: {
       batchType,
-      action: "archive",
+      action: config.action || "archive",
       explanation: config.explanation,
       itemCount: 0,
     },
@@ -290,15 +292,26 @@ export async function actionBatchCard(
   // Process checked items — apply the action
   if (checkedItemIds.length > 0) {
     for (const itemId of checkedItemIds) {
-      if (action === "archive") {
-        await db
-          .update(inboxItems)
-          .set({
-            status: "archived",
-            updatedAt: new Date(),
-          })
-          .where(eq(inboxItems.id, itemId));
-      }
+      // All actions archive the item
+      await db
+        .update(inboxItems)
+        .set({
+          status: "archived",
+          updatedAt: new Date(),
+        })
+        .where(eq(inboxItems.id, itemId));
+    }
+
+    // Calendar accept: log attendance in activity
+    if (action === "accept & archive") {
+      logActivity({
+        eventType: "triage_action",
+        actor: "user",
+        description: `Accepted ${checkedItemIds.length} calendar invite${checkedItemIds.length !== 1 ? "s" : ""}`,
+        metadata: { action: "calendar_accept", itemIds: checkedItemIds },
+      }).catch((err) =>
+        console.error("[Batch Cards] Failed to log calendar accept:", err)
+      );
     }
   }
 
