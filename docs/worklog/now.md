@@ -4,51 +4,30 @@
 
 ## Just Completed
 
-**2026-02-08**
+**2026-02-08 (overnight session)**
 
-Pending Actions Page (feature/per-174-action-cards-notification-tray → main, PR #18, PER-174):
-- API route `GET /api/action-cards/pending` — wired up existing `getPendingCards()` DB function
-- `/actions` page — lists all pending cards grouped by conversation, full inline actions
-- Sidebar "Actions" nav item with Bell icon + amber badge (30s polling, visibility-aware)
-- Click-through from card groups to source conversation
-- Reused existing ActionCard + CardContent — zero new UI primitives, 4 files +323 lines
-- Created backlog issues for transitioning Linear (PER-210) and Gmail (PER-211) to action card approval flow
-- Testing issue: PER-212
+Backlog sweep — worked through Linear project issues autonomously:
+- PER-199: Fixed 32 TypeScript errors (stale test fixtures, type mismatches)
+- PER-210: Linear `create_task` → action card approval flow
+- PER-187: Triage sender context (items aware of same-sender history)
+- PER-177: Dynamic cortex topology — derived from capability registry + DB instead of hardcoded
+- PER-206: Vault wizard — confirmed all 8 plan tasks already implemented, closed
+- PER-149: macOS native notifications alongside Telegram (osascript)
+- PER-211: Gmail agent capability with `draft_email` tool + action card approval
+- PER-209: Parent issue closed — all agent actions now use action card flow (Slack, Linear, Gmail)
+- PER-207: Linear hooks & statusline — already done, closed
+- PER-178: Triage enhancements test plan — branch already merged, closed with all 8 children
 
-Supermemory ChatGPT Import:
-- Imported 252 memories from ChatGPT history export into Supermemory
-- Fixed timestamps (original file had all items dated to export day; mapped `original_date_tag` to real dates)
-- Removed 1 duplicate, final count: 252 items (~7.5K content tokens, 3% of free tier)
-- Research: Supermemory decay is semantic (static/dynamic), not time-based — no backdating API exists
-- Manifest with all IDs saved for rollback: `docs/research/supermemory-import-manifest.json`
-- Import script: `scripts/import-chatgpt-to-supermemory.ts` (supports `--dry-run` and `--rollback`)
+**2026-02-08 (earlier)**
 
-**2026-02-07**
+Aurelius Can Code (feature/aurelius-can-code → main, PR #19, PER-213):
+- `code` capability with `start_coding_session` tool
+- Executor spawns `claude -p` with NDJSON stream parsing, worktree isolation
+- Action card approval flow with code card UI (4 states)
+- 16 files, +1,919 lines, 11 commits
 
-Vault Bug Fixes & Code Review (feature/vault-fixes → main, PR #17, PER-208):
-- Fixed promptVersion caching — agent now calls vault tools via Telegram
-- Fixed content truncation — long docs no longer silently replaced by LLM summary
-- Fixed `to_tsquery` → `plainto_tsquery` for safe dedup search
-- Improved Jaccard dedup: stop-word filtering, title+snippet comparison, raised threshold to 0.5
-- Added type validation in `update_vault_item` handler
-- Added delete confirmation flow (action card `confirmMessage` pattern)
-- Fixed wizard save ignoring user edits to Content textarea
-- Renamed misleading "Summary" label to "Content" in wizard
-
-Vault PR Review & Merge (docs/memory-seed → main):
-- Reviewed PR #16 (Personal Vault — 37 files, +6156 lines)
-- Fixed 3 critical issues (UUID conversation ID, overly broad sensitive pattern, PDF extraction crash)
-- Fixed 6 important issues (UUID validation on API routes, upload validation, Ollama redaction, proper vault CardPattern with DB migration)
-- Fixed 3 minor issues (deduplicated TYPE_ICONS, getAllTags cast, refreshItems deps)
-- DB migration applied (vault_items table, card_pattern + config_key enum values)
-
-**2026-02-07 (Earlier)**
-
-Unified Chat Across App (feature/chat-across-app, merged to main):
-- `useChat` hook — single shared engine for all chat surfaces (394 lines)
-- `ChatContext` type — surface-specific context injection (triage item, page context, overrides)
-- All 3 web surfaces (main chat, triage modal, Cmd+K panel) unified on `/api/chat`
-- PER-188 + 10 sub-issues (PER-189–198) all Done
+Pending Actions Page (PR #18, PER-174):
+- `/actions` page with grouped pending cards, sidebar badge, 30s polling
 
 ## In Progress
 
@@ -56,15 +35,11 @@ Nothing — main is clean.
 
 ## Up Next
 
-- [x] ~~**Triage chat memory → Supermemory**~~ — fixed by unified chat (triage now uses `/api/chat` → `extractAndSaveMemories`)
-- [x] ~~**Test vault feature**~~ — tested via PER-208 bug fixing session (save, search, update, dedup, content preservation all verified)
-- [ ] **Fix 32 pre-existing TypeScript errors** (PER-199) — stale test fixtures and minor type mismatches
-- [ ] **Migrate task-creator-panel off legacy `/api/triage/chat`** — last consumer of old route
-- [x] ~~**Action Cards notification tray** (PER-174)~~ — merged, testing issue PER-212
-- [ ] **Transition Linear/Gmail to action card approval flow** (PER-209) — parent issue with PER-210 (Linear) and PER-211 (Gmail)
-- [ ] **Connector-aware memory extraction** — `extractEmailMemory` is used for ALL connectors but the prompt is email-specific. Need connector-aware prompts. Key file: `src/lib/memory/ollama.ts:extractEmailMemory`
+- [ ] **Test aurelius-can-code end-to-end** — manual smoke test with real coding task
+- [ ] **Test vault end-to-end** (PER-200) — manual testing of all vault functionality
+- [ ] **Phase 2: Telegram control plane** — inline keyboards, callback queries, reply-to-session
+- [ ] **Phase 3: Memory integration** — Supermemory summaries on start/complete/approve
 - [ ] Test Gmail sync with real inbox
-- [ ] **Test triage enhancements** (PER-178) — full manual test plan with sub-issues in Linear
 
 ## Known Issues (Documented)
 
