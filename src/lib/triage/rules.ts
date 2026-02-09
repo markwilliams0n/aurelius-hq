@@ -2,6 +2,69 @@ import { db } from "@/lib/db";
 import { triageRules, type TriageRule, type NewTriageRule } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 
+// ── Seed rules for common automated services ─────────────────────────────────
+
+const SEED_RULES: Array<{
+  name: string;
+  trigger: NewTriageRule["trigger"];
+  batchType: string;
+}> = [
+  // Notifications — domain-level
+  { name: "GitHub → notifications", trigger: { senderDomain: "github.com" }, batchType: "notifications" },
+  { name: "Figma → notifications", trigger: { senderDomain: "figma.com" }, batchType: "notifications" },
+  { name: "Slack → notifications", trigger: { senderDomain: "slack.com" }, batchType: "notifications" },
+  { name: "Airtable → notifications", trigger: { senderDomain: "airtable.com" }, batchType: "notifications" },
+  { name: "Linear → notifications", trigger: { senderDomain: "linear.app" }, batchType: "notifications" },
+  { name: "Vercel → notifications", trigger: { senderDomain: "vercel.com" }, batchType: "notifications" },
+  { name: "Granola → notifications", trigger: { senderDomain: "granola.ai" }, batchType: "notifications" },
+  { name: "Railway → notifications", trigger: { senderDomain: "railway.app" }, batchType: "notifications" },
+  { name: "Neon → notifications", trigger: { senderDomain: "neon.tech" }, batchType: "notifications" },
+  { name: "Sentry → notifications", trigger: { senderDomain: "sentry.io" }, batchType: "notifications" },
+  { name: "Google Alerts → notifications", trigger: { sender: "googlealerts-noreply@google.com" }, batchType: "notifications" },
+  { name: "Google Search Console → notifications", trigger: { sender: "sc-noreply@google.com" }, batchType: "notifications" },
+  // Finance — domain-level
+  { name: "Venmo → finance", trigger: { senderDomain: "venmo.com" }, batchType: "finance" },
+  { name: "PayPal → finance", trigger: { senderDomain: "paypal.com" }, batchType: "finance" },
+  { name: "Stripe → finance", trigger: { senderDomain: "stripe.com" }, batchType: "finance" },
+  { name: "QuickBooks → finance", trigger: { senderDomain: "intuit.com" }, batchType: "finance" },
+  // Calendar — subject pattern
+  { name: "Calendar invites → calendar", trigger: { subjectContains: "invitation:" }, batchType: "calendar" },
+  { name: "Calendar updates → calendar", trigger: { subjectContains: "Updated invitation:" }, batchType: "calendar" },
+  { name: "Calendar cancellations → calendar", trigger: { subjectContains: "Canceled event:" }, batchType: "calendar" },
+  { name: "Calendar RSVPs → calendar", trigger: { subjectContains: "accepted this invitation" }, batchType: "calendar" },
+  // Newsletters — domain-level
+  { name: "Substack → newsletters", trigger: { senderDomain: "substack.com" }, batchType: "newsletters" },
+  { name: "Beehiiv → newsletters", trigger: { senderDomain: "beehiiv.com" }, batchType: "newsletters" },
+];
+
+/**
+ * Ensure seed rules exist in the database. Skips any rule whose name already exists.
+ * Returns the number of new rules created.
+ */
+export async function seedDefaultRules(): Promise<number> {
+  const existing = await db.select({ name: triageRules.name }).from(triageRules);
+  const existingNames = new Set(existing.map((r) => r.name));
+
+  let created = 0;
+  for (const seed of SEED_RULES) {
+    if (existingNames.has(seed.name)) continue;
+    await db.insert(triageRules).values({
+      name: seed.name,
+      type: "structured",
+      source: "user_settings",
+      trigger: seed.trigger,
+      action: { type: "batch", batchType: seed.batchType },
+      description: "Default rule — auto-created",
+    });
+    created++;
+  }
+
+  if (created > 0) {
+    console.log(`[Rules] Seeded ${created} default rules`);
+  }
+  return created;
+}
+
 // Minimal inbox item shape for rule matching (avoids coupling to full InboxItem type)
 export type MatchableItem = {
   connector: string;

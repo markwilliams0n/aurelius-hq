@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { inboxItems } from "@/lib/db/schema";
 import type { InboxItem, TriageRule } from "@/lib/db/schema";
-import { eq, isNull, and } from "drizzle-orm";
+import { eq, isNull, and, sql } from "drizzle-orm";
 import { matchRule, getActiveRules, incrementRuleMatchCount } from "./rules";
 import { getGuidanceNotes } from "./rules";
 import { assignItemsToBatchCards } from "./batch-cards";
@@ -185,6 +185,13 @@ export async function classifyNewItems(): Promise<{
     }
   }
 
+  // Re-run rule matching on items that were previously classified with null batchType.
+  // This catches items that now match newly created rules (e.g. seed rules, user rules).
+  const reclassified = await reclassifyNullBatchItems();
+  if (reclassified > 0) {
+    console.log(`[Classify] Reclassified ${reclassified} items via rules`);
+  }
+
   // Always assign classified items to batch cards — handles both newly
   // classified items and any orphaned items from previous runs
   const batchResult = await assignItemsToBatchCards();
@@ -193,4 +200,64 @@ export async function classifyNewItems(): Promise<{
   }
 
   return { classified: items.length, byTier };
+}
+
+/**
+ * Re-run rule matching (pass 1 only) on items that have classification
+ * but batchType is null. This picks up items that now match newly created rules
+ * without making any AI calls.
+ */
+async function reclassifyNullBatchItems(): Promise<number> {
+  const items = await db
+    .select()
+    .from(inboxItems)
+    .where(
+      and(
+        eq(inboxItems.status, "new"),
+        sql`${inboxItems.classification} IS NOT NULL`,
+        sql`${inboxItems.classification}->>'batchType' IS NULL`
+      )
+    );
+
+  if (items.length === 0) return 0;
+
+  const rules = await getActiveRules();
+  let reclassified = 0;
+
+  for (const item of items) {
+    for (const rule of rules) {
+      if (matchRule(rule, item)) {
+        const batchType = rule.action?.batchType ?? null;
+        if (!batchType) continue;
+
+        // Update classification with the matched rule
+        const existing = (item.classification as Record<string, unknown>) || {};
+        await db
+          .update(inboxItems)
+          .set({
+            classification: {
+              ...existing,
+              batchType,
+              batchCardId: null, // will be assigned by assignItemsToBatchCards
+              tier: "rule" as const,
+              confidence: 1,
+              reason: `Matched rule: ${rule.name}`,
+              classifiedAt: new Date().toISOString(),
+              ruleId: rule.id,
+            },
+            updatedAt: new Date(),
+          })
+          .where(eq(inboxItems.id, item.id));
+
+        if (rule.id) {
+          incrementRuleMatchCount(rule.id).catch(() => {});
+        }
+
+        reclassified++;
+        break; // first matching rule wins
+      }
+    }
+  }
+
+  return reclassified;
 }
