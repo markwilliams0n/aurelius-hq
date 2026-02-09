@@ -350,7 +350,8 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
   const handleMemory = useCallback(async () => {
     if (!currentItem) return;
 
-    fetch(`/api/triage/${currentItem.id}/memory`, {
+    const apiId = currentItem.dbId || currentItem.id;
+    fetch(`/api/triage/${apiId}/memory`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mode: "summary" }),
@@ -367,7 +368,8 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
   const handleMemoryFull = useCallback(async () => {
     if (!currentItem) return;
 
-    fetch(`/api/triage/${currentItem.id}/memory`, {
+    const apiId = currentItem.dbId || currentItem.id;
+    fetch(`/api/triage/${apiId}/memory`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mode: "full" }),
@@ -582,8 +584,9 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
       return;
     }
 
+    const apiId = currentItem.dbId || currentItem.id;
     try {
-      await fetch(`/api/triage/${currentItem.id}`, {
+      await fetch(`/api/triage/${apiId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, ...data }),
@@ -870,7 +873,8 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           e.preventDefault();
           if (currentItem) {
             // Create a pre-filled Linear issue action card
-            fetch(`/api/triage/${currentItem.id}/quick-task`, { method: "POST" })
+            const taskApiId = currentItem.dbId || currentItem.id;
+            fetch(`/api/triage/${taskApiId}/quick-task`, { method: "POST" })
               .then((res) => res.json())
               .then((data) => {
                 if (data.card) {
@@ -1133,8 +1137,8 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
                 {/* Suggested tasks box */}
                 {!animatingOut && (
                   <SuggestedTasksBox
-                    itemId={currentItem.id}
-                    initialTasks={tasksByItemId[currentItem.id]}
+                    itemId={currentItem.dbId || currentItem.id}
+                    initialTasks={tasksByItemId[currentItem.dbId || currentItem.id]}
                   />
                 )}
               </>

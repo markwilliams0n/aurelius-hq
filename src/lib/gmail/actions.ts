@@ -23,7 +23,7 @@ async function resolveGmailThreadId(itemId: string): Promise<string | null> {
 
   // threadId is stored as externalId on the inbox item
   const threadId = item.externalId
-    || (item.rawPayload as Record<string, unknown>)?.threadId as string | undefined;
+    || ((item.rawPayload as Record<string, unknown>)?.threadId as string | undefined);
   if (!threadId) {
     console.warn(`[Gmail] No threadId found for item ${itemId}`);
     return null;

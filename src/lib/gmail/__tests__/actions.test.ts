@@ -93,6 +93,18 @@ describe('Gmail Actions', () => {
       expect(archiveEmail).not.toHaveBeenCalled();
     });
 
+    it('falls back to rawPayload.threadId when externalId is null', async () => {
+      mockFindInboxItem.mockResolvedValue({
+        ...mockGmailItem,
+        externalId: null,
+        rawPayload: { threadId: 'fallback-thread-456' },
+      });
+
+      await syncArchiveToGmail('item-123');
+
+      expect(archiveEmail).toHaveBeenCalledWith('fallback-thread-456');
+    });
+
     it('handles missing threadId gracefully', async () => {
       mockFindInboxItem.mockResolvedValue({
         ...mockGmailItem,

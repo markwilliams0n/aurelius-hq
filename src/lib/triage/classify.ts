@@ -228,7 +228,9 @@ async function reclassifyNullBatchItems(): Promise<number> {
       and(
         eq(inboxItems.status, "new"),
         sql`${inboxItems.classification} IS NOT NULL`,
-        sql`${inboxItems.classification}->>'batchType' IS NULL`
+        sql`${inboxItems.classification}->>'batchType' IS NULL`,
+        // Don't re-classify items the user explicitly removed from groups
+        sql`COALESCE(${inboxItems.classification}->>'reason', '') NOT LIKE 'User removed from%'`
       )
     );
 
