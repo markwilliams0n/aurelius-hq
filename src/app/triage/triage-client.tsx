@@ -538,6 +538,37 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
       return;
     }
 
+    // Classify into a group
+    if (action === "classify" && data?.batchType) {
+      try {
+        const res = await fetch("/api/triage/batch/reclassify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            itemId: currentItem.id,
+            fromBatchType: "individual",
+            toBatchType: data.batchType,
+            sender: currentItem.sender,
+            senderName: currentItem.senderName,
+            connector: currentItem.connector,
+          }),
+        });
+        if (!res.ok) throw new Error("Classify failed");
+
+        // Remove item from individual items list (it's now in a batch card)
+        setAnimatingOut("right");
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        setItems((prev) => prev.filter((i) => i.id !== currentItem.id));
+        setAnimatingOut(null);
+        toast.success(`Classified as ${data.batchType} — rule created`);
+      } catch (error) {
+        console.error("Classify failed:", error);
+        toast.error("Failed to classify item");
+      }
+      setViewMode("triage");
+      return;
+    }
+
     try {
       await fetch(`/api/triage/${currentItem.id}`, {
         method: "POST",
