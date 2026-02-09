@@ -10,13 +10,32 @@ import {
 import { startSession, type ActiveSession } from "@/lib/capabilities/code/executor";
 import { buildCodePrompt } from "@/lib/capabilities/code/prompts";
 import { getCard, updateCard } from "../db";
-import { sendOwnerMessage, editOwnerMessage } from "@/lib/telegram/client";
+import {
+  sendOwnerMessage,
+  editOwnerMessage,
+  type InlineKeyboardMarkup,
+} from "@/lib/telegram/client";
 
 // ---------------------------------------------------------------------------
-// Active session tracking
+// Active session tracking — stored on globalThis to survive Next.js HMR
 // ---------------------------------------------------------------------------
 
-const activeSessions = new Map<string, ActiveSession>();
+const globalStore = globalThis as unknown as {
+  __codeActiveSessions?: Map<string, ActiveSession>;
+  __codeTelegramMessages?: Map<string, number>;
+  __codeTelegramToSession?: Map<number, string>;
+  __codeSigtermRegistered?: boolean;
+};
+
+if (!globalStore.__codeActiveSessions) globalStore.__codeActiveSessions = new Map();
+if (!globalStore.__codeTelegramMessages) globalStore.__codeTelegramMessages = new Map();
+if (!globalStore.__codeTelegramToSession) globalStore.__codeTelegramToSession = new Map();
+
+const activeSessions = globalStore.__codeActiveSessions;
+/** Map of sessionId → Telegram message_id for the session's status message. */
+const sessionTelegramMessages = globalStore.__codeTelegramMessages;
+/** Reverse map: Telegram message_id → sessionId (for reply detection). */
+export const telegramToSession = globalStore.__codeTelegramToSession;
 
 export function getActiveSessions(): Map<string, ActiveSession> {
   // Prune dead sessions (process exited but map entry remains after HMR)
@@ -29,20 +48,45 @@ export function getActiveSessions(): Map<string, ActiveSession> {
 }
 
 // Kill all active sessions on server shutdown to prevent orphaned processes
-process.on('SIGTERM', () => {
-  for (const [id, session] of activeSessions) {
-    console.log(`[code-session] Killing session ${id} on SIGTERM`);
-    session.kill();
-  }
-  activeSessions.clear();
-});
+// Only register once (globalThis persists across HMR)
+if (!globalStore.__codeSigtermRegistered) {
+  globalStore.__codeSigtermRegistered = true;
+  process.on('SIGTERM', () => {
+    for (const [id, session] of activeSessions) {
+      console.log(`[code-session] Killing session ${id} on SIGTERM`);
+      session.kill();
+    }
+    activeSessions.clear();
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Telegram session message — one message per session, edited on state changes
 // ---------------------------------------------------------------------------
 
-/** Map of sessionId → Telegram message_id for the session's status message. */
-const sessionTelegramMessages = new Map<string, number>();
+/** Build inline keyboard buttons appropriate for the session state. */
+export function getSessionKeyboard(
+  state: 'running' | 'waiting' | 'completed' | 'error',
+  cardId: string,
+): InlineKeyboardMarkup | undefined {
+  switch (state) {
+    case 'running':
+      return { inline_keyboard: [[{ text: '\u{1F6D1} Stop', callback_data: `code:stop:${cardId}` }]] };
+    case 'waiting':
+      return { inline_keyboard: [
+        [{ text: '\u{1F6D1} Stop', callback_data: `code:stop:${cardId}` }],
+      ] };
+    case 'completed':
+      return { inline_keyboard: [
+        [
+          { text: '\u{2705} Approve & Merge', callback_data: `code:approve:${cardId}` },
+          { text: '\u{274C} Reject', callback_data: `code:reject:${cardId}` },
+        ],
+      ] };
+    case 'error':
+      return undefined; // No actions for failed sessions
+  }
+}
 
 /** Format a session status message for Telegram. */
 function formatSessionTelegram(
@@ -67,6 +111,8 @@ function formatSessionTelegram(
     const preview = extra.lastMessage.length > 1000 ? extra.lastMessage.slice(0, 997) + '...' : extra.lastMessage;
     lines.push('');
     lines.push(`Claude says:\n${preview}`);
+    lines.push('');
+    lines.push('\u{1F4AC} Reply to this message to respond.');
   } else if (state === 'error' && extra?.error) {
     lines.push('');
     lines.push(`Error: ${extra.error}`);
@@ -81,18 +127,23 @@ function formatSessionTelegram(
 async function updateSessionTelegram(
   sessionId: string,
   text: string,
+  keyboard?: InlineKeyboardMarkup,
 ): Promise<void> {
   try {
     const existingMsgId = sessionTelegramMessages.get(sessionId);
     if (existingMsgId) {
-      const newId = await editOwnerMessage(existingMsgId, text);
+      const newId = await editOwnerMessage(existingMsgId, text, { replyMarkup: keyboard });
       if (newId && newId !== existingMsgId) {
+        // Update both maps
+        telegramToSession.delete(existingMsgId);
         sessionTelegramMessages.set(sessionId, newId);
+        telegramToSession.set(newId, sessionId);
       }
     } else {
-      const msgId = await sendOwnerMessage(text);
+      const msgId = await sendOwnerMessage(text, { replyMarkup: keyboard });
       if (msgId) {
         sessionTelegramMessages.set(sessionId, msgId);
+        telegramToSession.set(msgId, sessionId);
       }
     }
   } catch {
@@ -150,6 +201,7 @@ async function finalizeSession(
       formatSessionTelegram('completed', task, totalTurns, totalCostUsd, {
         filesChanged: changedFiles?.length ?? 0,
       }),
+      cardId ? getSessionKeyboard('completed', cardId) : undefined,
     );
   } catch (err) {
     console.error(`[code-session:${sessionId}] Failed to gather results:`, err);
@@ -250,6 +302,7 @@ registerCardHandler("code:start", {
             formatSessionTelegram('waiting', task, totalTurns, totalCostUsd, {
               lastMessage: result.text,
             }),
+            cardId ? getSessionKeyboard('waiting', cardId) : undefined,
           );
         },
 
@@ -314,6 +367,7 @@ registerCardHandler("code:start", {
     updateSessionTelegram(
       sessionId,
       formatSessionTelegram('running', task, 0, null),
+      cardId ? getSessionKeyboard('running', cardId) : undefined,
     );
 
     return { status: "confirmed" };
@@ -371,6 +425,7 @@ registerCardHandler("code:respond", {
     updateSessionTelegram(
       sessionId,
       formatSessionTelegram('running', task, totalTurns, totalCostUsd),
+      cardId ? getSessionKeyboard('running', cardId) : undefined,
     );
 
     return { status: "confirmed" };

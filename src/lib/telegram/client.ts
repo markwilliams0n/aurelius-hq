@@ -45,6 +45,15 @@ export interface TelegramUpdate {
   };
 }
 
+export interface InlineKeyboardButton {
+  text: string;
+  callback_data?: string; // max 64 bytes
+}
+
+export interface InlineKeyboardMarkup {
+  inline_keyboard: InlineKeyboardButton[][];
+}
+
 export interface TelegramApiResponse<T> {
   ok: boolean;
   result?: T;
@@ -74,6 +83,7 @@ export async function sendMessage(
     parseMode?: 'Markdown' | 'MarkdownV2' | 'HTML';
     replyToMessageId?: number;
     disableNotification?: boolean;
+    replyMarkup?: InlineKeyboardMarkup;
   }
 ): Promise<TelegramMessage> {
   const response = await fetch(getApiUrl('sendMessage'), {
@@ -85,6 +95,7 @@ export async function sendMessage(
       parse_mode: options?.parseMode,
       reply_to_message_id: options?.replyToMessageId,
       disable_notification: options?.disableNotification,
+      reply_markup: options?.replyMarkup,
     }),
   });
 
@@ -104,7 +115,7 @@ export async function editMessage(
   chatId: number | string,
   messageId: number,
   text: string,
-  options?: { parseMode?: 'Markdown' | 'MarkdownV2' | 'HTML' },
+  options?: { parseMode?: 'Markdown' | 'MarkdownV2' | 'HTML'; replyMarkup?: InlineKeyboardMarkup },
 ): Promise<TelegramMessage> {
   const response = await fetch(getApiUrl('editMessageText'), {
     method: 'POST',
@@ -114,6 +125,7 @@ export async function editMessage(
       message_id: messageId,
       text,
       parse_mode: options?.parseMode,
+      reply_markup: options?.replyMarkup,
     }),
   });
 
@@ -149,7 +161,7 @@ export async function setWebhook(url: string): Promise<boolean> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       url,
-      allowed_updates: ['message'],
+      allowed_updates: ['message', 'callback_query'],
     }),
   });
 
@@ -223,6 +235,24 @@ export async function getMe(): Promise<TelegramUser> {
   return data.result!;
 }
 
+/**
+ * Answer a callback query (dismiss the loading spinner on inline keyboard buttons)
+ */
+export async function answerCallbackQuery(
+  callbackQueryId: string,
+  options?: { text?: string; showAlert?: boolean },
+): Promise<void> {
+  await fetch(getApiUrl('answerCallbackQuery'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      callback_query_id: callbackQueryId,
+      text: options?.text,
+      show_alert: options?.showAlert,
+    }),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Owner chat ID — for proactive notifications (coding sessions, alerts, etc.)
 // ---------------------------------------------------------------------------
@@ -277,14 +307,17 @@ export async function notifyOwner(
  * Used for messages that will be edited later (e.g. coding session status).
  * Returns null if sending fails.
  */
-export async function sendOwnerMessage(text: string): Promise<number | null> {
+export async function sendOwnerMessage(
+  text: string,
+  options?: { replyMarkup?: InlineKeyboardMarkup },
+): Promise<number | null> {
   const chatId = getOwnerChatId();
   if (!chatId) {
     console.warn('[telegram] Cannot send owner message — no chat ID available.');
     return null;
   }
   try {
-    const msg = await sendMessage(chatId, text);
+    const msg = await sendMessage(chatId, text, { replyMarkup: options?.replyMarkup });
     return msg.message_id;
   } catch (err) {
     console.error('[telegram] Failed to send owner message:', err);
@@ -300,16 +333,17 @@ export async function sendOwnerMessage(text: string): Promise<number | null> {
 export async function editOwnerMessage(
   messageId: number,
   text: string,
+  options?: { replyMarkup?: InlineKeyboardMarkup },
 ): Promise<number | null> {
   const chatId = getOwnerChatId();
   if (!chatId) return null;
   try {
-    await editMessage(chatId, messageId, text);
+    await editMessage(chatId, messageId, text, { replyMarkup: options?.replyMarkup });
     return messageId;
   } catch (err) {
     // Telegram rejects edits if content is unchanged or message is too old
     console.error('[telegram] Failed to edit message, sending new:', err);
-    return sendOwnerMessage(text);
+    return sendOwnerMessage(text, options);
   }
 }
 

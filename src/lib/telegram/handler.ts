@@ -12,20 +12,29 @@ import { conversations } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import {
   sendMessage,
+  editMessage,
   sendTypingAction,
   splitMessage,
+  answerCallbackQuery,
   setOwnerChatId,
+  getOwnerChatId,
   type TelegramUpdate,
   type TelegramMessage,
 } from './client';
 import {
   createCard,
   generateCardId,
+  getCard,
   getPendingCards,
   updateCard,
 } from '@/lib/action-cards/db';
 import { dispatchCardAction } from '@/lib/action-cards/registry';
 import type { ActionCardData, CardPattern } from '@/lib/types/action-card';
+import {
+  getActiveSessions,
+  telegramToSession,
+  getSessionKeyboard,
+} from '@/lib/action-cards/handlers/code';
 
 // Register all card handlers so dispatchCardAction can find them
 import '@/lib/action-cards/handlers/code';
@@ -386,10 +395,110 @@ The user is ${message.from?.first_name || 'a user'}${message.from?.username ? ` 
   }
 }
 
+// ---------------------------------------------------------------------------
+// Callback query handler — inline keyboard button presses
+// ---------------------------------------------------------------------------
+
+async function handleCallbackQuery(
+  callbackQueryId: string,
+  data: string,
+  chatId: number,
+  messageId: number,
+): Promise<void> {
+  // Format: "code:<action>:<cardId>"
+  const parts = data.split(':');
+  if (parts.length < 3 || parts[0] !== 'code') {
+    await answerCallbackQuery(callbackQueryId, { text: 'Unknown action' });
+    return;
+  }
+
+  const action = parts[1]; // stop, approve, reject
+  const cardId = parts.slice(2).join(':'); // rejoin in case cardId has colons
+
+  try {
+    const card = await getCard(cardId);
+    if (!card) {
+      await answerCallbackQuery(callbackQueryId, { text: 'Session not found' });
+      return;
+    }
+
+    const cardData = { ...card.data, _cardId: cardId, _confirmed: true };
+    const handler = `code:${action}`;
+
+    const result = await dispatchCardAction(handler, 'confirm', cardData);
+
+    if (result.status === 'error') {
+      const err = (result.result?.error as string) || 'Unknown error';
+      await answerCallbackQuery(callbackQueryId, { text: `Failed: ${err}`, showAlert: true });
+    } else {
+      const labels: Record<string, string> = {
+        stop: 'Session stopped',
+        approve: 'Changes merged!',
+        reject: 'Changes discarded',
+      };
+      await answerCallbackQuery(callbackQueryId, { text: labels[action] || 'Done' });
+
+      // Update card status
+      await updateCard(cardId, {
+        status: result.status === 'needs_confirmation' ? 'pending' : result.status,
+        ...(result.result && { result: result.result }),
+      });
+    }
+  } catch (err) {
+    console.error('[telegram] Callback query error:', err);
+    await answerCallbackQuery(callbackQueryId, { text: 'Error processing action', showAlert: true });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Reply-to-session handler — respond to coding session questions
+// ---------------------------------------------------------------------------
+
+async function handleSessionReply(
+  message: TelegramMessage,
+  sessionId: string,
+): Promise<boolean> {
+  const sessions = getActiveSessions();
+  const session = sessions.get(sessionId);
+
+  if (!session) {
+    await sendMessage(message.chat.id, 'Session no longer active — it may have completed or been stopped.');
+    return true;
+  }
+
+  if (session.state !== 'waiting_for_input') {
+    await sendMessage(message.chat.id, `Session is ${session.state}, not waiting for input.`);
+    return true;
+  }
+
+  const text = message.text || '';
+  session.sendMessage(text);
+  await sendMessage(message.chat.id, '\u{2705} Response sent — session resuming.');
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Main handler
+// ---------------------------------------------------------------------------
+
 /**
  * Main handler for Telegram webhook updates
  */
 export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void> {
+  // Handle inline keyboard button presses
+  if (update.callback_query) {
+    const cq = update.callback_query;
+    if (cq.data && cq.message) {
+      await handleCallbackQuery(
+        cq.id,
+        cq.data,
+        cq.message.chat.id,
+        cq.message.message_id,
+      );
+    }
+    return;
+  }
+
   const message = update.message;
 
   if (!message || !message.text) {
@@ -398,6 +507,16 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
 
   // Remember the owner's chat ID for proactive notifications
   setOwnerChatId(message.chat.id);
+
+  // Check if this is a reply to a coding session status message
+  if (message.reply_to_message) {
+    const repliedMsgId = message.reply_to_message.message_id;
+    const sessionId = telegramToSession.get(repliedMsgId);
+    if (sessionId) {
+      const handled = await handleSessionReply(message, sessionId);
+      if (handled) return;
+    }
+  }
 
   const text = message.text.trim();
 
