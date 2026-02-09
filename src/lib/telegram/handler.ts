@@ -332,7 +332,12 @@ async function handleChatMessage(message: TelegramMessage): Promise<void> {
     // Build agent context with Telegram-specific additions
     const telegramContext = `## Telegram Context
 You're responding via Telegram. Keep responses concise and mobile-friendly.
-The user is ${message.from?.first_name || 'a user'}${message.from?.username ? ` (@${message.from.username})` : ''}.`;
+The user is ${message.from?.first_name || 'a user'}${message.from?.username ? ` (@${message.from.username})` : ''}.
+
+IMPORTANT: When the user asks about pending actions, approvals, sessions, or status,
+use the check_coding_sessions tool. After your response, the system will automatically
+send interactive cards with buttons the user can tap. Do NOT tell the user to use commands
+or that cards aren't available — they will be sent automatically.`;
 
     const { systemPrompt: telegramPrompt } = await buildAgentContext({
       query: userText,
@@ -342,9 +347,10 @@ The user is ${message.from?.first_name || 'a user'}${message.from?.username ? ` 
     // Build messages for AI
     const aiMessages: Message[] = [...aiHistory, { role: 'user', content: userText }];
 
-    // Collect text response and detect action cards from tool results
+    // Collect text response, detect action cards, and track tool usage
     let fullResponse = '';
     const collectedCards: ActionCardData[] = [];
+    const toolsUsed = new Set<string>();
 
     for await (const event of chatStreamWithTools(
       aiMessages,
@@ -353,6 +359,8 @@ The user is ${message.from?.first_name || 'a user'}${message.from?.username ? ` 
     )) {
       if (event.type === 'text') {
         fullResponse += event.content;
+      } else if (event.type === 'tool_use') {
+        toolsUsed.add(event.toolName);
       } else if (event.type === 'tool_result') {
         try {
           const parsed = JSON.parse(event.result);
@@ -416,6 +424,12 @@ The user is ${message.from?.first_name || 'a user'}${message.from?.username ? ` 
       const keyboard = getCardKeyboard(card.id);
       await sendMessage(chatId, text, { replyMarkup: keyboard });
     }
+
+    // Auto-send pending items with buttons when the AI checked sessions/status
+    // This ensures the user always gets interactive cards, not just text descriptions
+    if (toolsUsed.has('check_coding_sessions')) {
+      await sendPendingCardsWithButtons(chatId);
+    }
   } catch (error) {
     console.error('Error processing Telegram message:', error);
     await sendMessage(
@@ -429,6 +443,87 @@ The user is ${message.from?.first_name || 'a user'}${message.from?.username ? ` 
 }
 
 // ---------------------------------------------------------------------------
+// Send pending cards with buttons — shared by /pending command and auto-send
+// ---------------------------------------------------------------------------
+
+async function sendPendingCardsWithButtons(chatId: number): Promise<void> {
+  const pendingCards = await getPendingCards();
+  const codingSessions = await getActionableCodingSessions();
+  const liveSessionMap = getActiveSessions();
+
+  // Build a unified list of all actionable items
+  const allItems: ActionCardData[] = [];
+
+  // Coding sessions first (most time-sensitive)
+  for (const card of codingSessions) {
+    allItems.push(card);
+  }
+
+  // Then pending cards (excluding code cards already shown as sessions)
+  const sessionCardIds = new Set(codingSessions.map(c => c.id));
+  for (const card of pendingCards) {
+    if (!sessionCardIds.has(card.id)) {
+      allItems.push(card);
+    }
+  }
+
+  // Store for /approve N targeting
+  pendingListStore.__pendingCardList = allItems;
+
+  if (allItems.length === 0) return;
+
+  // Send each item as its own message with buttons
+  for (let i = 0; i < allItems.length; i++) {
+    const card = allItems[i];
+    const data = card.data as Record<string, unknown>;
+    const num = i + 1;
+
+    if (card.pattern === 'code' && card.status === 'confirmed') {
+      // Coding session — use rich session format with session-specific buttons
+      const state = data.state as 'running' | 'waiting' | 'completed' | 'error';
+      const task = (data.task as string) || 'Unknown task';
+      const totalTurns = (data.totalTurns as number) || 0;
+      const totalCostUsd = (data.totalCostUsd as number) ?? null;
+      const sessionId = data.sessionId as string;
+
+      const liveSession = sessionId ? liveSessionMap.get(sessionId) : null;
+      const effectiveState = liveSession
+        ? (liveSession.state === 'waiting_for_input' ? 'waiting' : 'running')
+        : state;
+
+      const text = `#${num} ` + formatSessionTelegram(
+        effectiveState as 'running' | 'waiting' | 'completed' | 'error',
+        task,
+        totalTurns,
+        totalCostUsd,
+        {
+          lastMessage: effectiveState === 'waiting' ? (data.lastMessage as string) : undefined,
+          filesChanged: effectiveState === 'completed'
+            ? ((data.result as Record<string, unknown>)?.changedFiles as unknown[])?.length ?? 0
+            : undefined,
+        },
+      );
+
+      const keyboard = getSessionKeyboard(
+        effectiveState as 'running' | 'waiting' | 'completed' | 'error',
+        card.id,
+      );
+
+      const msg = await sendMessage(chatId, text, { replyMarkup: keyboard });
+
+      if (sessionId && msg) {
+        telegramToSession.set(msg.message_id, sessionId);
+      }
+    } else {
+      // General pending card — plain text + approve/reject buttons
+      const text = `#${num} ${formatCardPlainText(card)}`;
+      const keyboard = getCardKeyboard(card.id);
+      await sendMessage(chatId, text, { replyMarkup: keyboard });
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // /pending (or /sessions, /status) — show ALL actionable items with buttons
 // ---------------------------------------------------------------------------
 
@@ -436,86 +531,18 @@ async function handlePendingCommand(message: TelegramMessage): Promise<void> {
   const chatId = message.chat.id;
 
   try {
-    const pendingCards = await getPendingCards();
-    const codingSessions = await getActionableCodingSessions();
-    const liveSessionMap = getActiveSessions();
-
-    // Build a unified numbered list of all actionable items
-    const allItems: ActionCardData[] = [];
-
-    // Coding sessions first (most time-sensitive)
-    for (const card of codingSessions) {
-      allItems.push(card);
-    }
-
-    // Then pending cards (excluding code cards already shown as sessions)
-    const sessionCardIds = new Set(codingSessions.map(c => c.id));
-    for (const card of pendingCards) {
-      if (!sessionCardIds.has(card.id)) {
-        allItems.push(card);
-      }
-    }
-
-    // Store for /approve N targeting
-    pendingListStore.__pendingCardList = allItems;
+    const allItems = [
+      ...(await getActionableCodingSessions()),
+      ...(await getPendingCards()),
+    ];
 
     if (allItems.length === 0) {
       await sendMessage(chatId, 'Nothing pending. All clear.');
       return;
     }
 
-    // Send header
     await sendMessage(chatId, `\u{1F4CB} ${allItems.length} actionable item${allItems.length > 1 ? 's' : ''}:`);
-
-    // Send each item as its own message with buttons
-    for (let i = 0; i < allItems.length; i++) {
-      const card = allItems[i];
-      const data = card.data as Record<string, unknown>;
-      const num = i + 1;
-
-      if (card.pattern === 'code' && card.status === 'confirmed') {
-        // Coding session — use rich session format with session-specific buttons
-        const state = data.state as 'running' | 'waiting' | 'completed' | 'error';
-        const task = (data.task as string) || 'Unknown task';
-        const totalTurns = (data.totalTurns as number) || 0;
-        const totalCostUsd = (data.totalCostUsd as number) ?? null;
-        const sessionId = data.sessionId as string;
-
-        const liveSession = sessionId ? liveSessionMap.get(sessionId) : null;
-        const effectiveState = liveSession
-          ? (liveSession.state === 'waiting_for_input' ? 'waiting' : 'running')
-          : state;
-
-        const text = `#${num} ` + formatSessionTelegram(
-          effectiveState as 'running' | 'waiting' | 'completed' | 'error',
-          task,
-          totalTurns,
-          totalCostUsd,
-          {
-            lastMessage: effectiveState === 'waiting' ? (data.lastMessage as string) : undefined,
-            filesChanged: effectiveState === 'completed'
-              ? ((data.result as Record<string, unknown>)?.changedFiles as unknown[])?.length ?? 0
-              : undefined,
-          },
-        );
-
-        const keyboard = getSessionKeyboard(
-          effectiveState as 'running' | 'waiting' | 'completed' | 'error',
-          card.id,
-        );
-
-        const msg = await sendMessage(chatId, text, { replyMarkup: keyboard });
-
-        if (sessionId && msg) {
-          telegramToSession.set(msg.message_id, sessionId);
-        }
-      } else {
-        // General pending card — plain text + approve/reject buttons
-        const text = `#${num} ${formatCardPlainText(card)}`;
-        const keyboard = getCardKeyboard(card.id);
-        await sendMessage(chatId, text, { replyMarkup: keyboard });
-      }
-    }
+    await sendPendingCardsWithButtons(chatId);
   } catch (err) {
     console.error('[telegram] /pending error:', err);
     await sendMessage(chatId, 'Failed to fetch pending items. Try again.');
