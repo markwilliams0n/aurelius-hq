@@ -6,10 +6,18 @@
 
 **2026-02-09**
 
+Smart triage classification & batch actions (feature/triage-enhancements → main, PR #20, PER-219):
+- 3-pass classification pipeline: rules → Ollama → Kimi (cloud LLM via OpenRouter)
+- Batch card UI with domain groups (notifications, finance, newsletters, calendar, spam)
+- Rule system with CRUD, auto-creation on reclassify, NL parsing
+- Individual item classify via `g` shortcut + action menu number keys
+- Calendar "Accept & Archive", daily learning loop, AI cost logging
+- Bug fixes: Gmail sync on batch archive, reappearing items after uncheck, SQL injection, OpenRouter max_tokens
+- 25 commits, 41 files, +7,500 lines
+
 Test suite fix (feature/test-fixes branch, PER-218):
 - Fixed 39 failing tests across 7 test files — all caused by implementation drift
-- 233/233 tests now pass, TypeScript clean
-- Key fixes: chainable DB mocks for drizzle, remocked gmail queries abstraction, added missing action-card/capability mocks to telegram handler
+- 260/260 tests now pass, TypeScript clean
 
 **2026-02-08 (overnight session)**
 
@@ -38,15 +46,15 @@ Pending Actions Page (PR #18, PER-174):
 
 ## In Progress
 
-- `feature/test-fixes` branch — ready to merge to main
+Nothing active — clean slate.
 
 ## Up Next
 
+- [ ] **Test triage pipeline end-to-end** — verify batch groups form correctly, rules apply, Gmail syncs
 - [ ] **Test aurelius-can-code end-to-end** — manual smoke test with real coding task
 - [ ] **Test vault end-to-end** (PER-200) — manual testing of all vault functionality
 - [ ] **Phase 2: Telegram control plane** — inline keyboards, callback queries, reply-to-session
 - [ ] **Phase 3: Memory integration** — Supermemory summaries on start/complete/approve
-- [ ] Test Gmail sync with real inbox
 
 ## Known Issues (Documented)
 
