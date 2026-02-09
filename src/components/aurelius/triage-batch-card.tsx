@@ -10,6 +10,7 @@ import {
   Square,
   CheckSquare,
   Send,
+  ArrowRightLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { BatchCardWithItems } from "@/lib/triage/batch-cards";
@@ -25,6 +26,15 @@ const CONNECTOR_ICON: Record<
   granola: { icon: CalendarDays, color: "text-amber-400" },
   manual: { icon: Mail, color: "text-muted-foreground" },
 };
+
+// Batch type options for reclassify dropdown
+const BATCH_TYPES = [
+  { value: "notifications", label: "Notifications" },
+  { value: "finance", label: "Finance" },
+  { value: "newsletters", label: "Newsletters" },
+  { value: "calendar", label: "Calendar" },
+  { value: "spam", label: "Spam" },
+];
 
 // Tier badge config
 const TIER_CONFIG: Record<string, { label: string; className: string }> = {
@@ -51,6 +61,14 @@ interface TriageBatchCardProps {
     uncheckedItemIds: string[]
   ) => void;
   onRuleInput: (input: string) => void;
+  onReclassify?: (
+    itemId: string,
+    fromBatchType: string,
+    toBatchType: string,
+    sender: string,
+    senderName: string | null,
+    connector: string
+  ) => Promise<void>;
 }
 
 export function TriageBatchCard({
@@ -58,14 +76,17 @@ export function TriageBatchCard({
   isActive,
   onAction,
   onRuleInput,
+  onReclassify,
 }: TriageBatchCardProps) {
   const [checkedIds, setCheckedIds] = useState<Set<string>>(
     () => new Set(card.items.map((item) => item.id))
   );
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const [ruleInput, setRuleInput] = useState("");
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const lastToggledIndex = useRef<number>(-1);
   const ruleInputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const checkedCount = checkedIds.size;
   const totalCount = card.items.length;
@@ -214,6 +235,21 @@ export function TriageBatchCard({
     submitRule,
   ]);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!openDropdownId) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
+        setOpenDropdownId(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openDropdownId]);
+
   // Capitalize action label for button
   const actionButtonLabel = `${actionLabel.charAt(0).toUpperCase()}${actionLabel.slice(1)} ${checkedCount}`;
 
@@ -259,7 +295,7 @@ export function TriageBatchCard({
             <div
               key={item.id}
               className={cn(
-                "flex items-start gap-2 px-4 py-2 cursor-pointer transition-colors",
+                "group flex items-start gap-2 px-4 py-2 cursor-pointer transition-colors",
                 isFocused && isActive && "bg-blue-500/10",
                 !isFocused && "hover:bg-secondary/50"
               )}
@@ -307,6 +343,51 @@ export function TriageBatchCard({
                   </p>
                 )}
               </div>
+
+              {/* Reclassify button */}
+              {onReclassify && (
+                <div className="relative shrink-0" ref={openDropdownId === item.id ? dropdownRef : undefined}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenDropdownId(
+                        openDropdownId === item.id ? null : item.id
+                      );
+                    }}
+                    className="p-1 rounded text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-foreground hover:bg-secondary transition-all"
+                    title="Move to different group"
+                  >
+                    <ArrowRightLeft className="w-3.5 h-3.5" />
+                  </button>
+
+                  {openDropdownId === item.id && (
+                    <div className="absolute right-0 top-full mt-1 z-30 bg-background border border-border rounded-lg shadow-lg py-1 min-w-[140px]">
+                      {BATCH_TYPES.filter((bt) => bt.value !== batchType).map(
+                        (bt) => (
+                          <button
+                            key={bt.value}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenDropdownId(null);
+                              onReclassify(
+                                item.id,
+                                batchType,
+                                bt.value,
+                                item.sender,
+                                item.senderName,
+                                item.connector
+                              );
+                            }}
+                            className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-secondary transition-colors"
+                          >
+                            {bt.label}
+                          </button>
+                        )
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}

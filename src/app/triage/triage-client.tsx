@@ -223,6 +223,56 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     [fetchItems]
   );
 
+  // Reclassify handler — moves item between batch groups and creates a rule
+  const handleReclassify = useCallback(
+    async (
+      itemId: string,
+      fromBatchType: string,
+      toBatchType: string,
+      sender: string,
+      senderName: string | null,
+      connector: string
+    ) => {
+      try {
+        const res = await fetch("/api/triage/batch/reclassify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            itemId,
+            fromBatchType,
+            toBatchType,
+            sender,
+            senderName,
+            connector,
+          }),
+        });
+        if (!res.ok) throw new Error("Reclassify failed");
+
+        // Remove item from current batch card in state
+        setBatchCards((prev) =>
+          prev
+            .map((card) => {
+              const cardBatchType = (card.data?.batchType as string) || "";
+              if (cardBatchType === fromBatchType) {
+                return {
+                  ...card,
+                  items: card.items.filter((i) => i.id !== itemId),
+                };
+              }
+              return card;
+            })
+            .filter((card) => card.items.length > 0)
+        );
+
+        toast.success(`Moved to ${toBatchType} — rule created`);
+      } catch (error) {
+        console.error("Reclassify failed:", error);
+        toast.error("Failed to reclassify item");
+      }
+    },
+    []
+  );
+
   // Rule input handler
   const handleRuleInput = useCallback(async (input: string) => {
     try {
@@ -986,6 +1036,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
                   isActive={true}
                   onAction={handleBatchAction}
                   onRuleInput={handleRuleInput}
+                  onReclassify={handleReclassify}
                 />
               </div>
             )}
