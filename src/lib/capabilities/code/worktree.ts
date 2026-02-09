@@ -174,13 +174,18 @@ export function getWorktreeLog(worktreePath: string): string {
 /**
  * Fast-forward merge the worktree branch into main, then clean up.
  *
- * Uses --ff-only so it will fail if the merge isn't a clean fast-forward.
+ * Uses `git fetch . <branch>:main` to advance the main ref without
+ * requiring main to be checked out. This works regardless of which
+ * branch the main repo currently has active (e.g. a feature branch).
+ * Fails if the merge isn't a clean fast-forward.
+ *
  * After a successful merge the worktree and branch are removed.
  */
 export function mergeWorktree(worktreePath: string, branchName: string): void {
-  // Merge into main from the main repo working directory
+  // Fast-forward the main branch ref to include the session's changes.
+  // `git fetch .` updates a local ref without needing that branch checked out.
   try {
-    git(['merge', '--ff-only', branchName], REPO_ROOT);
+    git(['fetch', '.', `${branchName}:main`], REPO_ROOT);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     throw new Error(
