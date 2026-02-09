@@ -11,6 +11,10 @@ import {
   CheckSquare,
   Send,
   ArrowRightLeft,
+  ChevronDown,
+  ChevronRight,
+  Trash2,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { BatchCardWithItems } from "@/lib/triage/batch-cards";
@@ -69,6 +73,15 @@ interface TriageBatchCardProps {
     senderName: string | null,
     connector: string
   ) => Promise<void>;
+  rules?: Array<{
+    id: string;
+    name: string;
+    trigger: { sender?: string; senderDomain?: string; subjectContains?: string; pattern?: string } | null;
+    source: string;
+    matchCount: number;
+    createdAt: string;
+  }>;
+  onDeleteRule?: (ruleId: string) => void;
 }
 
 export function TriageBatchCard({
@@ -77,6 +90,8 @@ export function TriageBatchCard({
   onAction,
   onRuleInput,
   onReclassify,
+  rules,
+  onDeleteRule,
 }: TriageBatchCardProps) {
   const [checkedIds, setCheckedIds] = useState<Set<string>>(
     () => new Set(card.items.map((item) => item.id))
@@ -84,6 +99,7 @@ export function TriageBatchCard({
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const [ruleInput, setRuleInput] = useState("");
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [rulesExpanded, setRulesExpanded] = useState(false);
   const lastToggledIndex = useRef<number>(-1);
   const ruleInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -392,6 +408,59 @@ export function TriageBatchCard({
           );
         })}
       </div>
+
+      {/* Rules learned section */}
+      {rules && rules.length > 0 && (
+        <div className="border-t border-border/50">
+          <button
+            onClick={() => setRulesExpanded(!rulesExpanded)}
+            className="flex items-center gap-2 w-full px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {rulesExpanded ? (
+              <ChevronDown className="w-3.5 h-3.5" />
+            ) : (
+              <ChevronRight className="w-3.5 h-3.5" />
+            )}
+            <Shield className="w-3.5 h-3.5" />
+            <span>{rules.length} rule{rules.length !== 1 ? "s" : ""} learned</span>
+          </button>
+
+          {rulesExpanded && (
+            <div className="px-4 pb-2 space-y-1">
+              {rules.map((rule) => (
+                <div
+                  key={rule.id}
+                  className="flex items-center gap-2 py-1 text-xs text-muted-foreground"
+                >
+                  <div className="flex-1 min-w-0">
+                    <span className="text-foreground/80 truncate block">{rule.name}</span>
+                    {rule.trigger?.sender && (
+                      <span className="text-[10px] text-muted-foreground truncate block">
+                        sender: {rule.trigger.sender}
+                      </span>
+                    )}
+                  </div>
+                  <span className="shrink-0 text-[10px]">
+                    {rule.matchCount > 0 ? `${rule.matchCount} matches` : "new"}
+                  </span>
+                  {onDeleteRule && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteRule(rule.id);
+                      }}
+                      className="p-0.5 rounded text-muted-foreground hover:text-red-400 transition-colors shrink-0"
+                      title="Delete rule"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Footer: action button + rule input */}
       <div className="px-4 py-3 border-t border-border bg-secondary/50">

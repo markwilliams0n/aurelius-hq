@@ -85,6 +85,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
   const [stats, setStats] = useState({ new: 0, archived: 0, snoozed: 0, actioned: 0 });
   const [tasksByItemId, setTasksByItemId] = useState<Record<string, any[]>>({});
   const [senderCounts, setSenderCounts] = useState<Record<string, number>>({});
+  const [triageRules, setTriageRules] = useState<any[]>([]);
   const [animatingOut, setAnimatingOut] = useState<"left" | "right" | "up" | null>(null);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -149,6 +150,15 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
       setTasksByItemId(data.tasksByItemId || {});
       setSenderCounts(data.senderCounts || {});
       setBatchCards(data.batchCards || []);
+
+      // Fetch triage rules in parallel
+      try {
+        const rulesRes = await fetch("/api/triage/rules");
+        const rulesData = await rulesRes.json();
+        setTriageRules(rulesData.rules || []);
+      } catch (rulesError) {
+        console.error("Failed to fetch triage rules:", rulesError);
+      }
     } catch (error) {
       console.error("Failed to fetch triage items:", error);
       if (!cached) toast.error("Failed to load triage items");
@@ -272,6 +282,18 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     },
     []
   );
+
+  // Delete a triage rule
+  const handleDeleteRule = useCallback(async (ruleId: string) => {
+    try {
+      await fetch(`/api/triage/rules/${ruleId}`, { method: "DELETE" });
+      setTriageRules((prev) => prev.filter((r) => r.id !== ruleId));
+      toast.success("Rule deleted");
+    } catch (error) {
+      console.error("Failed to delete rule:", error);
+      toast.error("Failed to delete rule");
+    }
+  }, []);
 
   // Rule input handler
   const handleRuleInput = useCallback(async (input: string) => {
@@ -1037,6 +1059,8 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
                   onAction={handleBatchAction}
                   onRuleInput={handleRuleInput}
                   onReclassify={handleReclassify}
+                  rules={triageRules.filter((r) => r.action?.batchType === (currentBatchCard.data?.batchType as string))}
+                  onDeleteRule={handleDeleteRule}
                 />
               </div>
             )}
