@@ -76,6 +76,7 @@ interface TriageCardProps {
   item: TriageItem;
   isActive?: boolean;
   className?: string;
+  senderItemCount?: number;
 }
 
 // Priority badge colors and icons
@@ -133,7 +134,7 @@ const ENTITY_ICONS = {
 };
 
 export const TriageCard = forwardRef<HTMLDivElement, TriageCardProps>(
-  ({ item, isActive = false, className }, ref) => {
+  ({ item, isActive = false, className, senderItemCount }, ref) => {
     const priority = PRIORITY_CONFIG[item.priority];
     const connector = CONNECTOR_CONFIG[item.connector];
     const PriorityIcon = priority.icon;
@@ -321,9 +322,16 @@ export const TriageCard = forwardRef<HTMLDivElement, TriageCardProps>(
               </div>
             )}
             <div className="flex flex-col">
-              <span className="font-medium text-sm">
-                {item.senderName || item.sender}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-medium text-sm">
+                  {item.senderName || item.sender}
+                </span>
+                {senderItemCount && senderItemCount > 0 ? (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+                    +{senderItemCount} more
+                  </span>
+                ) : null}
+              </div>
               {item.senderName && item.sender !== item.senderName && (
                 <span className="text-xs text-muted-foreground">{item.sender}</span>
               )}

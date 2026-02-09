@@ -11,11 +11,12 @@ import { useChat } from "@/hooks/use-chat";
 
 interface TriageChatProps {
   item: TriageItem;
+  senderItemCount?: number;
   onClose: () => void;
   onAction?: (action: string, data?: unknown) => void;
 }
 
-export function TriageChat({ item, onClose }: TriageChatProps) {
+export function TriageChat({ item, senderItemCount, onClose }: TriageChatProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -32,6 +33,7 @@ export function TriageChat({ item, onClose }: TriageChatProps) {
         subject: item.subject,
         content: item.content,
         preview: item.preview ?? undefined,
+        senderItemCount,
       },
     },
   });

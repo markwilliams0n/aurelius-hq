@@ -65,8 +65,8 @@ export async function GET(request: Request) {
   // First, wake up any snoozed items whose time has passed
   await wakeUpSnoozedItems();
 
-  // Fetch filtered items and stats in parallel
-  const [dbItems, statsRows] = await Promise.all([
+  // Fetch filtered items, stats, and sender counts in parallel
+  const [dbItems, statsRows, senderCountRows] = await Promise.all([
     getInboxItemsFromDb({
       status,
       connector: connector || undefined,
@@ -80,6 +80,16 @@ export async function GET(request: Request) {
       })
       .from(inboxItemsTable)
       .groupBy(inboxItemsTable.status),
+    // Sender counts for "new" items — enables "X more from this sender"
+    db
+      .select({
+        sender: inboxItemsTable.sender,
+        connector: inboxItemsTable.connector,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(inboxItemsTable)
+      .where(eq(inboxItemsTable.status, "new"))
+      .groupBy(inboxItemsTable.sender, inboxItemsTable.connector),
   ]);
 
   // Sort by priority then date
@@ -126,10 +136,19 @@ export async function GET(request: Request) {
     tasksByItemId[displayId].push(task);
   }
 
+  // Build sender counts map: "connector:sender" → count (excluding current item)
+  const senderCounts: Record<string, number> = {};
+  for (const row of senderCountRows) {
+    if (row.count > 1) {
+      senderCounts[`${row.connector}:${row.sender}`] = row.count - 1;
+    }
+  }
+
   return NextResponse.json({
     items: queue.slice(0, limit),
     total: queue.length,
     tasksByItemId,
+    senderCounts,
     stats: {
       new: statsByStatus["new"] || 0,
       archived: statsByStatus["archived"] || 0,

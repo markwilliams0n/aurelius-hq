@@ -7,6 +7,8 @@ export interface TriageItemContext {
   subject: string;
   content?: string;
   preview?: string;
+  /** Number of other unreviewed items from the same sender */
+  senderItemCount?: number;
 }
 
 export interface ChatContext {

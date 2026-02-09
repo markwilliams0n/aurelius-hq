@@ -62,7 +62,7 @@ const CONNECTOR_FILTERS: Array<{
 
 // Cache for triage data to avoid refetching on every page visit
 let triageCache: {
-  data: { items: TriageItem[]; stats: any; tasksByItemId: Record<string, any[]> } | null;
+  data: { items: TriageItem[]; stats: any; tasksByItemId: Record<string, any[]>; senderCounts: Record<string, number> } | null;
   timestamp: number;
 } = { data: null, timestamp: 0 };
 
@@ -81,6 +81,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
   } | null>(null);
   const [stats, setStats] = useState({ new: 0, archived: 0, snoozed: 0, actioned: 0 });
   const [tasksByItemId, setTasksByItemId] = useState<Record<string, any[]>>({});
+  const [senderCounts, setSenderCounts] = useState<Record<string, number>>({});
   const [animatingOut, setAnimatingOut] = useState<"left" | "right" | "up" | null>(null);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -110,6 +111,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
       setItems(cached.items);
       setStats(cached.stats);
       setTasksByItemId(cached.tasksByItemId);
+      setSenderCounts(cached.senderCounts);
       setIsLoading(false);
 
       // If cache is fresh, don't refetch
@@ -128,13 +130,14 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
 
       // Update cache
       triageCache = {
-        data: { items: mappedItems, stats: data.stats, tasksByItemId: data.tasksByItemId || {} },
+        data: { items: mappedItems, stats: data.stats, tasksByItemId: data.tasksByItemId || {}, senderCounts: data.senderCounts || {} },
         timestamp: Date.now(),
       };
 
       setItems(mappedItems);
       setStats(data.stats);
       setTasksByItemId(data.tasksByItemId || {});
+      setSenderCounts(data.senderCounts || {});
     } catch (error) {
       console.error("Failed to fetch triage items:", error);
       if (!cached) toast.error("Failed to load triage items");
@@ -911,7 +914,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
                 animatingOut === "up" && "animate-swipe-up"
               )}
             >
-              <TriageCard ref={cardRef} item={currentItem} isActive={true} />
+              <TriageCard ref={cardRef} item={currentItem} isActive={true} senderItemCount={senderCounts[`${currentItem.connector}:${currentItem.sender}`] || 0} />
             </div>
 
             {/* Suggested tasks box */}
@@ -966,6 +969,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
       {viewMode === "chat" && currentItem && (
         <TriageChat
           item={currentItem}
+          senderItemCount={senderCounts[`${currentItem.connector}:${currentItem.sender}`] || 0}
           onClose={handleCloseOverlay}
           onAction={(action, data) => {
             // Handle actions from chat (e.g., snooze, add to memory)

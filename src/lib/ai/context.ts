@@ -45,13 +45,16 @@ function buildSurfaceContext(context?: ChatContext): string | null {
     case "triage": {
       if (!context.triageItem) return null;
       const item = context.triageItem;
+      const senderContext = item.senderItemCount && item.senderItemCount > 0
+        ? `\n- Other items from this sender: ${item.senderItemCount} more unreviewed`
+        : '';
       return `You are currently helping the user with a specific triage item.
 
 Current triage item:
 - Type: ${item.connector}
 - From: ${item.senderName || item.sender}
 - Subject: ${item.subject}
-- Preview: ${(item.preview || item.content || "").slice(0, 500)}
+- Preview: ${(item.preview || item.content || "").slice(0, 500)}${senderContext}
 
 You can help the user with this item using your available tools — send Slack messages, create Linear tasks, save information to memory, update configuration, etc. Use the tools naturally based on what the user asks.`;
     }
