@@ -85,6 +85,11 @@ const NODE_DESCRIPTIONS: Record<string, string> = {
   "config:capability:tasks": "Instructions governing how the agent manages tasks via Linear — priorities, labels, workflows.",
   "config:capability:config": "Instructions for self-modification — what configs the agent can propose changes to and how.",
   "config:capability:slack": "Instructions for Slack messaging — tone, formatting, when to send, cc behavior.",
+  "capability:vault": "Secure vault for storing sensitive personal data — passwords, IDs, financial info, important references.",
+  "capability:code": "Autonomous coding agent. Starts Claude Code sessions, runs terminal commands, and manages code changes.",
+  "connector:manual": "Manually added triage items. Created directly by the user or agent without an external connector.",
+  "config:capability:vault": "Instructions for vault storage — categories, sensitivity levels, what to store and how.",
+  "config:capability:code": "Instructions for coding agent sessions — allowed repos, review rules, merge policies.",
   "config:prompt:email_draft": "Prompt template controlling AI-generated email draft replies — tone, style, formatting.",
   "config:slack:directory": "Cached Slack workspace directory of users and channels. Auto-refreshed daily by heartbeat.",
 };
@@ -128,6 +133,8 @@ const CAPABILITY_POSITIONS: Record<string, { x: number; y: number }> = {
   "capability:tasks": { x: CENTER.x + 280, y: CENTER.y - 120 },
   "capability:config": { x: CENTER.x - 280, y: CENTER.y - 120 },
   "capability:slack": { x: CENTER.x + 280, y: CENTER.y + 40 },
+  "capability:vault": { x: CENTER.x - 280, y: CENTER.y + 40 },
+  "capability:code": { x: CENTER.x - 280, y: CENTER.y + 140 },
 };
 
 const CONNECTOR_POSITIONS: Record<string, { x: number; y: number }> = {
@@ -135,21 +142,17 @@ const CONNECTOR_POSITIONS: Record<string, { x: number; y: number }> = {
   "connector:slack": { x: CENTER.x - 100, y: CENTER.y + 360 },
   "connector:linear": { x: CENTER.x + 320, y: CENTER.y + 220 },
   "connector:granola": { x: CENTER.x + 100, y: CENTER.y + 360 },
+  "connector:manual": { x: CENTER.x, y: CENTER.y + 450 },
 };
 
-function getConfigPosition(nodeId: string, parentId: string): { x: number; y: number } {
+function getConfigPosition(nodeId: string, parentId: string, indexInParent: number): { x: number; y: number } {
   const parentPos =
     CORE_POSITIONS[parentId] ||
     CAPABILITY_POSITIONS[parentId] ||
     CONNECTOR_POSITIONS[parentId] ||
     CENTER;
 
-  const configIndex = [
-    "config:soul", "config:system_prompt", "config:agents", "config:processes",
-    "config:capability:tasks", "config:capability:config", "config:capability:slack",
-    "config:prompt:email_draft", "config:slack:directory",
-  ].indexOf(nodeId);
-  const angle = ((configIndex % 4) * 90 + 45) * (Math.PI / 180);
+  const angle = ((indexInParent % 4) * 90 + 45) * (Math.PI / 180);
   const radius = 70;
   return {
     x: parentPos.x + Math.cos(angle) * radius,
@@ -157,19 +160,11 @@ function getConfigPosition(nodeId: string, parentId: string): { x: number; y: nu
   };
 }
 
-// --- Config key mapping (node id -> API key) ---
-
-const CONFIG_KEY_MAP: Record<string, string> = {
-  "config:soul": "soul",
-  "config:system_prompt": "system_prompt",
-  "config:agents": "agents",
-  "config:processes": "processes",
-  "config:capability:tasks": "capability:tasks",
-  "config:capability:config": "capability:config",
-  "config:capability:slack": "capability:slack",
-  "config:prompt:email_draft": "prompt:email_draft",
-  "config:slack:directory": "slack:directory",
-};
+// Derive config API key from node ID: "config:<key>" → "<key>"
+function getConfigKey(nodeId: string): string | null {
+  if (!nodeId.startsWith("config:")) return null;
+  return nodeId.replace(/^config:/, "");
+}
 
 // --- Custom Node Components ---
 
@@ -493,7 +488,7 @@ function DetailPanel({ node, onClose }: { node: TopologyNode; onClose: () => voi
   const typeLabel = node.type.charAt(0).toUpperCase() + node.type.slice(1);
   const colors = NODE_TYPE_COLORS[node.type];
   const description = NODE_DESCRIPTIONS[node.id];
-  const configKey = CONFIG_KEY_MAP[node.id];
+  const configKey = getConfigKey(node.id);
 
   const [configContent, setConfigContent] = useState<string | null>(null);
   const [configLoading, setConfigLoading] = useState(false);
@@ -732,6 +727,18 @@ export function ConfigHome() {
 
     const visibleNodeIds = new Set<string>();
 
+    // Pre-compute config index per parent for layout
+    const configParentCounters = new Map<string, number>();
+    const configIndexMap = new Map<string, number>();
+    for (const node of topology.nodes) {
+      if (node.type === "config") {
+        const parent = node.parent || "core:config";
+        const idx = configParentCounters.get(parent) ?? 0;
+        configIndexMap.set(node.id, idx);
+        configParentCounters.set(parent, idx + 1);
+      }
+    }
+
     const rfNodes: Node[] = topology.nodes
       .filter((node) => filters[node.type as NodeTypeFilter])
       .map((node) => {
@@ -740,7 +747,7 @@ export function ConfigHome() {
         if (node.type === "core") position = CORE_POSITIONS[node.id] || CENTER;
         else if (node.type === "capability") position = CAPABILITY_POSITIONS[node.id] || CENTER;
         else if (node.type === "connector") position = CONNECTOR_POSITIONS[node.id] || CENTER;
-        else position = getConfigPosition(node.id, node.parent || "core:config");
+        else position = getConfigPosition(node.id, node.parent || "core:config", configIndexMap.get(node.id) ?? 0);
 
         return {
           id: node.id,

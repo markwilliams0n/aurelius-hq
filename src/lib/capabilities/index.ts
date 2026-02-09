@@ -20,7 +20,7 @@ import { slackCapability } from './slack';
 import { vaultCapability } from './vault';
 import { codeCapability } from './code';
 
-const ALL_CAPABILITIES: Capability[] = [
+export const ALL_CAPABILITIES: Capability[] = [
   configCapability,
   tasksCapability,
   slackCapability,
