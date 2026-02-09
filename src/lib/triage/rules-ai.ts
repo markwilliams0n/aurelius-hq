@@ -1,5 +1,6 @@
 import { chat } from "@/lib/ai/client";
 import type { NewTriageRule } from "@/lib/db/schema";
+import { logAiCost } from "@/lib/triage/ai-cost";
 
 /**
  * Result of parsing natural language into a rule.
@@ -72,7 +73,12 @@ export async function parseNaturalLanguageRule(input: string): Promise<ParsedRul
     PARSE_PROMPT
   );
 
-  // TODO: log AI cost
+  // Fire-and-forget: log the AI cost (no token counts available from chat wrapper)
+  logAiCost({
+    provider: "kimi",
+    operation: "rule_parse",
+    result: { inputLength: input.length },
+  }).catch((err) => console.error("[Rules AI] Failed to log AI cost:", err));
 
   // Extract JSON from response (handle potential markdown fences)
   const jsonMatch = response.match(/\{[\s\S]*\}/);
