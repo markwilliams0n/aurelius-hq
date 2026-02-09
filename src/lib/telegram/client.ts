@@ -4,6 +4,8 @@
  * Handles communication with the Telegram Bot API
  */
 
+import { notifyMacOS } from '@/lib/notifications/macos';
+
 const TELEGRAM_API_BASE = 'https://api.telegram.org/bot';
 
 export interface TelegramUser {
@@ -287,6 +289,9 @@ export async function notifyOwner(
   text: string,
   options?: { parseMode?: 'Markdown' | 'MarkdownV2' | 'HTML' },
 ): Promise<void> {
+  // Fire macOS notification (best-effort, non-blocking)
+  notifyMacOS('Aurelius', text).catch(() => {});
+
   const chatId = getOwnerChatId();
   if (!chatId) {
     console.warn('[telegram] Cannot notify owner — no chat ID available. Set TELEGRAM_CHAT_ID or send a Telegram message first.');
@@ -311,6 +316,9 @@ export async function sendOwnerMessage(
   text: string,
   options?: { replyMarkup?: InlineKeyboardMarkup },
 ): Promise<number | null> {
+  // Fire macOS notification (best-effort, non-blocking)
+  notifyMacOS('Aurelius', text).catch(() => {});
+
   const chatId = getOwnerChatId();
   if (!chatId) {
     console.warn('[telegram] Cannot send owner message — no chat ID available.');
