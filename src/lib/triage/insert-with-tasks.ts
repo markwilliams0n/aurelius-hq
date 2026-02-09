@@ -5,6 +5,7 @@
 
 import { db } from "@/lib/db";
 import { inboxItems, type NewInboxItem, type InboxItem } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
 import { extractAndSaveTasks, convertActionItemsToTasks } from "./extract-tasks";
 import { suggestedTasks, type NewSuggestedTask } from "@/lib/db/schema";
 
@@ -34,11 +35,32 @@ export async function insertInboxItemWithTasks(
   item: NewInboxItem,
   options: InsertWithTasksOptions = {}
 ): Promise<InboxItem> {
-  // Insert the item and get the generated ID
-  const [insertedItem] = await db
+  // Insert the item and get the generated ID.
+  // onConflictDoNothing handles the (connector, external_id) unique constraint
+  // in case of concurrent syncs trying to insert the same item.
+  const result = await db
     .insert(inboxItems)
     .values(item)
+    .onConflictDoNothing()
     .returning();
+
+  if (result.length === 0) {
+    // Duplicate — fetch the existing item
+    const existing = item.externalId
+      ? await db.select().from(inboxItems).where(
+          and(
+            eq(inboxItems.connector, item.connector),
+            eq(inboxItems.externalId, item.externalId)
+          )
+        ).limit(1)
+      : [];
+    if (existing.length > 0) {
+      console.log(`[Insert] Duplicate skipped: ${item.connector}/${item.externalId}`);
+      return existing[0];
+    }
+    throw new Error(`Insert failed for ${item.connector}/${item.externalId} — no conflict, no result`);
+  }
+  const insertedItem = result[0];
 
   // If we have existing action items (e.g., from Granola extraction), convert and save them
   if (options.existingActionItems && options.existingActionItems.length > 0) {

@@ -6,8 +6,10 @@ import {
   jsonb,
   pgEnum,
   index,
+  uniqueIndex,
   integer,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 // Connector types for inbox items
 export const connectorTypeEnum = pgEnum("connector_type", [
@@ -161,6 +163,9 @@ export const inboxItems = pgTable(
     index("inbox_items_connector_idx").on(table.connector),
     index("inbox_items_priority_idx").on(table.priority),
     index("inbox_items_received_at_idx").on(table.receivedAt),
+    uniqueIndex("inbox_items_connector_external_id_idx")
+      .on(table.connector, table.externalId)
+      .where(sql`external_id IS NOT NULL`),
   ]
 );
 

@@ -104,7 +104,14 @@ export function TriageBatchCard({
   const ruleInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const checkedCount = checkedIds.size;
+  // Re-sync checkedIds when card items change (stale-while-revalidate, reclassify, dedup)
+  const itemIdsKey = card.items.map((item) => item.id).join(",");
+  useEffect(() => {
+    setCheckedIds(new Set(card.items.map((item) => item.id)));
+  }, [itemIdsKey]);
+
+  // Only count checked items that actually exist in the current card
+  const checkedCount = card.items.filter((item) => checkedIds.has(item.id)).length;
   const totalCount = card.items.length;
   const actionLabel = (card.data?.action as string) || "Archive";
   const explanation = (card.data?.explanation as string) || "";
@@ -156,9 +163,11 @@ export function TriageBatchCard({
     setCheckedIds(new Set());
   }, []);
 
-  // Execute batch action
+  // Execute batch action — only include IDs that exist in current card items
   const executeBatchAction = useCallback(() => {
-    const checked = Array.from(checkedIds);
+    const checked = card.items
+      .filter((item) => checkedIds.has(item.id))
+      .map((item) => item.id);
     const unchecked = card.items
       .filter((item) => !checkedIds.has(item.id))
       .map((item) => item.id);
