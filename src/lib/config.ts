@@ -157,4 +157,5 @@ export const CONFIG_DESCRIPTIONS: Record<ConfigKey, string> = {
   "slack:directory": "Cached Slack workspace directory (users and channels). Auto-refreshed daily by heartbeat.",
   "capability:vault": "Instructions for the Vault capability — how the agent manages the document library and fact store.",
   "capability:code": "Instructions for the Code capability — how the agent spawns Claude Code sessions in git worktrees.",
+  "capability:gmail": "Instructions for the Gmail capability — how the agent drafts email replies via action cards.",
 };

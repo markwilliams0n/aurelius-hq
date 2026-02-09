@@ -39,6 +39,7 @@ const CAPABILITY_LABELS: Record<string, string> = {
   slack: "Slack Agent",
   vault: "Vault",
   code: "Code Agent",
+  gmail: "Gmail Agent",
 };
 
 const CONNECTOR_LABELS: Record<string, string> = {
@@ -68,6 +69,7 @@ const CONFIG_PARENT_OVERRIDES: Record<string, string> = {
 const CAPABILITY_ACTION_TARGETS: Record<string, string> = {
   "capability:tasks": "connector:linear",
   "capability:slack": "connector:slack",
+  "capability:gmail": "connector:gmail",
 };
 
 // Known connectors to show even when no inbox items exist yet

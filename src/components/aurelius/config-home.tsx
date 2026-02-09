@@ -87,6 +87,8 @@ const NODE_DESCRIPTIONS: Record<string, string> = {
   "config:capability:slack": "Instructions for Slack messaging — tone, formatting, when to send, cc behavior.",
   "capability:vault": "Secure vault for storing sensitive personal data — passwords, IDs, financial info, important references.",
   "capability:code": "Autonomous coding agent. Starts Claude Code sessions, runs terminal commands, and manages code changes.",
+  "capability:gmail": "Gmail drafting agent. Creates email reply drafts from triage items for user review and approval.",
+  "config:capability:gmail": "Instructions for Gmail drafting — tone, reply style, when to draft vs suggest.",
   "connector:manual": "Manually added triage items. Created directly by the user or agent without an external connector.",
   "config:capability:vault": "Instructions for vault storage — categories, sensitivity levels, what to store and how.",
   "config:capability:code": "Instructions for coding agent sessions — allowed repos, review rules, merge policies.",
@@ -135,6 +137,7 @@ const CAPABILITY_POSITIONS: Record<string, { x: number; y: number }> = {
   "capability:slack": { x: CENTER.x + 280, y: CENTER.y + 40 },
   "capability:vault": { x: CENTER.x - 280, y: CENTER.y + 40 },
   "capability:code": { x: CENTER.x - 280, y: CENTER.y + 140 },
+  "capability:gmail": { x: CENTER.x + 280, y: CENTER.y + 140 },
 };
 
 const CONNECTOR_POSITIONS: Record<string, { x: number; y: number }> = {

@@ -19,6 +19,7 @@ import { tasksCapability } from './tasks';
 import { slackCapability } from './slack';
 import { vaultCapability } from './vault';
 import { codeCapability } from './code';
+import { gmailCapability } from './gmail';
 
 export const ALL_CAPABILITIES: Capability[] = [
   configCapability,
@@ -26,6 +27,7 @@ export const ALL_CAPABILITIES: Capability[] = [
   slackCapability,
   vaultCapability,
   codeCapability,
+  gmailCapability,
 ];
 
 /** Get all tool definitions from all capabilities (OpenAI function calling format) */
