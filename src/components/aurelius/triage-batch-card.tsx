@@ -299,7 +299,7 @@ export function TriageBatchCard({
       </div>
 
       {/* Item list */}
-      <div className="divide-y divide-border/50 max-h-[400px] overflow-y-auto">
+      <div className="divide-y divide-border/50 max-h-[70vh] overflow-y-auto">
         {card.items.map((item, index) => {
           const isChecked = checkedIds.has(item.id);
           const isFocused = focusedIndex === index;
@@ -478,6 +478,16 @@ export function TriageBatchCard({
             <Check className="w-3.5 h-3.5" />
             {actionButtonLabel}
           </button>
+
+          {checkedCount < totalCount && (
+            <button
+              onClick={checkAll}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-secondary text-muted-foreground border border-border hover:text-foreground hover:bg-secondary/80"
+            >
+              <CheckSquare className="w-3.5 h-3.5" />
+              Select All
+            </button>
+          )}
 
           <div className="flex-1 relative">
             <input
