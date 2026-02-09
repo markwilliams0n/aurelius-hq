@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { actionCards } from "@/lib/db/schema";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, ne, desc, and, sql } from "drizzle-orm";
 import type { ActionCardData, CardPattern, CardStatus } from "@/lib/types/action-card";
 import type { NewActionCard } from "@/lib/db/schema/action-cards";
 
@@ -79,7 +79,12 @@ export async function getPendingCards(): Promise<ActionCardData[]> {
   const rows = await db
     .select()
     .from(actionCards)
-    .where(eq(actionCards.status, "pending"))
+    .where(
+      and(
+        eq(actionCards.status, "pending"),
+        ne(actionCards.pattern, "batch")
+      )
+    )
     .orderBy(desc(actionCards.createdAt));
 
   return rows.map(rowToCardData);

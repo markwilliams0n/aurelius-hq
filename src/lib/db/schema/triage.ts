@@ -37,6 +37,17 @@ export const priorityEnum = pgEnum("priority", [
 // Triage rule status
 export const ruleStatusEnum = pgEnum("rule_status", ["active", "inactive"]);
 
+// Rule type: structured (deterministic) vs guidance (natural language for AI)
+export const ruleTypeEnum = pgEnum("rule_type", ["structured", "guidance"]);
+
+// Rule source: where the rule came from
+export const ruleSourceEnum = pgEnum("rule_source", [
+  "user_chat",
+  "user_settings",
+  "daily_learning",
+  "override",
+]);
+
 // Inbox items: unified triage inbox
 export const inboxItems = pgTable(
   "inbox_items",
@@ -123,6 +134,17 @@ export const inboxItems = pgTable(
       };
     }>(),
 
+    // Classification from pre-processing pipeline
+    classification: jsonb("classification").$type<{
+      batchCardId: string | null;
+      batchType: string | null;
+      tier: "rule" | "ollama" | "kimi";
+      confidence: number;
+      reason: string;
+      classifiedAt: string;
+      ruleId?: string;
+    }>(),
+
     // Timestamps
     receivedAt: timestamp("received_at", { withTimezone: true })
       .defaultNow()
@@ -150,42 +172,44 @@ export const triageRules = pgTable(
     name: text("name").notNull(),
     description: text("description"),
 
-    // Trigger conditions
-    trigger: jsonb("trigger").notNull().$type<{
-      connector?: string; // Match specific connector
-      sender?: string; // Email/user pattern (supports *)
-      senderDomain?: string; // e.g. "@company.com"
-      subjectContains?: string; // Keyword in subject
-      contentContains?: string; // Keyword in content
-      pattern?: string; // Regex pattern
+    // Rule type
+    type: ruleTypeEnum("type").notNull(),
+
+    // Structured rule: deterministic matching
+    trigger: jsonb("trigger").$type<{
+      connector?: string;
+      sender?: string;
+      senderDomain?: string;
+      subjectContains?: string;
+      contentContains?: string;
+      pattern?: string;
     }>(),
 
-    // Action to take
-    action: jsonb("action").notNull().$type<{
-      type: "archive" | "priority" | "tag" | "snooze";
-      value?: string; // Priority level, tag name, snooze duration
+    // Structured rule: what batch to put it in
+    action: jsonb("action").$type<{
+      type: "batch";
+      batchType: string;
+      label?: string;
     }>(),
 
-    // Status and versioning
+    // Guidance note: natural language for AI context
+    guidance: text("guidance"),
+
+    // Metadata
     status: ruleStatusEnum("status").default("active").notNull(),
+    source: ruleSourceEnum("source").notNull(),
     version: integer("version").default(1).notNull(),
-    createdBy: text("created_by").default("user").notNull(), // 'user' | 'aurelius'
+    createdBy: text("created_by").default("user").notNull(),
 
     // Stats
     matchCount: integer("match_count").default(0).notNull(),
     lastMatchedAt: timestamp("last_matched_at", { withTimezone: true }),
 
     // Timestamps
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [
-    index("triage_rules_status_idx").on(table.status),
-  ]
+  (table) => [index("triage_rules_status_idx").on(table.status)],
 );
 
 // Type exports

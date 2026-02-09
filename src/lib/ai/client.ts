@@ -43,12 +43,14 @@ const API_TIMEOUT_MS = 30000;
 // Simple chat completion
 export async function chat(
   input: string | Message[],
-  instructions?: string
+  instructions?: string,
+  options?: { maxTokens?: number }
 ): Promise<string> {
   const result = ai.callModel({
     model: DEFAULT_MODEL,
     input,
     instructions,
+    maxOutputTokens: options?.maxTokens ?? 4096,
   });
   return result.getText();
 }

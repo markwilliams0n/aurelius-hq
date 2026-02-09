@@ -10,6 +10,7 @@ import {
   Zap,
   AlertTriangle,
   ChevronRight,
+  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TriageItem } from "./triage-card";
@@ -20,6 +21,14 @@ interface TriageActionMenuProps {
   onAction: (action: string, data?: any) => void;
   onClose: () => void;
 }
+
+const BATCH_GROUP_OPTIONS = [
+  { key: "1", label: "Notifications", value: "notifications" },
+  { key: "2", label: "Finance", value: "finance" },
+  { key: "3", label: "Newsletters", value: "newsletters" },
+  { key: "4", label: "Calendar", value: "calendar" },
+  { key: "5", label: "Spam", value: "spam" },
+];
 
 const SNOOZE_OPTIONS = [
   { key: "1", label: "1 hour", value: "1h" },
@@ -95,6 +104,13 @@ export function TriageActionMenu({
         onAction("priority", { priority: priorityOpt.value });
         return;
       }
+
+      // Classify shortcuts
+      const classifyOpt = BATCH_GROUP_OPTIONS.find((o) => o.key === e.key);
+      if (classifyOpt) {
+        onAction("classify", { batchType: classifyOpt.value });
+        return;
+      }
     },
     [onAction, onClose]
   );
@@ -153,6 +169,28 @@ export function TriageActionMenu({
             }}
             disabled
           />
+        </div>
+
+        {/* Classify into group */}
+        <div className="px-4 py-2 border-t border-border">
+          <div className="flex items-center gap-2 mb-2">
+            <Layers className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Classify into Group</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {BATCH_GROUP_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => onAction("classify", { batchType: opt.value })}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm hover:bg-background transition-colors text-left"
+              >
+                <kbd className="px-1.5 py-0.5 rounded bg-background border border-border font-mono text-xs">
+                  {opt.key}
+                </kbd>
+                <span>{opt.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Snooze section */}

@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback, useRef, Dispatch, SetStateAction } from "react";
 import { AppShell } from "@/components/aurelius/app-shell";
 import { TriageCard, TriageItem } from "@/components/aurelius/triage-card";
+import { TriageBatchCard } from "@/components/aurelius/triage-batch-card";
 import { TriageListView } from "@/components/aurelius/triage-list-view";
+import type { BatchCardWithItems } from "@/lib/triage/batch-cards";
 import { TriageActionMenu } from "@/components/aurelius/triage-action-menu";
 import { TriageReplyComposer } from "@/components/aurelius/triage-reply-composer";
 import { TriageSidebar } from "@/components/aurelius/triage-sidebar";
@@ -12,6 +14,7 @@ import { TriageChat } from "@/components/aurelius/triage-chat";
 import { SuggestedTasksBox } from "@/components/aurelius/suggested-tasks-box";
 import { TriageSnoozeMenu } from "@/components/aurelius/triage-snooze-menu";
 import { TaskCreatorPanel } from "@/components/aurelius/task-creator-panel";
+import { TriageGroupPicker } from "@/components/aurelius/triage-group-picker";
 import { ActionCard } from "@/components/aurelius/action-card";
 import { CardContent } from "@/components/aurelius/cards/card-content";
 import type { ActionCardData } from "@/lib/types/action-card";
@@ -29,7 +32,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type ViewMode = "triage" | "action" | "reply" | "detail" | "chat" | "snooze" | "create-task" | "quick-task";
+type ViewMode = "triage" | "action" | "reply" | "detail" | "chat" | "snooze" | "create-task" | "quick-task" | "group-picker";
 type ConnectorFilter = "all" | "gmail" | "slack" | "linear" | "granola";
 type TriageView = "card" | "list";
 
@@ -62,7 +65,7 @@ const CONNECTOR_FILTERS: Array<{
 
 // Cache for triage data to avoid refetching on every page visit
 let triageCache: {
-  data: { items: TriageItem[]; stats: any; tasksByItemId: Record<string, any[]>; senderCounts: Record<string, number> } | null;
+  data: { items: TriageItem[]; stats: any; tasksByItemId: Record<string, any[]>; senderCounts: Record<string, number>; batchCards: BatchCardWithItems[] } | null;
   timestamp: number;
 } = { data: null, timestamp: 0 };
 
@@ -70,6 +73,7 @@ const CACHE_STALE_MS = 5 * 60 * 1000; // 5 minutes
 
 export function TriageClient({ userEmail }: { userEmail?: string }) {
   const [items, setItems] = useState<TriageItem[]>([]);
+  const [batchCards, setBatchCards] = useState<BatchCardWithItems[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("triage");
@@ -82,6 +86,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
   const [stats, setStats] = useState({ new: 0, archived: 0, snoozed: 0, actioned: 0 });
   const [tasksByItemId, setTasksByItemId] = useState<Record<string, any[]>>({});
   const [senderCounts, setSenderCounts] = useState<Record<string, number>>({});
+  const [triageRules, setTriageRules] = useState<any[]>([]);
   const [animatingOut, setAnimatingOut] = useState<"left" | "right" | "up" | null>(null);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -112,6 +117,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
       setStats(cached.stats);
       setTasksByItemId(cached.tasksByItemId);
       setSenderCounts(cached.senderCounts);
+      setBatchCards(cached.batchCards);
       setIsLoading(false);
 
       // If cache is fresh, don't refetch
@@ -130,7 +136,13 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
 
       // Update cache
       triageCache = {
-        data: { items: mappedItems, stats: data.stats, tasksByItemId: data.tasksByItemId || {}, senderCounts: data.senderCounts || {} },
+        data: {
+          items: mappedItems,
+          stats: data.stats,
+          tasksByItemId: data.tasksByItemId || {},
+          senderCounts: data.senderCounts || {},
+          batchCards: data.batchCards || [],
+        },
         timestamp: Date.now(),
       };
 
@@ -138,6 +150,16 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
       setStats(data.stats);
       setTasksByItemId(data.tasksByItemId || {});
       setSenderCounts(data.senderCounts || {});
+      setBatchCards(data.batchCards || []);
+
+      // Fetch triage rules in parallel
+      try {
+        const rulesRes = await fetch("/api/triage/rules");
+        const rulesData = await rulesRes.json();
+        setTriageRules(rulesData.rules || []);
+      } catch (rulesError) {
+        console.error("Failed to fetch triage rules:", rulesError);
+      }
     } catch (error) {
       console.error("Failed to fetch triage items:", error);
       if (!cached) toast.error("Failed to load triage items");
@@ -156,10 +178,18 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     ? items
     : items.filter((item) => item.connector === connectorFilter);
 
-  // Current item (from filtered list)
-  const currentItem = filteredItems[currentIndex];
-  const hasItems = filteredItems.length > 0;
-  const progress = hasItems ? `${currentIndex + 1} / ${filteredItems.length}` : "0 / 0";
+  // Batch card navigation: batch cards occupy indices 0..batchCards.length-1,
+  // individual items start at batchCards.length
+  const batchCardCount = batchCards.length;
+  const isOnBatchCard = currentIndex < batchCardCount;
+  const currentBatchCard = isOnBatchCard ? batchCards[currentIndex] : null;
+  const individualItemIndex = currentIndex - batchCardCount;
+
+  // Current item (from filtered list, offset by batch card count)
+  const currentItem = isOnBatchCard ? undefined : filteredItems[individualItemIndex];
+  const totalCards = batchCardCount + filteredItems.length;
+  const hasItems = totalCards > 0;
+  const progress = hasItems ? `${currentIndex + 1} / ${totalCards}` : "0 / 0";
 
   // Reset index when filter changes
   useEffect(() => {
@@ -174,6 +204,112 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     linear: items.filter((i) => i.connector === "linear").length,
     granola: items.filter((i) => i.connector === "granola").length,
   };
+
+  // Batch card action handler
+  const handleBatchAction = useCallback(
+    async (cardId: string, checkedIds: string[], uncheckedIds: string[]) => {
+      try {
+        await fetch(`/api/triage/batch/${cardId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            checkedItemIds: checkedIds,
+            uncheckedItemIds: uncheckedIds,
+          }),
+        });
+
+        // Remove the batch card from state and refresh
+        setBatchCards((prev) => prev.filter((c) => c.id !== cardId));
+        // Invalidate cache and refresh
+        triageCache = { data: null, timestamp: 0 };
+        fetchItems({ skipCache: true });
+        toast.success(
+          `Batch action complete: ${checkedIds.length} processed, ${uncheckedIds.length} kept`
+        );
+      } catch (error) {
+        console.error("Failed to execute batch action:", error);
+        toast.error("Batch action failed");
+      }
+    },
+    [fetchItems]
+  );
+
+  // Reclassify handler — moves item between batch groups and creates a rule
+  const handleReclassify = useCallback(
+    async (
+      itemId: string,
+      fromBatchType: string,
+      toBatchType: string,
+      sender: string,
+      senderName: string | null,
+      connector: string
+    ) => {
+      try {
+        const res = await fetch("/api/triage/batch/reclassify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            itemId,
+            fromBatchType,
+            toBatchType,
+            sender,
+            senderName,
+            connector,
+          }),
+        });
+        if (!res.ok) throw new Error("Reclassify failed");
+
+        // Remove item from current batch card in state
+        setBatchCards((prev) =>
+          prev
+            .map((card) => {
+              const cardBatchType = (card.data?.batchType as string) || "";
+              if (cardBatchType === fromBatchType) {
+                return {
+                  ...card,
+                  items: card.items.filter((i) => i.id !== itemId),
+                };
+              }
+              return card;
+            })
+            .filter((card) => card.items.length > 0)
+        );
+
+        toast.success(`Moved to ${toBatchType} — rule created`);
+      } catch (error) {
+        console.error("Reclassify failed:", error);
+        toast.error("Failed to reclassify item");
+      }
+    },
+    []
+  );
+
+  // Delete a triage rule
+  const handleDeleteRule = useCallback(async (ruleId: string) => {
+    try {
+      await fetch(`/api/triage/rules/${ruleId}`, { method: "DELETE" });
+      setTriageRules((prev) => prev.filter((r) => r.id !== ruleId));
+      toast.success("Rule deleted");
+    } catch (error) {
+      console.error("Failed to delete rule:", error);
+      toast.error("Failed to delete rule");
+    }
+  }, []);
+
+  // Rule input handler
+  const handleRuleInput = useCallback(async (input: string) => {
+    try {
+      await fetch("/api/triage/rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input, source: "user_chat" }),
+      });
+      toast.success("Rule created from your input");
+    } catch (error) {
+      console.error("Failed to create rule:", error);
+      toast.error("Failed to create rule");
+    }
+  }, []);
 
   // Archive action (←) - swipe animation + optimistic
   const handleArchive = useCallback(() => {
@@ -403,6 +539,41 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
       return;
     }
 
+    // Classify into a group
+    if (action === "classify" && data?.batchType) {
+      try {
+        const res = await fetch("/api/triage/batch/reclassify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            itemId: currentItem.dbId || currentItem.id,
+            fromBatchType: "individual",
+            toBatchType: data.batchType,
+            sender: currentItem.sender,
+            senderName: currentItem.senderName,
+            connector: currentItem.connector,
+          }),
+        });
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          console.error("Classify API error:", res.status, errBody);
+          throw new Error(errBody.error || "Classify failed");
+        }
+
+        // Remove item from individual items list (it's now in a batch card)
+        setAnimatingOut("right");
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        setItems((prev) => prev.filter((i) => i.id !== currentItem.id));
+        setAnimatingOut(null);
+        toast.success(`Classified as ${data.batchType} — rule created`);
+      } catch (error) {
+        console.error("Classify failed:", error);
+        toast.error("Failed to classify item");
+      }
+      setViewMode("triage");
+      return;
+    }
+
     try {
       await fetch(`/api/triage/${currentItem.id}`, {
         method: "POST",
@@ -567,11 +738,11 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
   const handleOpenListItem = useCallback((id: string) => {
     const index = filteredItems.findIndex((i) => i.id === id);
     if (index >= 0) {
-      setCurrentIndex(index);
+      setCurrentIndex(index + batchCardCount);
       setReturnToList(true);
       setTriageView("card");
     }
-  }, [filteredItems]);
+  }, [filteredItems, batchCardCount]);
 
   // Keyboard controls
   useEffect(() => {
@@ -636,8 +807,16 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
         return;
       }
 
-      // Only handle card-mode arrows in triage mode
+      // Only handle card-mode keys in triage mode
       if (viewMode !== "triage" || triageView === "list") return;
+
+      // When on a batch card, the TriageBatchCard component handles its own
+      // keyboard events (j/k/Space/a/n/ArrowLeft). We only let Escape and
+      // global keys (Tab, Cmd+1-5, v) through from the triage client.
+      // However, we do NOT intercept ArrowRight/ArrowDown for card-to-card
+      // navigation — those aren't used by batch cards. We'll add "next/prev
+      // card" navigation via Escape (already handled above) or a dedicated key.
+      if (isOnBatchCard) return;
 
       switch (e.key) {
         case "ArrowLeft":
@@ -697,6 +876,10 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           e.preventDefault();
           handleActionNeeded();
           break;
+        case "g":
+          e.preventDefault();
+          setViewMode("group-picker");
+          break;
         case "l":
         case "L":
           // Open in Linear (if Linear item with URL)
@@ -726,6 +909,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     returnToList,
     currentItem,
     connectorFilter,
+    isOnBatchCard,
     handleArchive,
     handleMemory,
     handleMemoryFull,
@@ -889,8 +1073,8 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
         {/* Card area */}
         {!isLoading && hasItems && triageView === "card" && (
         <div className="flex-1 flex items-start justify-center pt-12 p-6 relative overflow-y-auto">
-          {/* Card stack effect - show next cards behind */}
-          {filteredItems.slice(currentIndex + 1, currentIndex + 3).map((item, idx) => (
+          {/* Card stack effect - show next items behind (only for individual cards) */}
+          {!isOnBatchCard && filteredItems.slice(individualItemIndex + 1, individualItemIndex + 3).map((item, idx) => (
             <div
               key={item.id}
               className="absolute"
@@ -906,23 +1090,43 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
 
           {/* Active card and tasks box */}
           <div className="flex flex-col items-center gap-4">
-            <div
-              className={cn(
-                "relative z-20 transition-all duration-200",
-                animatingOut === "left" && "animate-swipe-left",
-                animatingOut === "right" && "animate-swipe-right",
-                animatingOut === "up" && "animate-swipe-up"
-              )}
-            >
-              <TriageCard ref={cardRef} item={currentItem} isActive={true} senderItemCount={senderCounts[`${currentItem.connector}:${currentItem.sender}`] || 0} />
-            </div>
+            {/* Batch card */}
+            {isOnBatchCard && currentBatchCard && (
+              <div className="relative z-20">
+                <TriageBatchCard
+                  card={currentBatchCard}
+                  isActive={true}
+                  onAction={handleBatchAction}
+                  onRuleInput={handleRuleInput}
+                  onReclassify={handleReclassify}
+                  rules={triageRules.filter((r) => r.action?.batchType === (currentBatchCard.data?.batchType as string))}
+                  onDeleteRule={handleDeleteRule}
+                />
+              </div>
+            )}
 
-            {/* Suggested tasks box */}
-            {currentItem && !animatingOut && (
-              <SuggestedTasksBox
-                itemId={currentItem.id}
-                initialTasks={tasksByItemId[currentItem.id]}
-              />
+            {/* Individual card */}
+            {!isOnBatchCard && currentItem && (
+              <>
+                <div
+                  className={cn(
+                    "relative z-20 transition-all duration-200",
+                    animatingOut === "left" && "animate-swipe-left",
+                    animatingOut === "right" && "animate-swipe-right",
+                    animatingOut === "up" && "animate-swipe-up"
+                  )}
+                >
+                  <TriageCard ref={cardRef} item={currentItem} isActive={true} senderItemCount={senderCounts[`${currentItem.connector}:${currentItem.sender}`] || 0} />
+                </div>
+
+                {/* Suggested tasks box */}
+                {!animatingOut && (
+                  <SuggestedTasksBox
+                    itemId={currentItem.id}
+                    initialTasks={tasksByItemId[currentItem.id]}
+                  />
+                )}
+              </>
             )}
           </div>
 
@@ -935,6 +1139,17 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
         <TriageActionMenu
           item={currentItem}
           onAction={handleActionComplete}
+          onClose={handleCloseOverlay}
+        />
+      )}
+
+      {/* Group picker overlay */}
+      {viewMode === "group-picker" && currentItem && (
+        <TriageGroupPicker
+          item={currentItem}
+          onSelect={async (batchType) => {
+            await handleActionComplete("classify", { batchType });
+          }}
           onClose={handleCloseOverlay}
         />
       )}

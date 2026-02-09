@@ -21,7 +21,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { AppShell } from "@/components/aurelius/app-shell";
 import { cn } from "@/lib/utils";
-import { X, Loader2, Eye, EyeOff } from "lucide-react";
+import { X, Loader2, Eye, EyeOff, Trash2, Power, Plus, BookOpen, Zap, Send } from "lucide-react";
 
 // --- Types ---
 
@@ -69,7 +69,7 @@ const NODE_DESCRIPTIONS: Record<string, string> = {
   "core:ai": "Central AI client powered by OpenRouter. Routes all LLM calls, manages tool use, and orchestrates agent responses.",
   "core:memory": "Long-term memory system. Stores entities, facts, and relationships extracted from conversations and data sources.",
   "core:config": "Versioned configuration store. All system behavior is defined by editable config documents with full history.",
-  "core:triage": "Incoming data processing. Receives items from all connectors, classifies priority, and routes for action.",
+  "core:triage": "Incoming data processing. Receives items from all connectors, classifies via rules and AI (Ollama → Kimi), groups into batch cards, and routes for action. Click to manage triage rules.",
   "core:heartbeat": "Scheduled background loop. Syncs connectors, refreshes caches, and performs periodic maintenance tasks.",
   "capability:tasks": "Task management via Linear. Creates, updates, and tracks engineering tasks and project work.",
   "capability:config": "Self-modification capability. Allows the agent to propose changes to its own configuration.",
@@ -487,6 +487,204 @@ function AmbientParticles() {
 
 // --- Detail Panel ---
 
+// --- Triage Rules Section ---
+
+interface TriageRuleData {
+  id: string;
+  name: string;
+  description: string | null;
+  type: "structured" | "guidance";
+  trigger: Record<string, string> | null;
+  action: Record<string, string> | null;
+  guidance: string | null;
+  status: "active" | "inactive";
+  source: string;
+  matchCount: number;
+  lastMatchedAt: string | null;
+}
+
+function TriageRulesSection() {
+  const [rules, setRules] = useState<TriageRuleData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newRuleInput, setNewRuleInput] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  const fetchRules = useCallback(async () => {
+    try {
+      const res = await fetch("/api/triage/rules");
+      if (res.ok) {
+        const data = await res.json();
+        setRules(data.rules || []);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRules();
+  }, [fetchRules]);
+
+  const toggleRule = async (id: string, currentStatus: string) => {
+    const newStatus = currentStatus === "active" ? "inactive" : "active";
+    try {
+      await fetch(`/api/triage/rules/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      setRules((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, status: newStatus as "active" | "inactive" } : r))
+      );
+    } catch {
+      // ignore
+    }
+  };
+
+  const deleteRule = async (id: string) => {
+    try {
+      await fetch(`/api/triage/rules/${id}`, { method: "DELETE" });
+      setRules((prev) => prev.filter((r) => r.id !== id));
+    } catch {
+      // ignore
+    }
+  };
+
+  const createRule = async () => {
+    if (!newRuleInput.trim() || creating) return;
+    setCreating(true);
+    try {
+      const res = await fetch("/api/triage/rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input: newRuleInput.trim() }),
+      });
+      if (res.ok) {
+        setNewRuleInput("");
+        fetchRules();
+      }
+    } catch {
+      // ignore
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const triageColor = NODE_TYPE_COLORS.core.primary;
+
+  return (
+    <div className="space-y-3">
+      <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider font-mono">
+        Triage Rules
+      </h4>
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-white/40 text-sm">
+          <Loader2 className="w-3 h-3 animate-spin" />
+          Loading rules...
+        </div>
+      ) : rules.length === 0 ? (
+        <p className="text-sm text-white/30 italic">No rules yet. Add one below.</p>
+      ) : (
+        <div className="space-y-2">
+          {rules.map((rule) => (
+            <div
+              key={rule.id}
+              className={cn(
+                "p-2.5 rounded-lg border text-sm transition-opacity",
+                rule.status === "inactive" && "opacity-40",
+              )}
+              style={{
+                background: rule.status === "active" ? triageColor + "08" : "transparent",
+                borderColor: triageColor + "20",
+              }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    {rule.type === "structured" ? (
+                      <Zap className="w-3 h-3 shrink-0" style={{ color: triageColor }} />
+                    ) : (
+                      <BookOpen className="w-3 h-3 shrink-0 text-blue-400" />
+                    )}
+                    <span className="text-white/80 font-medium truncate">{rule.name}</span>
+                  </div>
+                  {rule.type === "structured" && rule.trigger && (
+                    <div className="text-xs text-white/40 font-mono space-y-0.5">
+                      {rule.trigger.sender && <div>sender: {rule.trigger.sender}</div>}
+                      {rule.trigger.senderDomain && <div>domain: {rule.trigger.senderDomain}</div>}
+                      {rule.trigger.connector && <div>connector: {rule.trigger.connector}</div>}
+                      {rule.trigger.subjectContains && <div>subject ~ {rule.trigger.subjectContains}</div>}
+                      {rule.trigger.pattern && <div>pattern: /{rule.trigger.pattern}/</div>}
+                      {rule.action?.batchType && (
+                        <div className="text-white/50">→ {rule.action.batchType}</div>
+                      )}
+                    </div>
+                  )}
+                  {rule.type === "guidance" && rule.guidance && (
+                    <p className="text-xs text-blue-300/60 italic leading-relaxed">
+                      {rule.guidance}
+                    </p>
+                  )}
+                  {rule.matchCount > 0 && (
+                    <div className="text-[10px] text-white/20 mt-1 font-mono">
+                      {rule.matchCount} matches
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => toggleRule(rule.id, rule.status)}
+                    className="p-1 hover:bg-white/10 rounded transition-colors"
+                    title={rule.status === "active" ? "Disable" : "Enable"}
+                  >
+                    <Power className={cn("w-3 h-3", rule.status === "active" ? "text-green-400" : "text-white/20")} />
+                  </button>
+                  <button
+                    onClick={() => deleteRule(rule.id)}
+                    className="p-1 hover:bg-red-500/20 rounded transition-colors"
+                    title="Delete"
+                  >
+                    <Trash2 className="w-3 h-3 text-white/20 hover:text-red-400" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add rule input */}
+      <div className="flex gap-2 mt-2">
+        <input
+          type="text"
+          value={newRuleInput}
+          onChange={(e) => setNewRuleInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && createRule()}
+          placeholder="e.g. 'never auto-archive from Sarah'"
+          className="flex-1 text-xs bg-white/5 border border-white/10 rounded-md px-2.5 py-1.5 text-white/80 placeholder:text-white/20 focus:outline-none focus:border-white/20"
+        />
+        <button
+          onClick={createRule}
+          disabled={!newRuleInput.trim() || creating}
+          className={cn(
+            "px-2 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1",
+            newRuleInput.trim() && !creating
+              ? "bg-white/10 text-white/80 hover:bg-white/15"
+              : "bg-white/5 text-white/20 cursor-not-allowed",
+          )}
+        >
+          {creating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// --- Detail Panel ---
+
 function DetailPanel({ node, onClose }: { node: TopologyNode; onClose: () => void }) {
   const typeLabel = node.type.charAt(0).toUpperCase() + node.type.slice(1);
   const colors = NODE_TYPE_COLORS[node.type];
@@ -589,6 +787,13 @@ function DetailPanel({ node, onClose }: { node: TopologyNode; onClose: () => voi
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Triage rules (when core:triage is selected) */}
+      {node.id === "core:triage" && (
+        <div className="mb-4">
+          <TriageRulesSection />
         </div>
       )}
 

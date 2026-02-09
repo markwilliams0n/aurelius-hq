@@ -371,6 +371,7 @@ export const TriageCard = forwardRef<HTMLDivElement, TriageCardProps>(
               {item.connector === "gmail" && (
                 <KeyHint keyName="x" label="Spam" />
               )}
+              <KeyHint keyName="g" label="Group" />
               <KeyHint keyName="␣" label="Chat" />
               <KeyHint keyName="↵" label="Expand" />
               <KeyHint keyName="→" label="Actions" />

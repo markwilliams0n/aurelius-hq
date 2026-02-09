@@ -18,6 +18,7 @@ const mockParsedEmail = {
   labels: ['INBOX'],
   attachments: [],
   hasUnsubscribe: false,
+  hasListId: false,
   unsubscribeUrl: undefined,
 };
 

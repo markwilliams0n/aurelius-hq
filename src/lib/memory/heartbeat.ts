@@ -5,8 +5,10 @@ import { syncSlackMessages, type SlackSyncResult, startSocketMode, isSocketConfi
 import { syncSlackDirectory } from '@/lib/slack/directory';
 import { createBackup, type BackupResult } from './backup';
 import { logConnectorSync } from '@/lib/system-events';
+import { classifyNewItems } from '@/lib/triage/classify';
+import { runDailyLearning, type DailyLearningResult } from '@/lib/triage/daily-learning';
 
-export type HeartbeatStep = 'backup' | 'granola' | 'gmail' | 'linear' | 'slack';
+export type HeartbeatStep = 'backup' | 'granola' | 'gmail' | 'linear' | 'slack' | 'classify' | 'learning';
 export type HeartbeatStepStatus = 'start' | 'done' | 'skip' | 'error';
 export type ProgressCallback = (step: HeartbeatStep, status: HeartbeatStepStatus, detail?: string) => void;
 
@@ -21,6 +23,10 @@ export interface HeartbeatOptions {
   skipLinear?: boolean;
   /** Skip Slack sync */
   skipSlack?: boolean;
+  /** Skip classification pipeline */
+  skipClassify?: boolean;
+  /** Skip daily learning loop */
+  skipLearning?: boolean;
   /** Progress callback for streaming status updates */
   onProgress?: ProgressCallback;
 }
@@ -37,6 +43,7 @@ export interface HeartbeatResult {
   linear?: LinearSyncResult;
   slack?: SlackSyncResult;
   backup?: BackupResult;
+  learning?: DailyLearningResult;
   /** Granular step results for debugging */
   steps: {
     backup?: StepResult;
@@ -44,11 +51,21 @@ export interface HeartbeatResult {
     gmail?: StepResult;
     linear?: StepResult;
     slack?: StepResult;
+    classify?: StepResult;
+    learning?: StepResult;
   };
   /** Whether all steps succeeded */
   allStepsSucceeded: boolean;
   /** Warnings from partial failures */
   warnings: string[];
+}
+
+// Track when daily learning last ran (module-level, resets on server restart)
+let lastLearningRunDate: string | null = null;
+
+function getTodayDateString(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
 /**
@@ -58,6 +75,8 @@ export interface HeartbeatResult {
  * 3. Sync Gmail messages
  * 4. Sync Linear notifications
  * 5. Sync Slack messages
+ * 6. Classify new inbox items (rule → Ollama → Kimi)
+ * 7. Daily learning loop (once per day — analyze triage patterns, suggest rules)
  *
  * Memory extraction is handled by Supermemory — content is sent to Supermemory
  * at the point of creation (chat messages, triage saves) rather than in heartbeat.
@@ -243,6 +262,79 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
     }
   }
 
+  // Step 6: Classify new inbox items (rule → Ollama → Kimi pipeline)
+  if (!options.skipClassify) {
+    progress?.('classify', 'start');
+    const classifyStart = Date.now();
+    try {
+      const classifyResult = await classifyNewItems();
+      if (classifyResult.classified > 0) {
+        console.log(
+          `[Heartbeat] Classify: ${classifyResult.classified} items (rule:${classifyResult.byTier.rule} ollama:${classifyResult.byTier.ollama} kimi:${classifyResult.byTier.kimi})`
+        );
+      }
+      steps.classify = {
+        success: true,
+        durationMs: Date.now() - classifyStart,
+      };
+      progress?.('classify', 'done', classifyResult.classified > 0
+        ? `${classifyResult.classified} items`
+        : undefined);
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error('[Heartbeat] Classification failed:', errMsg);
+      warnings.push(`Classification failed: ${errMsg}`);
+      progress?.('classify', 'error', errMsg);
+      steps.classify = {
+        success: false,
+        durationMs: Date.now() - classifyStart,
+        error: errMsg,
+      };
+    }
+  }
+
+  // Step 7: Daily learning loop (once per day — analyze triage patterns, suggest rules)
+  let learningResult: DailyLearningResult | undefined;
+  if (!options.skipLearning) {
+    const today = getTodayDateString();
+    if (lastLearningRunDate === today) {
+      progress?.('learning', 'skip', 'Already ran today');
+      console.log('[Heartbeat] Learning skipped (already ran today)');
+      steps.learning = { success: true, durationMs: 0 };
+    } else {
+      progress?.('learning', 'start');
+      const learningStart = Date.now();
+      try {
+        learningResult = await runDailyLearning();
+        lastLearningRunDate = today;
+        if (learningResult.suggestions > 0) {
+          console.log(
+            `[Heartbeat] Learning: ${learningResult.suggestions} suggestion(s), card: ${learningResult.cardId}`
+          );
+        } else {
+          console.log('[Heartbeat] Learning: no patterns found');
+        }
+        steps.learning = {
+          success: true,
+          durationMs: Date.now() - learningStart,
+        };
+        progress?.('learning', 'done', learningResult.suggestions > 0
+          ? `${learningResult.suggestions} suggestion(s)`
+          : undefined);
+      } catch (error) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        console.error('[Heartbeat] Learning failed:', errMsg);
+        warnings.push(`Learning failed: ${errMsg}`);
+        progress?.('learning', 'error', errMsg);
+        steps.learning = {
+          success: false,
+          durationMs: Date.now() - learningStart,
+          error: errMsg,
+        };
+      }
+    }
+  }
+
   const totalDuration = Date.now() - overallStart;
   const allStepsSucceeded = Object.values(steps).every(s => s?.success ?? true);
 
@@ -257,6 +349,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
     linear: linearResult,
     slack: slackResult,
     backup: backupResult,
+    learning: learningResult,
     steps,
     allStepsSucceeded,
     warnings,
