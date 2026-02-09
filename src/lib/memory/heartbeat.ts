@@ -5,8 +5,9 @@ import { syncSlackMessages, type SlackSyncResult, startSocketMode, isSocketConfi
 import { syncSlackDirectory } from '@/lib/slack/directory';
 import { createBackup, type BackupResult } from './backup';
 import { logConnectorSync } from '@/lib/system-events';
+import { classifyNewItems } from '@/lib/triage/classify';
 
-export type HeartbeatStep = 'backup' | 'granola' | 'gmail' | 'linear' | 'slack';
+export type HeartbeatStep = 'backup' | 'granola' | 'gmail' | 'linear' | 'slack' | 'classify';
 export type HeartbeatStepStatus = 'start' | 'done' | 'skip' | 'error';
 export type ProgressCallback = (step: HeartbeatStep, status: HeartbeatStepStatus, detail?: string) => void;
 
@@ -21,6 +22,8 @@ export interface HeartbeatOptions {
   skipLinear?: boolean;
   /** Skip Slack sync */
   skipSlack?: boolean;
+  /** Skip classification pipeline */
+  skipClassify?: boolean;
   /** Progress callback for streaming status updates */
   onProgress?: ProgressCallback;
 }
@@ -44,6 +47,7 @@ export interface HeartbeatResult {
     gmail?: StepResult;
     linear?: StepResult;
     slack?: StepResult;
+    classify?: StepResult;
   };
   /** Whether all steps succeeded */
   allStepsSucceeded: boolean;
@@ -58,6 +62,7 @@ export interface HeartbeatResult {
  * 3. Sync Gmail messages
  * 4. Sync Linear notifications
  * 5. Sync Slack messages
+ * 6. Classify new inbox items (rule → Ollama → Kimi)
  *
  * Memory extraction is handled by Supermemory — content is sent to Supermemory
  * at the point of creation (chat messages, triage saves) rather than in heartbeat.
@@ -238,6 +243,37 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
       steps.slack = {
         success: false,
         durationMs: Date.now() - slackStart,
+        error: errMsg,
+      };
+    }
+  }
+
+  // Step 6: Classify new inbox items (rule → Ollama → Kimi pipeline)
+  if (!options.skipClassify) {
+    progress?.('classify', 'start');
+    const classifyStart = Date.now();
+    try {
+      const classifyResult = await classifyNewItems();
+      if (classifyResult.classified > 0) {
+        console.log(
+          `[Heartbeat] Classify: ${classifyResult.classified} items (rule:${classifyResult.byTier.rule} ollama:${classifyResult.byTier.ollama} kimi:${classifyResult.byTier.kimi})`
+        );
+      }
+      steps.classify = {
+        success: true,
+        durationMs: Date.now() - classifyStart,
+      };
+      progress?.('classify', 'done', classifyResult.classified > 0
+        ? `${classifyResult.classified} items`
+        : undefined);
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error('[Heartbeat] Classification failed:', errMsg);
+      warnings.push(`Classification failed: ${errMsg}`);
+      progress?.('classify', 'error', errMsg);
+      steps.classify = {
+        success: false,
+        durationMs: Date.now() - classifyStart,
         error: errMsg,
       };
     }
