@@ -20,12 +20,14 @@ import {
   getOwnerChatId,
   type TelegramUpdate,
   type TelegramMessage,
+  type InlineKeyboardMarkup,
 } from './client';
 import {
   createCard,
   generateCardId,
   getCard,
   getPendingCards,
+  getActionableCodingSessions,
   updateCard,
 } from '@/lib/action-cards/db';
 import { dispatchCardAction } from '@/lib/action-cards/registry';
@@ -34,6 +36,7 @@ import {
   getActiveSessions,
   telegramToSession,
   getSessionKeyboard,
+  formatSessionTelegram,
 } from '@/lib/action-cards/handlers/code';
 
 // Register all card handlers so dispatchCardAction can find them
@@ -151,12 +154,16 @@ I'm your AI assistant with full access to HQ:
 
 *Memory:* I remember our conversations and can search your knowledge base
 
-*Configuration:* I can view and propose changes to my own behavior
+*Coding Sessions:* I can start coding tasks, and you control them here
 
 *Commands:*
-/start - Welcome message
+/sessions - Show active sessions & pending actions
 /clear - Clear conversation history
 /help - This help message
+
+*Session Control:*
+Reply to a session message to answer Claude's questions.
+Use the inline buttons to stop, approve, or reject.
 
 Just chat naturally - I have the same capabilities as the web interface.`;
 
@@ -396,6 +403,94 @@ The user is ${message.from?.first_name || 'a user'}${message.from?.username ? ` 
 }
 
 // ---------------------------------------------------------------------------
+// /sessions command — recall all active/actionable coding sessions with buttons
+// ---------------------------------------------------------------------------
+
+async function handleSessionsCommand(message: TelegramMessage): Promise<void> {
+  const chatId = message.chat.id;
+
+  try {
+    // Get pending action cards (any pattern)
+    const pendingCards = await getPendingCards();
+
+    // Get active coding sessions from DB (confirmed cards with actionable states)
+    const codingSessions = await getActionableCodingSessions();
+
+    // Also check in-memory active sessions for live state
+    const liveSessionMap = getActiveSessions();
+
+    if (pendingCards.length === 0 && codingSessions.length === 0) {
+      await sendMessage(chatId, 'No active sessions or pending actions.');
+      return;
+    }
+
+    // Send pending action cards first (non-code)
+    const nonCodePending = pendingCards.filter(c => c.pattern !== 'code');
+    for (const card of nonCodePending) {
+      try {
+        await sendMessage(chatId, formatCardForTelegram(card), { parseMode: 'MarkdownV2' });
+      } catch {
+        await sendMessage(chatId, `Pending: ${card.title}\nReply "approve" to confirm or "dismiss" to cancel.`);
+      }
+    }
+
+    // Send coding session status messages with keyboards
+    for (const card of codingSessions) {
+      const data = card.data as Record<string, unknown>;
+      const state = data.state as 'running' | 'waiting' | 'completed' | 'error';
+      const task = (data.task as string) || 'Unknown task';
+      const totalTurns = (data.totalTurns as number) || 0;
+      const totalCostUsd = (data.totalCostUsd as number) ?? null;
+      const sessionId = data.sessionId as string;
+
+      // Check live session for real-time state
+      const liveSession = sessionId ? liveSessionMap.get(sessionId) : null;
+      const effectiveState = liveSession
+        ? (liveSession.state === 'waiting_for_input' ? 'waiting' : 'running')
+        : state;
+
+      const text = formatSessionTelegram(
+        effectiveState as 'running' | 'waiting' | 'completed' | 'error',
+        task,
+        totalTurns,
+        totalCostUsd,
+        {
+          lastMessage: effectiveState === 'waiting' ? (data.lastMessage as string) : undefined,
+          filesChanged: effectiveState === 'completed'
+            ? ((data.result as Record<string, unknown>)?.changedFiles as unknown[])?.length ?? 0
+            : undefined,
+        },
+      );
+
+      const keyboard = getSessionKeyboard(
+        effectiveState as 'running' | 'waiting' | 'completed' | 'error',
+        card.id,
+      );
+
+      const msg = await sendMessage(chatId, text, { replyMarkup: keyboard });
+
+      // Track this message for reply-to-session detection
+      if (sessionId && msg) {
+        telegramToSession.set(msg.message_id, sessionId);
+      }
+    }
+
+    // Also show pending code cards (not yet started)
+    const pendingCodeCards = pendingCards.filter(c => c.pattern === 'code');
+    for (const card of pendingCodeCards) {
+      try {
+        await sendMessage(chatId, formatCardForTelegram(card), { parseMode: 'MarkdownV2' });
+      } catch {
+        await sendMessage(chatId, `Pending: ${card.title}\nReply "approve" to confirm or "dismiss" to cancel.`);
+      }
+    }
+  } catch (err) {
+    console.error('[telegram] /sessions error:', err);
+    await sendMessage(chatId, 'Failed to fetch sessions. Try again.');
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Callback query handler — inline keyboard button presses
 // ---------------------------------------------------------------------------
 
@@ -458,22 +553,30 @@ async function handleSessionReply(
   message: TelegramMessage,
   sessionId: string,
 ): Promise<boolean> {
+  const chatId = message.chat.id;
+  const repliedMsgId = message.reply_to_message?.message_id;
   const sessions = getActiveSessions();
   const session = sessions.get(sessionId);
 
   if (!session) {
-    await sendMessage(message.chat.id, 'Session no longer active — it may have completed or been stopped.');
+    await sendMessage(chatId, 'Session no longer active — it may have completed or been stopped.', {
+      replyToMessageId: repliedMsgId,
+    });
     return true;
   }
 
   if (session.state !== 'waiting_for_input') {
-    await sendMessage(message.chat.id, `Session is ${session.state}, not waiting for input.`);
+    await sendMessage(chatId, `Session is ${session.state}, not waiting for input.`, {
+      replyToMessageId: repliedMsgId,
+    });
     return true;
   }
 
   const text = message.text || '';
   session.sendMessage(text);
-  await sendMessage(message.chat.id, '\u{2705} Response sent — session resuming.');
+  await sendMessage(chatId, '\u{2705} Response sent — session resuming.', {
+    replyToMessageId: repliedMsgId,
+  });
   return true;
 }
 
@@ -527,6 +630,10 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
     switch (command) {
       case '/start':
         await handleStartCommand(message);
+        return;
+      case '/sessions':
+      case '/status':
+        await handleSessionsCommand(message);
         return;
       case '/clear':
         await handleClearCommand(message);

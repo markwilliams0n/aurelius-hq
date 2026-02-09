@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { actionCards } from "@/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import type { ActionCardData, CardPattern, CardStatus } from "@/lib/types/action-card";
 import type { NewActionCard } from "@/lib/db/schema/action-cards";
 
@@ -95,6 +95,26 @@ export async function getCardsByPattern(
     .select()
     .from(actionCards)
     .where(eq(actionCards.pattern, pattern))
+    .orderBy(desc(actionCards.createdAt));
+
+  return rows.map(rowToCardData);
+}
+
+/**
+ * Get coding session cards that are actionable (waiting for response or completed awaiting approval).
+ * Returns confirmed code-pattern cards where data.state is 'waiting' or 'completed'.
+ */
+export async function getActionableCodingSessions(): Promise<ActionCardData[]> {
+  const rows = await db
+    .select()
+    .from(actionCards)
+    .where(
+      and(
+        eq(actionCards.pattern, 'code'),
+        eq(actionCards.status, 'confirmed'),
+        sql`${actionCards.data}->>'state' IN ('waiting', 'completed', 'running')`,
+      ),
+    )
     .orderBy(desc(actionCards.createdAt));
 
   return rows.map(rowToCardData);

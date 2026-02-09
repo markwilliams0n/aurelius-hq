@@ -89,7 +89,7 @@ export function getSessionKeyboard(
 }
 
 /** Format a session status message for Telegram. */
-function formatSessionTelegram(
+export function formatSessionTelegram(
   state: 'running' | 'waiting' | 'completed' | 'error',
   task: string,
   totalTurns: number,
