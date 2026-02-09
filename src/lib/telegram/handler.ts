@@ -336,10 +336,13 @@ async function handleChatMessage(message: TelegramMessage): Promise<void> {
 You're responding via Telegram. Keep responses concise and mobile-friendly.
 The user is ${message.from?.first_name || 'a user'}${message.from?.username ? ` (@${message.from.username})` : ''}.
 
-IMPORTANT: When the user asks about pending actions, approvals, sessions, or status,
-use the check_coding_sessions tool. After your response, the system will automatically
-send interactive cards with buttons the user can tap. Do NOT tell the user to use commands
-or that cards aren't available — they will be sent automatically.`;
+CRITICAL — Telegram has FULL interactive capability:
+- The user CAN approve, reject, resume, and stop coding sessions directly from Telegram
+- Interactive cards with tap-able buttons are sent automatically after your response
+- NEVER say "you can't see cards" or "cards aren't available" or suggest the user go to a computer
+- NEVER suggest manual merging or GitHub — Telegram handles it
+- When the user asks about sessions, approvals, merging, or status: use check_coding_sessions, then give a brief summary. The system sends the interactive buttons automatically.
+- Keep your text response SHORT — the buttons do the work.`;
 
     const { systemPrompt: telegramPrompt } = await buildAgentContext({
       query: userText,
@@ -427,13 +430,13 @@ or that cards aren't available — they will be sent automatically.`;
       await sendMessage(chatId, text, { replyMarkup: keyboard });
     }
 
-    // Auto-send pending items with buttons when relevant:
+    // Auto-send coding sessions with buttons when relevant:
     // 1. AI explicitly called check_coding_sessions tool
-    // 2. User's message mentions approval/session/status keywords
-    // Belt-and-suspenders: even if AI doesn't call the right tool, keywords trigger it
-    const sessionKeywords = /\b(approv|reject|pending|session|status|merge|code.?review|check.?session|what.?s.*running)\b/i;
+    // 2. User's message mentions approval/session/merge keywords
+    // Only sends CODE sessions — use /pending for full list including config cards
+    const sessionKeywords = /\b(approv|reject|merg|session|code.?review|check.?session|what.?s.*(running|pending|status))\b/i;
     if (toolsUsed.has('check_coding_sessions') || sessionKeywords.test(userText)) {
-      await sendPendingCardsWithButtons(chatId);
+      await sendCodingSessionCards(chatId);
     }
   } catch (error) {
     console.error('Error processing Telegram message:', error);
@@ -448,23 +451,96 @@ or that cards aren't available — they will be sent automatically.`;
 }
 
 // ---------------------------------------------------------------------------
-// Send pending cards with buttons — shared by /pending command and auto-send
+// Render a single coding session card to Telegram
+// ---------------------------------------------------------------------------
+
+/** Render a coding session card with status, buttons, and zombie detection. Returns false if skipped. */
+async function renderSessionCard(
+  chatId: number,
+  card: ActionCardData,
+  num: number,
+): Promise<boolean> {
+  const data = card.data as Record<string, unknown>;
+  const state = data.state as 'running' | 'waiting' | 'completed' | 'error';
+  const task = (data.task as string) || 'Unknown task';
+  const totalTurns = (data.totalTurns as number) || 0;
+  const totalCostUsd = (data.totalCostUsd as number) ?? null;
+  const sessionId = data.sessionId as string;
+
+  const liveSessionMap = getActiveSessions();
+  const liveSession = sessionId ? liveSessionMap.get(sessionId) : null;
+
+  // Purge stale: worktree gone means already actioned
+  if (!liveSession && sessionId && !worktreeExists(sessionId)) {
+    await updateCard(card.id, { data: { ...data, state: 'done' } });
+    return false;
+  }
+
+  // Detect zombie: card says running/waiting but no active process
+  const isZombie = !liveSession && (state === 'running' || state === 'waiting');
+  let effectiveState: string;
+
+  if (liveSession) {
+    effectiveState = liveSession.state === 'waiting_for_input' ? 'waiting' : 'running';
+  } else if (isZombie) {
+    const finalized = await finalizeZombieSession(card.id);
+    effectiveState = finalized;
+  } else {
+    effectiveState = state;
+  }
+
+  if (effectiveState === 'error') return false;
+
+  const text = `#${num} ` + formatSessionTelegram(
+    effectiveState as 'running' | 'waiting' | 'completed' | 'error',
+    task,
+    totalTurns,
+    totalCostUsd,
+    {
+      lastMessage: effectiveState === 'waiting' ? (data.lastMessage as string) : undefined,
+      filesChanged: effectiveState === 'completed'
+        ? ((data.result as Record<string, unknown>)?.changedFiles as unknown[])?.length ?? 0
+        : undefined,
+    },
+  );
+
+  const keyboard = getSessionKeyboard(
+    effectiveState as 'running' | 'waiting' | 'completed' | 'error',
+    card.id,
+  );
+
+  const msg = await sendMessage(chatId, text, { replyMarkup: keyboard });
+  if (sessionId && msg) {
+    telegramToSession.set(msg.message_id, sessionId);
+  }
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Send coding session cards only — used by auto-send from chat
+// ---------------------------------------------------------------------------
+
+async function sendCodingSessionCards(chatId: number): Promise<void> {
+  const sessions = await getActionableCodingSessions();
+  if (sessions.length === 0) return;
+
+  let num = 0;
+  for (const card of sessions) {
+    num++;
+    await renderSessionCard(chatId, card, num);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Send ALL pending cards with buttons — used by /pending command
 // ---------------------------------------------------------------------------
 
 async function sendPendingCardsWithButtons(chatId: number): Promise<void> {
-  const pendingCards = await getPendingCards();
   const codingSessions = await getActionableCodingSessions();
-  const liveSessionMap = getActiveSessions();
+  const pendingCards = await getPendingCards();
 
-  // Build a unified list of all actionable items
-  const allItems: ActionCardData[] = [];
-
-  // Coding sessions first (most time-sensitive)
-  for (const card of codingSessions) {
-    allItems.push(card);
-  }
-
-  // Then pending cards (excluding code cards already shown as sessions)
+  // Build unified list: code sessions first, then other pending cards
+  const allItems: ActionCardData[] = [...codingSessions];
   const sessionCardIds = new Set(codingSessions.map(c => c.id));
   for (const card of pendingCards) {
     if (!sessionCardIds.has(card.id)) {
@@ -472,75 +548,15 @@ async function sendPendingCardsWithButtons(chatId: number): Promise<void> {
     }
   }
 
-  // Store for /approve N targeting
   pendingListStore.__pendingCardList = allItems;
-
   if (allItems.length === 0) return;
 
-  // Send each item as its own message with buttons
-  for (let i = 0; i < allItems.length; i++) {
-    const card = allItems[i];
-    const data = card.data as Record<string, unknown>;
-    const num = i + 1;
-
+  let num = 0;
+  for (const card of allItems) {
+    num++;
     if (card.pattern === 'code' && card.status === 'confirmed') {
-      // Coding session — use rich session format with session-specific buttons
-      const state = data.state as 'running' | 'waiting' | 'completed' | 'error';
-      const task = (data.task as string) || 'Unknown task';
-      const totalTurns = (data.totalTurns as number) || 0;
-      const totalCostUsd = (data.totalCostUsd as number) ?? null;
-      const sessionId = data.sessionId as string;
-
-      const liveSession = sessionId ? liveSessionMap.get(sessionId) : null;
-
-      // Detect zombie: card says running/waiting but no active process
-      const isZombie = !liveSession && (state === 'running' || state === 'waiting');
-      let effectiveState: string;
-
-      if (liveSession) {
-        effectiveState = liveSession.state === 'waiting_for_input' ? 'waiting' : 'running';
-      } else if (isZombie) {
-        // Auto-finalize: check worktree for work done, mark as completed
-        const finalized = await finalizeZombieSession(card.id);
-        effectiveState = finalized; // 'completed' or 'error'
-      } else {
-        effectiveState = state;
-      }
-
-      // Purge stale sessions: worktree gone means already actioned (merged/rejected)
-      if (!liveSession && sessionId && !worktreeExists(sessionId)) {
-        await updateCard(card.id, { data: { ...data, state: 'done' } });
-        continue;
-      }
-
-      // Skip error-state sessions entirely
-      if (effectiveState === 'error') continue;
-
-      const text = `#${num} ` + formatSessionTelegram(
-        effectiveState as 'running' | 'waiting' | 'completed' | 'error',
-        task,
-        totalTurns,
-        totalCostUsd,
-        {
-          lastMessage: effectiveState === 'waiting' ? (data.lastMessage as string) : undefined,
-          filesChanged: effectiveState === 'completed'
-            ? ((data.result as Record<string, unknown>)?.changedFiles as unknown[])?.length ?? 0
-            : undefined,
-        },
-      );
-
-      const keyboard = getSessionKeyboard(
-        effectiveState as 'running' | 'waiting' | 'completed' | 'error',
-        card.id,
-      );
-
-      const msg = await sendMessage(chatId, text, { replyMarkup: keyboard });
-
-      if (sessionId && msg) {
-        telegramToSession.set(msg.message_id, sessionId);
-      }
+      await renderSessionCard(chatId, card, num);
     } else {
-      // General pending card — plain text + approve/reject buttons
       const text = `#${num} ${formatCardPlainText(card)}`;
       const keyboard = getCardKeyboard(card.id);
       await sendMessage(chatId, text, { replyMarkup: keyboard });
