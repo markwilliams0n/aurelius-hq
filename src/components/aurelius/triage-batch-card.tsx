@@ -400,6 +400,24 @@ export function TriageBatchCard({
                           </button>
                         )
                       )}
+                      <div className="border-t border-border my-1" />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenDropdownId(null);
+                          onReclassify(
+                            item.id,
+                            batchType,
+                            "individual",
+                            item.sender,
+                            item.senderName,
+                            item.connector
+                          );
+                        }}
+                        className="w-full text-left px-3 py-1.5 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                      >
+                        Remove from groups
+                      </button>
                     </div>
                   )}
                 </div>

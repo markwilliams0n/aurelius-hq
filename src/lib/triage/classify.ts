@@ -32,10 +32,23 @@ export type ClassificationResult = {
  * Pass 2 — Ollama: fast local LLM (if available and confident)
  * Pass 3 — Kimi: cloud LLM with enrichment (fallback)
  */
+/** Connectors whose items should always surface individually (never batch-grouped) */
+const INDIVIDUAL_CONNECTORS = new Set(["granola"]);
+
 export async function classifyItem(
   item: InboxItem,
   rules?: TriageRule[]
 ): Promise<ClassificationResult> {
+  // Items from certain connectors always stay individual
+  if (INDIVIDUAL_CONNECTORS.has(item.connector)) {
+    return {
+      batchType: null,
+      tier: "rule",
+      confidence: 1,
+      reason: `${item.connector} items are always kept for individual review`,
+    };
+  }
+
   // Pass 1: Structured rule matching
   const activeRules = rules ?? (await getActiveRules());
 

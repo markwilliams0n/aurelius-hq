@@ -25,17 +25,16 @@ export async function POST(request: Request) {
     }
 
     const VALID_BATCH_TYPES = ["notifications", "finance", "newsletters", "calendar", "spam"];
-    if (!VALID_BATCH_TYPES.includes(toBatchType)) {
+    const isRemoveFromGroup = toBatchType === "individual";
+
+    if (!isRemoveFromGroup && !VALID_BATCH_TYPES.includes(toBatchType)) {
       return NextResponse.json(
         { error: "Invalid batchType" },
         { status: 400 }
       );
     }
 
-    // 1. Get or create the target batch card
-    const newCardId = await getOrCreateBatchCard(toBatchType);
-
-    // 2. Update the item's classification JSONB
+    // Look up the item
     const [item] = await db
       .select()
       .from(inboxItems)
@@ -47,6 +46,30 @@ export async function POST(request: Request) {
     }
 
     const existingClassification = (item.classification as Record<string, unknown>) || {};
+
+    // Remove from group → clear batch assignment, keep as individual
+    if (isRemoveFromGroup) {
+      await db
+        .update(inboxItems)
+        .set({
+          classification: {
+            ...existingClassification,
+            tier: "rule" as const,
+            confidence: 1,
+            reason: `User removed from ${fromBatchType} group`,
+            classifiedAt: new Date().toISOString(),
+            batchType: null,
+            batchCardId: null,
+          },
+          updatedAt: new Date(),
+        })
+        .where(eq(inboxItems.id, itemId));
+
+      return NextResponse.json({ success: true });
+    }
+
+    // Move to a different group
+    const newCardId = await getOrCreateBatchCard(toBatchType);
     const isFromIndividual = fromBatchType === "individual";
     await db
       .update(inboxItems)
@@ -66,7 +89,7 @@ export async function POST(request: Request) {
       })
       .where(eq(inboxItems.id, itemId));
 
-    // 3. Create a structured triage rule
+    // Create a structured triage rule
     const displayName = senderName || sender;
     const rule = await createRule({
       name: `Reclassify ${displayName} → ${toBatchType}`,
