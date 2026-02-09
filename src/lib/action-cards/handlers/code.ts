@@ -10,7 +10,7 @@ import {
 import { startSession, type ActiveSession } from "@/lib/capabilities/code/executor";
 import { buildCodePrompt } from "@/lib/capabilities/code/prompts";
 import { getCard, updateCard } from "../db";
-import { notifyOwner } from "@/lib/telegram/client";
+import { sendOwnerMessage, editOwnerMessage } from "@/lib/telegram/client";
 
 // ---------------------------------------------------------------------------
 // Active session tracking
@@ -36,6 +36,69 @@ process.on('SIGTERM', () => {
   }
   activeSessions.clear();
 });
+
+// ---------------------------------------------------------------------------
+// Telegram session message — one message per session, edited on state changes
+// ---------------------------------------------------------------------------
+
+/** Map of sessionId → Telegram message_id for the session's status message. */
+const sessionTelegramMessages = new Map<string, number>();
+
+/** Format a session status message for Telegram. */
+function formatSessionTelegram(
+  state: 'running' | 'waiting' | 'completed' | 'error',
+  task: string,
+  totalTurns: number,
+  totalCostUsd: number | null,
+  extra?: { lastMessage?: string; error?: string; filesChanged?: number },
+): string {
+  const emoji = { running: '\u{1F7E1}', waiting: '\u{1F535}', completed: '\u{1F7E2}', error: '\u{1F534}' }[state];
+  const label = { running: 'Running', waiting: 'Needs Response', completed: 'Completed', error: 'Failed' }[state];
+  const truncatedTask = task.length > 50 ? task.slice(0, 47) + '...' : task;
+  const costStr = totalCostUsd !== null ? `$${totalCostUsd.toFixed(2)}` : '...';
+
+  const lines: string[] = [];
+  lines.push(`${emoji} Coding: ${label}`);
+  lines.push('');
+  lines.push(`Task: ${truncatedTask}`);
+  lines.push(`Turns: ${totalTurns} · Cost: ${costStr}`);
+
+  if (state === 'waiting' && extra?.lastMessage) {
+    const preview = extra.lastMessage.length > 1000 ? extra.lastMessage.slice(0, 997) + '...' : extra.lastMessage;
+    lines.push('');
+    lines.push(`Claude says:\n${preview}`);
+  } else if (state === 'error' && extra?.error) {
+    lines.push('');
+    lines.push(`Error: ${extra.error}`);
+  } else if (state === 'completed' && extra?.filesChanged !== undefined) {
+    lines.push(`Files changed: ${extra.filesChanged}`);
+  }
+
+  return lines.join('\n');
+}
+
+/** Send or edit the Telegram status message for a session. */
+async function updateSessionTelegram(
+  sessionId: string,
+  text: string,
+): Promise<void> {
+  try {
+    const existingMsgId = sessionTelegramMessages.get(sessionId);
+    if (existingMsgId) {
+      const newId = await editOwnerMessage(existingMsgId, text);
+      if (newId && newId !== existingMsgId) {
+        sessionTelegramMessages.set(sessionId, newId);
+      }
+    } else {
+      const msgId = await sendOwnerMessage(text);
+      if (msgId) {
+        sessionTelegramMessages.set(sessionId, msgId);
+      }
+    }
+  } catch {
+    // Best effort — don't fail the session over Telegram issues
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -80,14 +143,14 @@ async function finalizeSession(
       });
     }
 
-    // Notify via Telegram
+    // Update Telegram status message
     const task = (data.task as string) || 'Unknown task';
-    const truncatedTask = task.length > 50 ? task.slice(0, 47) + '...' : task;
-    const costStr = totalCostUsd !== null ? `$${totalCostUsd.toFixed(2)}` : '?';
-    const filesChanged = changedFiles?.length ?? 0;
-    notifyOwner(
-      `🟢 Coding session completed\n\nTask: ${truncatedTask}\nTurns: ${totalTurns} · Cost: ${costStr}\nFiles changed: ${filesChanged}`
-    ).catch(() => {});
+    updateSessionTelegram(
+      sessionId,
+      formatSessionTelegram('completed', task, totalTurns, totalCostUsd, {
+        filesChanged: changedFiles?.length ?? 0,
+      }),
+    );
   } catch (err) {
     console.error(`[code-session:${sessionId}] Failed to gather results:`, err);
   }
@@ -181,17 +244,13 @@ registerCardHandler("code:start", {
             }
           }
 
-          // Notify via Telegram — session needs a response
-          const truncatedTask = task.length > 50 ? task.slice(0, 47) + '...' : task;
-          const costStr = totalCostUsd !== null ? `$${totalCostUsd.toFixed(2)}` : '?';
-          let telegramMsg = `🔵 Coding session needs your response\n\n`;
-          telegramMsg += `Task: ${truncatedTask}\n`;
-          telegramMsg += `Turns: ${totalTurns} · Cost: ${costStr}\n\n`;
-          if (result.text) {
-            const msgPreview = result.text.length > 1000 ? result.text.slice(0, 997) + '...' : result.text;
-            telegramMsg += `Claude says:\n${msgPreview}`;
-          }
-          notifyOwner(telegramMsg).catch(() => {});
+          // Update Telegram status message
+          updateSessionTelegram(
+            sessionId,
+            formatSessionTelegram('waiting', task, totalTurns, totalCostUsd, {
+              lastMessage: result.text,
+            }),
+          );
         },
 
         async onError(error) {
@@ -214,9 +273,11 @@ registerCardHandler("code:start", {
             }
           }
 
-          // Notify via Telegram
-          const truncatedTask = task.length > 50 ? task.slice(0, 47) + '...' : task;
-          notifyOwner(`🔴 Coding session failed\n\nTask: ${truncatedTask}\nError: ${error.message}`).catch(() => {});
+          // Update Telegram status message
+          updateSessionTelegram(
+            sessionId,
+            formatSessionTelegram('error', task, 0, null, { error: error.message }),
+          );
         },
       });
     } catch (err) {
@@ -248,6 +309,12 @@ registerCardHandler("code:start", {
         },
       });
     }
+
+    // Send initial Telegram status message
+    updateSessionTelegram(
+      sessionId,
+      formatSessionTelegram('running', task, 0, null),
+    );
 
     return { status: "confirmed" };
   },
@@ -282,6 +349,10 @@ registerCardHandler("code:respond", {
     // Send the message and update card state
     session.sendMessage(message);
 
+    const task = (data.task as string) || 'Unknown task';
+    const totalTurns = (data.totalTurns as number) || 0;
+    const totalCostUsd = (data.totalCostUsd as number) ?? null;
+
     if (cardId) {
       try {
         await updateCard(cardId, {
@@ -295,6 +366,12 @@ registerCardHandler("code:respond", {
         console.error(`[code-session:${sessionId}] Failed to update card:`, err);
       }
     }
+
+    // Update Telegram status back to running
+    updateSessionTelegram(
+      sessionId,
+      formatSessionTelegram('running', task, totalTurns, totalCostUsd),
+    );
 
     return { status: "confirmed" };
   },

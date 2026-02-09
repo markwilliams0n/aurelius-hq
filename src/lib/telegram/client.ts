@@ -98,6 +98,35 @@ export async function sendMessage(
 }
 
 /**
+ * Edit an existing message in a Telegram chat
+ */
+export async function editMessage(
+  chatId: number | string,
+  messageId: number,
+  text: string,
+  options?: { parseMode?: 'Markdown' | 'MarkdownV2' | 'HTML' },
+): Promise<TelegramMessage> {
+  const response = await fetch(getApiUrl('editMessageText'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      message_id: messageId,
+      text,
+      parse_mode: options?.parseMode,
+    }),
+  });
+
+  const data: TelegramApiResponse<TelegramMessage> = await response.json();
+
+  if (!data.ok) {
+    throw new Error(`Telegram API error: ${data.description}`);
+  }
+
+  return data.result!;
+}
+
+/**
  * Send a "typing" action to indicate the bot is processing
  */
 export async function sendTypingAction(chatId: number | string): Promise<void> {
@@ -240,6 +269,47 @@ export async function notifyOwner(
     }
   } catch (err) {
     console.error('[telegram] Failed to notify owner:', err);
+  }
+}
+
+/**
+ * Send a notification to the owner and return the message_id.
+ * Used for messages that will be edited later (e.g. coding session status).
+ * Returns null if sending fails.
+ */
+export async function sendOwnerMessage(text: string): Promise<number | null> {
+  const chatId = getOwnerChatId();
+  if (!chatId) {
+    console.warn('[telegram] Cannot send owner message — no chat ID available.');
+    return null;
+  }
+  try {
+    const msg = await sendMessage(chatId, text);
+    return msg.message_id;
+  } catch (err) {
+    console.error('[telegram] Failed to send owner message:', err);
+    return null;
+  }
+}
+
+/**
+ * Edit an existing owner notification. Falls back to sending a new message
+ * if editing fails (e.g. message too old or deleted).
+ * Returns the message_id (possibly new if fallback was used).
+ */
+export async function editOwnerMessage(
+  messageId: number,
+  text: string,
+): Promise<number | null> {
+  const chatId = getOwnerChatId();
+  if (!chatId) return null;
+  try {
+    await editMessage(chatId, messageId, text);
+    return messageId;
+  } catch (err) {
+    // Telegram rejects edits if content is unchanged or message is too old
+    console.error('[telegram] Failed to edit message, sending new:', err);
+    return sendOwnerMessage(text);
   }
 }
 
