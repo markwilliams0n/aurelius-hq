@@ -13,14 +13,14 @@ describe('auth', () => {
   const originalEnv = process.env.NODE_ENV
 
   afterEach(() => {
-    process.env.NODE_ENV = originalEnv
+    Object.defineProperty(process.env, 'NODE_ENV', { value: originalEnv, writable: true })
     vi.resetModules()
     vi.clearAllMocks()
   })
 
   describe('getSession', () => {
     it('returns mock session in development mode', async () => {
-      process.env.NODE_ENV = 'development'
+      Object.defineProperty(process.env, 'NODE_ENV', { value: 'development', writable: true })
 
       // Dynamic import to get fresh module with new env
       const { getSession } = await import('../auth')
@@ -32,7 +32,7 @@ describe('auth', () => {
     })
 
     it('returns null in production mode without valid cookie', async () => {
-      process.env.NODE_ENV = 'production'
+      Object.defineProperty(process.env, 'NODE_ENV', { value: 'production', writable: true })
 
       // Dynamic import to get fresh module with new env
       const { getSession } = await import('../auth')

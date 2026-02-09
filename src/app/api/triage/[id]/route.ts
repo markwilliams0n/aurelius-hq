@@ -225,7 +225,7 @@ export async function POST(
         newStatus: updates.status,
         ...(action === "snooze" && { snoozeUntil: updates.snoozedUntil }),
       },
-    }).catch((error) => {
+    }).then(() => {}, (error) => {
       console.error("[Triage] Background activity logging failed:", error);
     })
   );

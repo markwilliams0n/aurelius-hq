@@ -298,8 +298,8 @@ export async function isFactRedundant(
 
     // Check for same key information (numbers, dates) in similar context
     // Extract numbers from both facts
-    const newNumbers = newLower.match(/\d+\.?\d*/g) || [];
-    const existingNumbers = existingLower.match(/\d+\.?\d*/g) || [];
+    const newNumbers: string[] = newLower.match(/\d+\.?\d*/g) || [];
+    const existingNumbers: string[] = existingLower.match(/\d+\.?\d*/g) || [];
 
     // If both have the same numbers and similar words, likely duplicate
     if (newNumbers.length > 0 && existingNumbers.length > 0) {

@@ -94,7 +94,7 @@ describe('Triage API - Database Integration', () => {
 
     const granolaItem = items.find((item: any) => item.connector === 'granola');
     expect(granolaItem).toBeDefined();
-    expect(granolaItem.subject).toBe('Engineering Weekly');
-    expect(granolaItem.externalId).toBe('granola-meeting-123');
+    expect(granolaItem!.subject).toBe('Engineering Weekly');
+    expect(granolaItem!.externalId).toBe('granola-meeting-123');
   });
 });

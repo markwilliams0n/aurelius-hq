@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock dependencies
 vi.mock('../route', () => ({
-  getInboxItems: vi.fn(),
+  getInboxItemsFromDb: vi.fn(),
 }));
 
 vi.mock('@/lib/memory/entities', () => ({
@@ -24,7 +24,7 @@ vi.stubGlobal('crypto', {
 
 // Import after mocking
 import { POST } from '../[id]/memory/route';
-import { getInboxItems } from '../route';
+import { getInboxItemsFromDb } from '../route';
 import { upsertEntity } from '@/lib/memory/entities';
 import { createFact } from '@/lib/memory/facts';
 import { appendToDailyNote } from '@/lib/memory/daily-notes';
@@ -40,7 +40,7 @@ describe('Triage Memory API Route', () => {
     status: 'new',
     priority: 'normal',
     tags: [],
-  };
+  } as any;
 
   const mockSlackItem = {
     connector: 'slack',
@@ -52,7 +52,7 @@ describe('Triage Memory API Route', () => {
     status: 'new',
     priority: 'normal',
     tags: [],
-  };
+  } as any;
 
   const mockLinearItem = {
     connector: 'linear',
@@ -64,16 +64,18 @@ describe('Triage Memory API Route', () => {
     status: 'new',
     priority: 'urgent',
     tags: [],
-  };
+  } as any;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(getInboxItems).mockReturnValue([mockEmailItem, mockSlackItem, mockLinearItem]);
+    vi.mocked(getInboxItemsFromDb).mockResolvedValue([mockEmailItem, mockSlackItem, mockLinearItem]);
     vi.mocked(upsertEntity).mockResolvedValue({
       id: 'entity-1',
       name: 'Test Entity',
       type: 'person',
       metadata: {},
+      summary: null,
+      summaryEmbedding: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -81,13 +83,13 @@ describe('Triage Memory API Route', () => {
       id: 'fact-1',
       entityId: 'entity-1',
       content: 'Test fact',
+      embedding: null,
       category: 'context',
+      status: 'active',
+      supersededBy: null,
       sourceType: 'chat',
       sourceId: 'test-1',
-      confidence: 1,
       createdAt: new Date(),
-      updatedAt: new Date(),
-      verifiedAt: null,
     });
     vi.mocked(appendToDailyNote).mockResolvedValue();
   });
@@ -145,7 +147,7 @@ describe('Triage Memory API Route', () => {
     });
 
     it('does not extract company from personal email domains', async () => {
-      vi.mocked(getInboxItems).mockReturnValue([{
+      vi.mocked(getInboxItemsFromDb).mockResolvedValue([{
         ...mockEmailItem,
         externalId: 'personal-email',
         sender: 'john@gmail.com',
@@ -183,7 +185,7 @@ describe('Triage Memory API Route', () => {
     });
 
     it('creates priority status fact for urgent items', async () => {
-      vi.mocked(getInboxItems).mockReturnValue([mockLinearItem]);
+      vi.mocked(getInboxItemsFromDb).mockResolvedValue([mockLinearItem]);
 
       const request = new Request('http://localhost/api/triage/linear-1/memory', {
         method: 'POST',
@@ -202,7 +204,7 @@ describe('Triage Memory API Route', () => {
     });
 
     it('extracts project entity from Linear items', async () => {
-      vi.mocked(getInboxItems).mockReturnValue([mockLinearItem]);
+      vi.mocked(getInboxItemsFromDb).mockResolvedValue([mockLinearItem]);
 
       const request = new Request('http://localhost/api/triage/linear-1/memory', {
         method: 'POST',
@@ -267,7 +269,7 @@ describe('Triage Memory API Route', () => {
   describe('fallback behavior', () => {
     beforeEach(() => {
       // Reset mocks - set up for fallback mode where database ops fail
-      vi.mocked(getInboxItems).mockReturnValue([mockEmailItem, mockSlackItem, mockLinearItem]);
+      vi.mocked(getInboxItemsFromDb).mockResolvedValue([mockEmailItem, mockSlackItem, mockLinearItem]);
       vi.mocked(upsertEntity).mockRejectedValue(new Error('Database error'));
     });
 
@@ -287,7 +289,7 @@ describe('Triage Memory API Route', () => {
     });
 
     it('handles database failure gracefully', async () => {
-      vi.mocked(getInboxItems).mockReturnValue([mockLinearItem]);
+      vi.mocked(getInboxItemsFromDb).mockResolvedValue([mockLinearItem]);
 
       const request = new Request('http://localhost/api/triage/linear-1/memory', {
         method: 'POST',

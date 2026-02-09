@@ -18,7 +18,7 @@ const mockParsedEmail = {
   labels: ['INBOX'],
   attachments: [],
   hasUnsubscribe: false,
-  unsubscribeUrl: null,
+  unsubscribeUrl: undefined,
 };
 
 // Set up environment before mocks
@@ -79,7 +79,7 @@ vi.mock('../client', () => ({
   fetchUnarchived: vi.fn(() =>
     Promise.resolve({
       emails: [mockParsedEmail],
-      nextPageToken: null,
+      nextPageToken: undefined,
     })
   ),
   getSyncState: vi.fn(() => Promise.resolve(null)),
@@ -186,7 +186,7 @@ describe('Gmail Sync', () => {
 
       vi.mocked(fetchUnarchived).mockResolvedValueOnce({
         emails: [olderMessage, newerMessage],
-        nextPageToken: null,
+        nextPageToken: undefined,
       });
 
       const result = await syncGmailMessages();
@@ -217,7 +217,7 @@ describe('Smart Sender Analysis', () => {
 
     vi.mocked(fetchUnarchived).mockResolvedValueOnce({
       emails: [internalEmail],
-      nextPageToken: null,
+      nextPageToken: undefined,
     });
 
     await syncGmailMessages();
@@ -236,7 +236,7 @@ describe('Smart Sender Analysis', () => {
 
     vi.mocked(fetchUnarchived).mockResolvedValueOnce({
       emails: [directEmail],
-      nextPageToken: null,
+      nextPageToken: undefined,
     });
 
     await syncGmailMessages();
@@ -254,7 +254,7 @@ describe('Smart Sender Analysis', () => {
 
     vi.mocked(fetchUnarchived).mockResolvedValueOnce({
       emails: [ccEmail],
-      nextPageToken: null,
+      nextPageToken: undefined,
     });
 
     await syncGmailMessages();
@@ -271,7 +271,7 @@ describe('Smart Sender Analysis', () => {
 
     vi.mocked(fetchUnarchived).mockResolvedValueOnce({
       emails: [autoEmail],
-      nextPageToken: null,
+      nextPageToken: undefined,
     });
 
     await syncGmailMessages();
@@ -289,7 +289,7 @@ describe('Smart Sender Analysis', () => {
 
     vi.mocked(fetchUnarchived).mockResolvedValueOnce({
       emails: [newsletterEmail],
-      nextPageToken: null,
+      nextPageToken: undefined,
     });
 
     await syncGmailMessages();
@@ -311,7 +311,7 @@ describe('Smart Sender Analysis', () => {
 
     vi.mocked(fetchUnarchived).mockResolvedValueOnce({
       emails: [groupEmail],
-      nextPageToken: null,
+      nextPageToken: undefined,
     });
 
     await syncGmailMessages();
@@ -336,7 +336,7 @@ describe('Phishing Detection', () => {
 
     vi.mocked(fetchUnarchived).mockResolvedValueOnce({
       emails: [phishingEmail],
-      nextPageToken: null,
+      nextPageToken: undefined,
     });
 
     await syncGmailMessages();
@@ -354,7 +354,7 @@ describe('Phishing Detection', () => {
 
     vi.mocked(fetchUnarchived).mockResolvedValueOnce({
       emails: [urgentPhishing],
-      nextPageToken: null,
+      nextPageToken: undefined,
     });
 
     await syncGmailMessages();
@@ -372,7 +372,7 @@ describe('Phishing Detection', () => {
 
     vi.mocked(fetchUnarchived).mockResolvedValueOnce({
       emails: [legitimateEmail],
-      nextPageToken: null,
+      nextPageToken: undefined,
     });
 
     await syncGmailMessages();

@@ -17,22 +17,18 @@ export async function GET(request: NextRequest) {
     const eventType = searchParams.get('eventType');
     const limit = parseInt(searchParams.get('limit') || '50');
 
-    let query = db
-      .select()
-      .from(activityLog)
-      .orderBy(desc(activityLog.createdAt))
-      .limit(limit);
-
-    if (eventType) {
-      query = db
-        .select()
-        .from(activityLog)
-        .where(eq(activityLog.eventType, eventType as any))
-        .orderBy(desc(activityLog.createdAt))
-        .limit(limit);
-    }
-
-    const activities = await query;
+    const activities = eventType
+      ? await db
+          .select()
+          .from(activityLog)
+          .where(eq(activityLog.eventType, eventType as any))
+          .orderBy(desc(activityLog.createdAt))
+          .limit(limit)
+      : await db
+          .select()
+          .from(activityLog)
+          .orderBy(desc(activityLog.createdAt))
+          .limit(limit);
 
     return NextResponse.json({ activities });
   } catch (error) {
