@@ -546,7 +546,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            itemId: currentItem.id,
+            itemId: currentItem.dbId || currentItem.id,
             fromBatchType: "individual",
             toBatchType: data.batchType,
             sender: currentItem.sender,
@@ -554,7 +554,11 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
             connector: currentItem.connector,
           }),
         });
-        if (!res.ok) throw new Error("Classify failed");
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          console.error("Classify API error:", res.status, errBody);
+          throw new Error(errBody.error || "Classify failed");
+        }
 
         // Remove item from individual items list (it's now in a batch card)
         setAnimatingOut("right");
