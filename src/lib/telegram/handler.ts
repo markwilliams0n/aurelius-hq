@@ -39,6 +39,7 @@ import {
   formatSessionTelegram,
   finalizeZombieSession,
 } from '@/lib/action-cards/handlers/code';
+import { worktreeExists } from '@/lib/capabilities/code/worktree';
 
 // Register all card handlers so dispatchCardAction can find them
 import '@/lib/action-cards/handlers/code';
@@ -506,6 +507,12 @@ async function sendPendingCardsWithButtons(chatId: number): Promise<void> {
         effectiveState = state;
       }
 
+      // Purge stale sessions: worktree gone means already actioned (merged/rejected)
+      if (!liveSession && sessionId && !worktreeExists(sessionId)) {
+        await updateCard(card.id, { data: { ...data, state: 'done' } });
+        continue;
+      }
+
       // Skip error-state sessions entirely
       if (effectiveState === 'error') continue;
 
@@ -565,6 +572,50 @@ async function handlePendingCommand(message: TelegramMessage): Promise<void> {
     console.error('[telegram] /pending error:', err);
     await sendMessage(chatId, 'Failed to fetch pending items. Try again.');
   }
+}
+
+// ---------------------------------------------------------------------------
+// Action follow-up — rich info after button presses
+// ---------------------------------------------------------------------------
+
+/** Build a follow-up message with details about what happened. */
+function buildActionFollowUp(action: string, card: ActionCardData): string | null {
+  const data = card.data as Record<string, unknown>;
+
+  if (card.pattern === 'code') {
+    const branch = data.branchName as string;
+    const result = data.result as Record<string, unknown> | undefined;
+    const stats = result?.stats as { filesChanged?: number; insertions?: number; deletions?: number; summary?: string } | undefined;
+    const changedFiles = (result?.changedFiles as string[]) ?? [];
+    const task = (data.task as string) || '';
+
+    if (action === 'approve') {
+      const lines = [`Branch ${branch} merged into main.`];
+      if (stats?.summary) lines.push(stats.summary);
+      if (changedFiles.length > 0) {
+        const fileList = changedFiles.slice(0, 8).join('\n  ');
+        lines.push(`Files:\n  ${fileList}${changedFiles.length > 8 ? `\n  +${changedFiles.length - 8} more` : ''}`);
+      }
+      return lines.join('\n');
+    }
+
+    if (action === 'reject') {
+      return `Discarded branch ${branch} and cleaned up worktree.`;
+    }
+
+    if (action === 'stop') {
+      return `Killed session and cleaned up.\nTask was: ${task.length > 100 ? task.slice(0, 97) + '...' : task}`;
+    }
+
+    if (action === 'resume') {
+      return `New CLI session starting in existing worktree.\nTask: ${task.length > 100 ? task.slice(0, 97) + '...' : task}`;
+    }
+  }
+
+  // General card actions
+  if (action === 'approve') return `Approved: ${card.title}`;
+  if (action === 'reject') return `Rejected: ${card.title}`;
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -632,22 +683,25 @@ async function handleCallbackQuery(
         });
       }
 
-      // Edit the message to show it's been handled
-      const ownerChatId = getOwnerChatId();
-      if (ownerChatId) {
-        try {
-          const emojiMap: Record<string, string> = {
-            approve: '\u{2705}', reject: '\u{274C}', stop: '\u{1F6D1}', resume: '\u{25B6}\u{FE0F}',
-          };
-          const labelMap: Record<string, string> = {
-            approve: 'Approved', reject: 'Rejected', stop: 'Stopped', resume: 'Resumed',
-          };
-          const emoji = emojiMap[action] || '\u{2705}';
-          const label = labelMap[action] || 'Done';
-          await editMessage(ownerChatId, messageId, `${emoji} ${label}: ${card.title}`);
-        } catch {
-          // Best effort — message may be too old
-        }
+      // Edit the button message to show it's been handled (removes buttons)
+      try {
+        const emojiMap: Record<string, string> = {
+          approve: '\u{2705}', reject: '\u{274C}', stop: '\u{1F6D1}', resume: '\u{25B6}\u{FE0F}',
+        };
+        const labelMap: Record<string, string> = {
+          approve: 'Merged', reject: 'Rejected', stop: 'Stopped', resume: 'Resuming...',
+        };
+        const emoji = emojiMap[action] || '\u{2705}';
+        const label = labelMap[action] || 'Done';
+        await editMessage(chatId, messageId, `${emoji} ${label}: ${card.title}`);
+      } catch {
+        // Best effort — message may be too old
+      }
+
+      // Send a detailed follow-up as a reply to the actioned message
+      const followUp = buildActionFollowUp(action, card);
+      if (followUp) {
+        await sendMessage(chatId, followUp, { replyToMessageId: messageId });
       }
     }
   } catch (err) {
