@@ -121,7 +121,7 @@ describe('TriageActionMenu', () => {
       );
 
       fireEvent.click(screen.getByText('Create task'));
-      expect(mockOnAction).toHaveBeenCalledWith('actioned');
+      expect(mockOnAction).toHaveBeenCalledWith('create-task');
     });
 
     it('calls onAction with "flag" when Flag is clicked', () => {
@@ -346,7 +346,7 @@ describe('TriageActionMenu', () => {
       );
 
       fireEvent.keyDown(window, { key: 't' });
-      expect(mockOnAction).toHaveBeenCalledWith('actioned');
+      expect(mockOnAction).toHaveBeenCalledWith('create-task');
     });
 
     it('calls onAction with flag when F is pressed', () => {

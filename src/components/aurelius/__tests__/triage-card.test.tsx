@@ -65,7 +65,12 @@ describe('TriageCard', () => {
     });
 
     it('displays preview when available', () => {
-      render(<TriageCard item={mockItem} />);
+      // Preview only shows when there's no AI summary
+      const itemWithPreviewNoSummary: TriageItem = {
+        ...mockItem,
+        enrichment: { ...mockItem.enrichment!, summary: undefined },
+      };
+      render(<TriageCard item={itemWithPreviewNoSummary} />);
       expect(screen.getByText('This is a preview...')).toBeInTheDocument();
     });
 
@@ -73,6 +78,7 @@ describe('TriageCard', () => {
       const itemWithoutPreview: TriageItem = {
         ...mockItem,
         preview: null,
+        enrichment: null,
       };
       render(<TriageCard item={itemWithoutPreview} />);
       expect(screen.getByText(/This is the test content/)).toBeInTheDocument();
@@ -162,7 +168,7 @@ describe('TriageCard', () => {
 
     it('displays AI summary', () => {
       render(<TriageCard item={mockItem} />);
-      expect(screen.getByText(/"Test summary"/)).toBeInTheDocument();
+      expect(screen.getByText('Test summary')).toBeInTheDocument();
     });
 
     it('displays context from memory when no summary', () => {
@@ -174,7 +180,8 @@ describe('TriageCard', () => {
         },
       };
       render(<TriageCard item={itemWithoutSummary} />);
-      expect(screen.getByText(/"Previous conversation context"/)).toBeInTheDocument();
+      // Memory context is rendered with quotes via template literal
+      expect(screen.getByText(/Previous conversation context/)).toBeInTheDocument();
     });
 
     it('handles missing enrichment gracefully', () => {
@@ -192,7 +199,9 @@ describe('TriageCard', () => {
       render(<TriageCard item={mockItem} isActive={true} />);
 
       expect(screen.getByText('Archive')).toBeInTheDocument();
-      expect(screen.getByText('Memory')).toBeInTheDocument();
+      expect(screen.getByText('Summary')).toBeInTheDocument();
+      expect(screen.getByText('Snooze')).toBeInTheDocument();
+      // Gmail-specific hints
       expect(screen.getByText('Action')).toBeInTheDocument();
       expect(screen.getByText('Reply')).toBeInTheDocument();
     });
@@ -201,7 +210,7 @@ describe('TriageCard', () => {
       render(<TriageCard item={mockItem} isActive={false} />);
 
       expect(screen.queryByText('Archive')).not.toBeInTheDocument();
-      expect(screen.queryByText('Memory')).not.toBeInTheDocument();
+      expect(screen.queryByText('Summary')).not.toBeInTheDocument();
     });
 
     it('defaults to not active', () => {
