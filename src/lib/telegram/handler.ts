@@ -37,6 +37,7 @@ import {
   telegramToSession,
   getSessionKeyboard,
   formatSessionTelegram,
+  finalizeZombieSession,
 } from '@/lib/action-cards/handlers/code';
 
 // Register all card handlers so dispatchCardAction can find them
@@ -425,9 +426,12 @@ or that cards aren't available — they will be sent automatically.`;
       await sendMessage(chatId, text, { replyMarkup: keyboard });
     }
 
-    // Auto-send pending items with buttons when the AI checked sessions/status
-    // This ensures the user always gets interactive cards, not just text descriptions
-    if (toolsUsed.has('check_coding_sessions')) {
+    // Auto-send pending items with buttons when relevant:
+    // 1. AI explicitly called check_coding_sessions tool
+    // 2. User's message mentions approval/session/status keywords
+    // Belt-and-suspenders: even if AI doesn't call the right tool, keywords trigger it
+    const sessionKeywords = /\b(approv|reject|pending|session|status|merge|code.?review|check.?session|what.?s.*running)\b/i;
+    if (toolsUsed.has('check_coding_sessions') || sessionKeywords.test(userText)) {
       await sendPendingCardsWithButtons(chatId);
     }
   } catch (error) {
@@ -487,9 +491,23 @@ async function sendPendingCardsWithButtons(chatId: number): Promise<void> {
       const sessionId = data.sessionId as string;
 
       const liveSession = sessionId ? liveSessionMap.get(sessionId) : null;
-      const effectiveState = liveSession
-        ? (liveSession.state === 'waiting_for_input' ? 'waiting' : 'running')
-        : state;
+
+      // Detect zombie: card says running/waiting but no active process
+      const isZombie = !liveSession && (state === 'running' || state === 'waiting');
+      let effectiveState: string;
+
+      if (liveSession) {
+        effectiveState = liveSession.state === 'waiting_for_input' ? 'waiting' : 'running';
+      } else if (isZombie) {
+        // Auto-finalize: check worktree for work done, mark as completed
+        const finalized = await finalizeZombieSession(card.id);
+        effectiveState = finalized; // 'completed' or 'error'
+      } else {
+        effectiveState = state;
+      }
+
+      // Skip error-state sessions entirely
+      if (effectiveState === 'error') continue;
 
       const text = `#${num} ` + formatSessionTelegram(
         effectiveState as 'running' | 'waiting' | 'completed' | 'error',
@@ -602,20 +620,30 @@ async function handleCallbackQuery(
         stop: 'Session stopped',
         approve: result.successMessage || 'Approved!',
         reject: result.successMessage || 'Rejected',
+        resume: 'Session resumed',
       };
       await answerCallbackQuery(callbackQueryId, { text: labels[action] || 'Done' });
 
-      await updateCard(cardId, {
-        status: result.status === 'needs_confirmation' ? 'pending' : result.status,
-        ...(result.result && { result: result.result }),
-      });
+      // Don't change card status for resume (session handler manages it)
+      if (action !== 'resume') {
+        await updateCard(cardId, {
+          status: result.status === 'needs_confirmation' ? 'pending' : result.status,
+          ...(result.result && { result: result.result }),
+        });
+      }
 
       // Edit the message to show it's been handled
       const ownerChatId = getOwnerChatId();
       if (ownerChatId) {
         try {
-          const emoji = action === 'approve' ? '\u{2705}' : '\u{274C}';
-          const label = action === 'approve' ? 'Approved' : 'Rejected';
+          const emojiMap: Record<string, string> = {
+            approve: '\u{2705}', reject: '\u{274C}', stop: '\u{1F6D1}', resume: '\u{25B6}\u{FE0F}',
+          };
+          const labelMap: Record<string, string> = {
+            approve: 'Approved', reject: 'Rejected', stop: 'Stopped', resume: 'Resumed',
+          };
+          const emoji = emojiMap[action] || '\u{2705}';
+          const label = labelMap[action] || 'Done';
           await editMessage(ownerChatId, messageId, `${emoji} ${label}: ${card.title}`);
         } catch {
           // Best effort — message may be too old

@@ -23,6 +23,10 @@ You can also check on coding session status using check_coding_sessions. Use thi
 - The user asks about running or recent sessions
 - You need to report on session progress or results
 - The user asks "what's the coding agent doing?"
+- The user wants to approve, reject, or review code changes
+- The user asks about pending actions or approvals
+- The user says anything about merging, reviewing, or managing sessions
+In Telegram, calling this tool automatically surfaces interactive cards with buttons.
 
 ## When to start a session
 
@@ -79,7 +83,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'check_coding_sessions',
     description:
-      'Check the status of active and recent coding sessions. Returns active session states, recent session results, and optionally the tail of a session log.',
+      'Check the status of coding sessions and surface pending approvals. Use this when the user asks about sessions, wants to approve/reject code, check status, see what\'s pending, or interact with any coding session. In Telegram, calling this tool automatically sends interactive cards with approve/reject/resume buttons.',
     parameters: {
       type: 'object',
       properties: {

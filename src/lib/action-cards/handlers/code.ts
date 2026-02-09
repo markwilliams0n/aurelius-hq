@@ -6,6 +6,7 @@ import {
   getWorktreeStats,
   getChangedFiles,
   getWorktreeLog,
+  worktreeExists,
 } from "@/lib/capabilities/code/worktree";
 import { startSession, type ActiveSession } from "@/lib/capabilities/code/executor";
 import { buildCodePrompt } from "@/lib/capabilities/code/prompts";
@@ -78,6 +79,7 @@ export function getSessionKeyboard(
       ] };
     case 'completed':
       return { inline_keyboard: [
+        [{ text: '\u{25B6}\u{FE0F} Resume', callback_data: `code:resume:${cardId}` }],
         [
           { text: '\u{2705} Approve & Merge', callback_data: `code:approve:${cardId}` },
           { text: '\u{274C} Reject', callback_data: `code:reject:${cardId}` },
@@ -543,3 +545,200 @@ registerCardHandler("code:stop", {
     return { status: "confirmed" };
   },
 });
+
+// ---------------------------------------------------------------------------
+// code:resume — Restart a CLI session in an existing worktree
+// ---------------------------------------------------------------------------
+
+registerCardHandler("code:resume", {
+  label: "Resume Session",
+  successMessage: "Session resumed",
+
+  async execute(data) {
+    const sessionId = data.sessionId as string;
+    const task = data.task as string;
+    const context = data.context as string | undefined;
+    const branchName = data.branchName as string;
+    const worktreePath = data.worktreePath as string;
+    const cardId = data._cardId as string | undefined;
+
+    if (!sessionId || !task || !worktreePath) {
+      return { status: "error", error: "Missing required fields for resume" };
+    }
+
+    if (!worktreeExists(sessionId)) {
+      return { status: "error", error: "Worktree no longer exists on disk" };
+    }
+
+    // Reserve session slot
+    const placeholder = {
+      pid: 0,
+      kill: () => {},
+      process: null as unknown,
+      state: 'running' as const,
+      sendMessage: () => {},
+      closeInput: () => {},
+    } as ActiveSession;
+    activeSessions.set(sessionId, placeholder);
+
+    let totalTurns = (data.totalTurns as number) || 0;
+    let totalCostUsd = (data.totalCostUsd as number) ?? null;
+
+    let session: ActiveSession;
+    try {
+      const resumeContext = [
+        'RESUME: This session is being resumed from a previous run.',
+        'The worktree already has work in progress.',
+        'Check `git log --oneline main..HEAD` and `git status` to see what was done.',
+        'Continue from where you left off.',
+        context || '',
+      ].filter(Boolean).join('\n');
+
+      const systemPrompt = buildCodePrompt(task, resumeContext);
+
+      session = startSession({
+        sessionId,
+        systemPrompt,
+        task: `Continue working on: ${task}\n\nThis is a resumed session. Check git log and git status to see what was already done, then continue.`,
+        worktreePath,
+
+        onProgress(event) {
+          console.log(`[code-session:${sessionId}] ${event.type}`, event.text ?? event.tool ?? "");
+        },
+
+        async onResult(result) {
+          totalTurns = result.turns;
+          if (result.costUsd !== null) totalCostUsd = result.costUsd;
+
+          if (cardId) {
+            try {
+              const currentCard = await getCard(cardId);
+              if (currentCard?.status === "confirmed") {
+                await updateCard(cardId, {
+                  data: {
+                    ...data,
+                    worktreePath,
+                    state: 'waiting',
+                    lastMessage: result.text,
+                    totalTurns,
+                    totalCostUsd,
+                  },
+                });
+              }
+            } catch (err) {
+              console.error(`[code-session:${sessionId}] Failed to update card:`, err);
+            }
+          }
+
+          updateSessionTelegram(
+            sessionId,
+            formatSessionTelegram('waiting', task, totalTurns, totalCostUsd, {
+              lastMessage: result.text,
+            }),
+            cardId ? getSessionKeyboard('waiting', cardId) : undefined,
+          );
+        },
+
+        async onError(error) {
+          activeSessions.delete(sessionId);
+          // DON'T clean up worktree — it may have partial work worth keeping
+
+          if (cardId) {
+            try {
+              await updateCard(cardId, {
+                data: { ...data, state: 'error' },
+                result: { error: error.message },
+              });
+            } catch (err) {
+              console.error(`[code-session:${sessionId}] Failed to update card on error:`, err);
+            }
+          }
+
+          updateSessionTelegram(
+            sessionId,
+            formatSessionTelegram('error', task, totalTurns, totalCostUsd, { error: error.message }),
+          );
+        },
+      });
+    } catch (err) {
+      activeSessions.delete(sessionId);
+      const msg = err instanceof Error ? err.message : String(err);
+      return { status: "error", error: `Failed to resume session: ${msg}` };
+    }
+
+    activeSessions.set(sessionId, session);
+
+    session.process.on('exit', () => {
+      if (session.state === 'completed' || session.state === 'waiting_for_input') {
+        finalizeSession(sessionId, cardId, data, worktreePath, totalTurns, totalCostUsd);
+      }
+    });
+
+    if (cardId) {
+      await updateCard(cardId, {
+        data: {
+          ...data,
+          worktreePath,
+          state: 'running',
+          totalTurns,
+          totalCostUsd,
+        },
+      });
+    }
+
+    updateSessionTelegram(
+      sessionId,
+      formatSessionTelegram('running', task, totalTurns, totalCostUsd),
+      cardId ? getSessionKeyboard('running', cardId) : undefined,
+    );
+
+    return { status: "confirmed" };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Zombie detection — auto-finalize sessions whose process died
+// ---------------------------------------------------------------------------
+
+/**
+ * Check if a code session card is a "zombie" — card says running/waiting
+ * but there's no active process. If the worktree still exists, auto-finalize
+ * it to "completed" state so the user can approve/reject.
+ *
+ * Returns the effective state after finalization.
+ */
+export async function finalizeZombieSession(cardId: string): Promise<'completed' | 'error'> {
+  const card = await getCard(cardId);
+  if (!card) return 'error';
+
+  const data = card.data as Record<string, unknown>;
+  const wtPath = data.worktreePath as string;
+  const sessionId = data.sessionId as string;
+
+  if (!wtPath || !worktreeExists(sessionId)) return 'error';
+
+  try {
+    const stats = getWorktreeStats(wtPath);
+    const changedFiles = getChangedFiles(wtPath);
+    const log = getWorktreeLog(wtPath);
+
+    await updateCard(cardId, {
+      data: {
+        ...data,
+        state: 'completed',
+        result: {
+          sessionId,
+          turns: data.totalTurns || 0,
+          costUsd: data.totalCostUsd ?? null,
+          stats,
+          changedFiles,
+          log,
+        },
+      },
+    });
+
+    return 'completed';
+  } catch {
+    return 'error';
+  }
+}
