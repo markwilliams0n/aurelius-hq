@@ -6,6 +6,16 @@
 
 **2026-02-09**
 
+Gmail sync & triage reliability fixes (feature/follow-up-enhancement → main, PR #21, PER-229):
+- Gmail archive/spam now uses `threads.modify` (was per-message, didn't work for multi-message threads)
+- Retroactive cleanup: archived 23 stale Gmail threads stuck in inbox
+- Dedup prevention: unique index on (connector, external_id) + onConflictDoNothing
+- All triage API calls use `dbId` (was using remapped `externalId`, causing 404s)
+- Batch card checked state re-syncs on item changes (stale-while-revalidate fix)
+- `handleActionNeeded` awaits API before removing from state (race condition fix)
+- `reclassifyNullBatchItems` respects user "remove from group" decisions
+- 261 tests pass, TypeScript clean
+
 Smart triage classification & batch actions (feature/triage-enhancements → main, PR #20, PER-219):
 - 3-pass classification pipeline: rules → Ollama → Kimi (cloud LLM via OpenRouter)
 - Batch card UI with domain groups (notifications, finance, newsletters, calendar, spam)
@@ -50,7 +60,8 @@ Nothing active — clean slate.
 
 ## Up Next
 
-- [ ] **Test triage pipeline end-to-end** — verify batch groups form correctly, rules apply, Gmail syncs
+- [x] **Test triage pipeline end-to-end** — Gmail sync verified working, batch groups forming, rules applying
+- [ ] **Investigate 15 remaining skipped Gmail threads** — items archived in triage but still in Gmail inbox
 - [ ] **Test aurelius-can-code end-to-end** — manual smoke test with real coding task
 - [ ] **Test vault end-to-end** (PER-200) — manual testing of all vault functionality
 - [ ] **Phase 2: Telegram control plane** — inline keyboards, callback queries, reply-to-session
@@ -60,6 +71,7 @@ Nothing active — clean slate.
 
 - Gmail: `GMAIL_ENABLE_SEND=true` required to send (drafts by default)
 - Gmail: Service Account needs domain-wide delegation setup
+- OpenRouter credits low — learning step failing (needs top-up)
 - Memory: 3 edge cases in entity resolution tests (12.5% fail rate)
 
 ---
