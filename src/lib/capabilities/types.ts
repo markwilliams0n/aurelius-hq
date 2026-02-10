@@ -20,6 +20,13 @@ export interface ToolDefinition {
 export interface ToolResult {
   result: string;
   pendingChangeId?: string;
+  /** If the tool wants to show an action card in the UI, return it here */
+  actionCard?: {
+    pattern: string;
+    title: string;
+    data: Record<string, unknown>;
+    handler?: string;
+  };
 }
 
 export interface Capability {
