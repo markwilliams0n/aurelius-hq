@@ -1,13 +1,28 @@
-import { syncGranolaMeetings, type GranolaSyncResult } from '@/lib/granola';
-import { syncGmailMessages, type GmailSyncResult } from '@/lib/gmail';
-import { syncLinearNotifications, type LinearSyncResult } from '@/lib/linear';
-import { syncSlackMessages, type SlackSyncResult, startSocketMode, isSocketConfigured } from '@/lib/slack';
-import { syncSlackDirectory } from '@/lib/slack/directory';
-import { createBackup, type BackupResult } from './backup';
-import { logConnectorSync } from '@/lib/system-events';
+/**
+ * Heartbeat Orchestrator
+ *
+ * Composes focused jobs (connector sync, classification, daily maintenance)
+ * into the full heartbeat pipeline. Preserves the original HeartbeatResult
+ * shape so callers (scheduler, API route) don't need changes.
+ *
+ * Run order:
+ * 1. Daily maintenance (backup + learning)
+ * 2. Connector syncs (Granola, Gmail, Linear, Slack)
+ * 3. Classification (rule -> Ollama -> Kimi)
+ */
+
+import type { GranolaSyncResult } from '@/lib/granola';
+import type { GmailSyncResult } from '@/lib/gmail';
+import type { LinearSyncResult } from '@/lib/linear';
+import type { SlackSyncResult } from '@/lib/slack';
+import type { BackupResult } from './backup';
+import type { DailyLearningResult } from '@/lib/triage/daily-learning';
+import { syncAllConnectors } from '@/lib/connectors/sync-all';
+import { runDailyMaintenance } from '@/lib/jobs/daily-maintenance';
 import { classifyNewItems } from '@/lib/triage/classify';
-import { runDailyLearning, type DailyLearningResult } from '@/lib/triage/daily-learning';
 import { seedDefaultRules } from '@/lib/triage/rules';
+
+// --- Public type exports (preserved for callers) ---
 
 export type HeartbeatStep = 'backup' | 'granola' | 'gmail' | 'linear' | 'slack' | 'classify' | 'learning';
 export type HeartbeatStepStatus = 'start' | 'done' | 'skip' | 'error';
@@ -61,14 +76,6 @@ export interface HeartbeatResult {
   warnings: string[];
 }
 
-// Track when daily learning last ran (module-level, resets on server restart)
-let lastLearningRunDate: string | null = null;
-
-function getTodayDateString(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-}
-
 /**
  * Run the heartbeat process:
  * 1. Daily backup (once per day, keeps last 7)
@@ -76,10 +83,10 @@ function getTodayDateString(): string {
  * 3. Sync Gmail messages
  * 4. Sync Linear notifications
  * 5. Sync Slack messages
- * 6. Classify new inbox items (rule → Ollama → Kimi)
- * 7. Daily learning loop (once per day — analyze triage patterns, suggest rules)
+ * 6. Classify new inbox items (rule -> Ollama -> Kimi)
+ * 7. Daily learning loop (once per day -- analyze triage patterns, suggest rules)
  *
- * Memory extraction is handled by Supermemory — content is sent to Supermemory
+ * Memory extraction is handled by Supermemory -- content is sent to Supermemory
  * at the point of creation (chat messages, triage saves) rather than in heartbeat.
  *
  * Each step is isolated - failures in one step don't prevent others from running.
@@ -90,180 +97,43 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
 
   const warnings: string[] = [];
   const steps: HeartbeatResult['steps'] = {};
-
   const progress = options.onProgress;
 
-  // Step 1: Daily backup (runs once per day, keeps last 7)
-  let backupResult: BackupResult | undefined;
-  if (!options.skipBackup) {
-    progress?.('backup', 'start');
-    const backupStart = Date.now();
-    try {
-      backupResult = await createBackup();
-      if (backupResult.skipped) {
-        console.log(`[Heartbeat] Backup skipped (${backupResult.reason})`);
-        progress?.('backup', 'skip', backupResult.reason);
-      } else if (backupResult.success) {
-        console.log(`[Heartbeat] Backup created: ${backupResult.backupPath}`);
-        progress?.('backup', 'done');
-      }
-      steps.backup = {
-        success: backupResult.success,
-        durationMs: Date.now() - backupStart,
-        error: backupResult.error,
-      };
-    } catch (error) {
-      const errMsg = error instanceof Error ? error.message : String(error);
-      console.error('[Heartbeat] Backup failed:', errMsg);
-      warnings.push(`Backup failed: ${errMsg}`);
-      progress?.('backup', 'error', errMsg);
-      steps.backup = {
-        success: false,
-        durationMs: Date.now() - backupStart,
-        error: errMsg,
-      };
-    }
-  }
+  // --- 1. Daily maintenance (backup + learning) ---
+  const maintenance = await runDailyMaintenance({
+    skipBackup: options.skipBackup,
+    skipLearning: options.skipLearning,
+    onProgress: progress as ((step: string, status: string, detail?: string) => void) | undefined,
+  });
 
-  // Step 2: Sync Granola meetings to triage
-  let granolaResult: GranolaSyncResult | undefined;
-  if (!options.skipGranola) {
-    progress?.('granola', 'start');
-    const granolaStart = Date.now();
-    try {
-      granolaResult = await syncGranolaMeetings();
-      if (granolaResult.synced > 0) {
-        console.log(`[Heartbeat] Granola: synced ${granolaResult.synced} meetings`);
-        logConnectorSync('granola', granolaResult.synced);
-      }
-      steps.granola = {
-        success: true,
-        durationMs: Date.now() - granolaStart,
-      };
-      progress?.('granola', 'done', granolaResult.synced > 0 ? `${granolaResult.synced} meetings` : undefined);
-    } catch (error) {
-      const errMsg = error instanceof Error ? error.message : String(error);
-      console.error('[Heartbeat] Granola sync failed:', errMsg);
-      warnings.push(`Granola sync failed: ${errMsg}`);
-      progress?.('granola', 'error', errMsg);
-      steps.granola = {
-        success: false,
-        durationMs: Date.now() - granolaStart,
-        error: errMsg,
-      };
-    }
-  }
+  if (maintenance.steps.backup) steps.backup = maintenance.steps.backup;
+  if (maintenance.steps.learning) steps.learning = maintenance.steps.learning;
+  warnings.push(...maintenance.warnings);
 
-  // Step 3: Sync Gmail messages to triage
-  let gmailResult: GmailSyncResult | undefined;
-  if (!options.skipGmail) {
-    progress?.('gmail', 'start');
-    const gmailStart = Date.now();
-    try {
-      gmailResult = await syncGmailMessages();
-      if (gmailResult.synced > 0) {
-        console.log(`[Heartbeat] Gmail: synced ${gmailResult.synced} emails`);
-        logConnectorSync('gmail', gmailResult.synced);
-      }
-      steps.gmail = {
-        success: true,
-        durationMs: Date.now() - gmailStart,
-      };
-      const gmailDetail = [
-        gmailResult.synced > 0 ? `${gmailResult.synced} synced` : null,
-        gmailResult.archived > 0 ? `${gmailResult.archived} archived` : null,
-      ].filter(Boolean).join(', ');
-      progress?.('gmail', 'done', gmailDetail || undefined);
-    } catch (error) {
-      const errMsg = error instanceof Error ? error.message : String(error);
-      console.error('[Heartbeat] Gmail sync failed:', errMsg);
-      warnings.push(`Gmail sync failed: ${errMsg}`);
-      progress?.('gmail', 'error', errMsg);
-      steps.gmail = {
-        success: false,
-        durationMs: Date.now() - gmailStart,
-        error: errMsg,
-      };
-    }
-  }
+  // --- 2. Connector syncs ---
+  const skipConnectors: string[] = [];
+  if (options.skipGranola) skipConnectors.push('granola');
+  if (options.skipGmail) skipConnectors.push('gmail');
+  if (options.skipLinear) skipConnectors.push('linear');
+  if (options.skipSlack) skipConnectors.push('slack');
 
-  // Step 4: Sync Linear notifications to triage
-  let linearResult: LinearSyncResult | undefined;
-  if (!options.skipLinear) {
-    progress?.('linear', 'start');
-    const linearStart = Date.now();
-    try {
-      linearResult = await syncLinearNotifications();
-      if (linearResult.synced > 0) {
-        console.log(`[Heartbeat] Linear: synced ${linearResult.synced} notifications`);
-        logConnectorSync('linear', linearResult.synced);
-      }
-      steps.linear = {
-        success: !linearResult.error,
-        durationMs: Date.now() - linearStart,
-        error: linearResult.error,
-      };
-      progress?.('linear', linearResult.error ? 'error' : 'done', linearResult.synced > 0 ? `${linearResult.synced} notifications` : undefined);
-    } catch (error) {
-      const errMsg = error instanceof Error ? error.message : String(error);
-      console.error('[Heartbeat] Linear sync failed:', errMsg);
-      warnings.push(`Linear sync failed: ${errMsg}`);
-      progress?.('linear', 'error', errMsg);
-      steps.linear = {
-        success: false,
-        durationMs: Date.now() - linearStart,
-        error: errMsg,
-      };
-    }
-  }
+  const sync = await syncAllConnectors({
+    skip: skipConnectors,
+    onProgress: progress,
+  });
 
-  // Step 5: Ensure Slack Socket Mode is connected
-  let slackResult: SlackSyncResult | undefined;
-  if (!options.skipSlack) {
-    progress?.('slack', 'start');
-    const slackStart = Date.now();
-    try {
-      if (isSocketConfigured()) {
-        await startSocketMode();
-        console.log('[Heartbeat] Slack Socket Mode connected');
-        // Refresh workspace directory cache (skips if <24h old)
-        try {
-          await syncSlackDirectory();
-        } catch (dirErr) {
-          console.warn('[Heartbeat] Slack directory sync failed:', dirErr);
-        }
-        steps.slack = {
-          success: true,
-          durationMs: Date.now() - slackStart,
-        };
-        progress?.('slack', 'done', 'Socket Mode connected');
-      } else {
-        slackResult = await syncSlackMessages();
-        if (slackResult.synced > 0) {
-          console.log(`[Heartbeat] Slack: synced ${slackResult.synced} messages`);
-          logConnectorSync('slack', slackResult.synced);
-        }
-        steps.slack = {
-          success: !slackResult.error,
-          durationMs: Date.now() - slackStart,
-          error: slackResult.error,
-        };
-        progress?.('slack', slackResult.error ? 'error' : 'done', slackResult.synced > 0 ? `${slackResult.synced} messages` : undefined);
-      }
-    } catch (error) {
-      const errMsg = error instanceof Error ? error.message : String(error);
-      console.error('[Heartbeat] Slack setup failed:', errMsg);
-      warnings.push(`Slack setup failed: ${errMsg}`);
-      progress?.('slack', 'error', errMsg);
-      steps.slack = {
-        success: false,
-        durationMs: Date.now() - slackStart,
-        error: errMsg,
-      };
-    }
+  // Map connector step results into the heartbeat steps shape
+  for (const r of sync.results) {
+    const key = r.connector as keyof typeof steps;
+    steps[key] = {
+      success: r.success,
+      durationMs: r.durationMs,
+      error: r.error,
+    };
   }
+  warnings.push(...sync.warnings);
 
-  // Step 6: Classify new inbox items (rule → Ollama → Kimi pipeline)
+  // --- 3. Classification ---
   if (!options.skipClassify) {
     progress?.('classify', 'start');
     const classifyStart = Date.now();
@@ -296,48 +166,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
     }
   }
 
-  // Step 7: Daily learning loop (once per day — analyze triage patterns, suggest rules)
-  let learningResult: DailyLearningResult | undefined;
-  if (!options.skipLearning) {
-    const today = getTodayDateString();
-    if (lastLearningRunDate === today) {
-      progress?.('learning', 'skip', 'Already ran today');
-      console.log('[Heartbeat] Learning skipped (already ran today)');
-      steps.learning = { success: true, durationMs: 0 };
-    } else {
-      progress?.('learning', 'start');
-      const learningStart = Date.now();
-      try {
-        learningResult = await runDailyLearning();
-        lastLearningRunDate = today;
-        if (learningResult.suggestions > 0) {
-          console.log(
-            `[Heartbeat] Learning: ${learningResult.suggestions} suggestion(s), card: ${learningResult.cardId}`
-          );
-        } else {
-          console.log('[Heartbeat] Learning: no patterns found');
-        }
-        steps.learning = {
-          success: true,
-          durationMs: Date.now() - learningStart,
-        };
-        progress?.('learning', 'done', learningResult.suggestions > 0
-          ? `${learningResult.suggestions} suggestion(s)`
-          : undefined);
-      } catch (error) {
-        const errMsg = error instanceof Error ? error.message : String(error);
-        console.error('[Heartbeat] Learning failed:', errMsg);
-        warnings.push(`Learning failed: ${errMsg}`);
-        progress?.('learning', 'error', errMsg);
-        steps.learning = {
-          success: false,
-          durationMs: Date.now() - learningStart,
-          error: errMsg,
-        };
-      }
-    }
-  }
-
+  // --- Finalize ---
   const totalDuration = Date.now() - overallStart;
   const allStepsSucceeded = Object.values(steps).every(s => s?.success ?? true);
 
@@ -347,12 +176,12 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
   );
 
   return {
-    granola: granolaResult,
-    gmail: gmailResult,
-    linear: linearResult,
-    slack: slackResult,
-    backup: backupResult,
-    learning: learningResult,
+    granola: sync.connectorResults.granola,
+    gmail: sync.connectorResults.gmail,
+    linear: sync.connectorResults.linear,
+    slack: sync.connectorResults.slack,
+    backup: maintenance.backup,
+    learning: maintenance.learning,
     steps,
     allStepsSucceeded,
     warnings,
