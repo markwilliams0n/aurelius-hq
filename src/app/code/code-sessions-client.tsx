@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Code, RefreshCw, Loader2, Terminal, Plus, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ActionCardData } from "@/lib/types/action-card";
+import { timeAgo } from "@/lib/code/state";
 import { cn } from "@/lib/utils";
 
 type SessionGroup = "active" | "completed" | "failed";
@@ -21,26 +22,6 @@ function classifyCard(card: ActionCardData): SessionGroup {
   }
   // pending = waiting for user to start
   return "active";
-}
-
-function formatDuration(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const rem = seconds % 60;
-  return `${minutes}m ${rem}s`;
-}
-
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  if (diff < 0) return "just now";
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
 }
 
 const GROUP_META: Record<SessionGroup, { label: string; dotClass: string }> = {
