@@ -57,7 +57,6 @@ export async function POST(request: NextRequest) {
 
   // Create streaming response
   let fullResponse = "";
-  let pendingChangeId: string | null = null;
 
   // Generate stable IDs for this exchange (used to associate cards with messages)
   const userMessageId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -71,7 +70,7 @@ export async function POST(request: NextRequest) {
           sseEncode({ type: "assistant_message_id", id: assistantMessageId })
         );
 
-        // Stream the response
+        // Stream the response — forward events to SSE, intercept where needed
         for await (const event of chatStreamWithTools(
           aiMessages,
           systemPrompt,
@@ -79,22 +78,12 @@ export async function POST(request: NextRequest) {
         )) {
           if (event.type === "text") {
             fullResponse += event.content;
-            controller.enqueue(
-              sseEncode({ type: "text", content: event.content })
-            );
-          } else if (event.type === "tool_use") {
-            controller.enqueue(
-              sseEncode({ type: "tool_use", toolName: event.toolName, toolInput: event.toolInput })
-            );
-          } else if (event.type === "tool_result") {
-            controller.enqueue(
-              sseEncode({ type: "tool_result", toolName: event.toolName, result: event.result })
-            );
+            controller.enqueue(sseEncode(event));
           } else if (event.type === "action_card") {
+            // Persist action card to DB before forwarding to client
             const ac = event.card;
-            const cardId = generateCardId();
             const card = await createCard({
-              id: cardId,
+              id: generateCardId(),
               messageId: assistantMessageId,
               conversationId: conversationId || undefined,
               pattern: (ac.pattern || "approval") as CardPattern,
@@ -103,14 +92,10 @@ export async function POST(request: NextRequest) {
               data: ac.data || {},
               handler: ac.handler || null,
             });
-            controller.enqueue(
-              sseEncode({ type: "action_card", card })
-            );
-          } else if (event.type === "pending_change") {
-            pendingChangeId = event.changeId;
-            controller.enqueue(
-              sseEncode({ type: "pending_change", changeId: event.changeId })
-            );
+            controller.enqueue(sseEncode({ type: "action_card", card }));
+          } else {
+            // tool_use, tool_result, pending_change — forward as-is
+            controller.enqueue(sseEncode(event));
           }
         }
 
