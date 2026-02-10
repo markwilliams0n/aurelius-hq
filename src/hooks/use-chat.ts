@@ -158,15 +158,6 @@ export function useChat(options: UseChatOptions) {
           (data.toolName as string) || "unknown",
           data.result as string
         );
-        // Check for action cards in tool results
-        try {
-          const parsed = JSON.parse(data.result as string);
-          if (parsed.action_card) {
-            // Card will arrive as its own event from the server
-          }
-        } catch {
-          // Not JSON — fine
-        }
         break;
 
       case "pending_change":

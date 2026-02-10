@@ -366,25 +366,18 @@ CRITICAL — Telegram has FULL interactive capability:
         fullResponse += event.content;
       } else if (event.type === 'tool_use') {
         toolsUsed.add(event.toolName);
-      } else if (event.type === 'tool_result') {
-        try {
-          const parsed = JSON.parse(event.result);
-          if (parsed.action_card) {
-            const ac = parsed.action_card;
-            const card = await createCard({
-              id: generateCardId(),
-              conversationId,
-              pattern: (ac.pattern || 'approval') as CardPattern,
-              status: 'pending',
-              title: ac.title || 'Action',
-              data: ac.data || {},
-              handler: ac.handler || null,
-            });
-            collectedCards.push(card);
-          }
-        } catch {
-          // Not JSON or no action_card — that's fine
-        }
+      } else if (event.type === 'action_card') {
+        const ac = event.card;
+        const card = await createCard({
+          id: generateCardId(),
+          conversationId,
+          pattern: (ac.pattern || 'approval') as CardPattern,
+          status: 'pending',
+          title: ac.title || 'Action',
+          data: ac.data || {},
+          handler: ac.handler || null,
+        });
+        collectedCards.push(card);
       }
     }
 

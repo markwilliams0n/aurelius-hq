@@ -109,29 +109,22 @@ export async function POST(request: NextRequest) {
             controller.enqueue(
               sseEncode({ type: "tool_result", toolName: event.toolName, result: event.result })
             );
-            // Check if tool result contains an action card — persist to DB and emit
-            try {
-              const parsed = JSON.parse(event.result);
-              if (parsed.action_card) {
-                const cardId = generateCardId();
-                const ac = parsed.action_card;
-                const card = await createCard({
-                  id: cardId,
-                  messageId: assistantMessageId,
-                  conversationId: conversationId || undefined,
-                  pattern: (ac.pattern || "approval") as CardPattern,
-                  status: "pending",
-                  title: ac.title || "Action",
-                  data: ac.data || {},
-                  handler: ac.handler || null,
-                });
-                controller.enqueue(
-                  sseEncode({ type: "action_card", card })
-                );
-              }
-            } catch {
-              // Not JSON or no action_card — that's fine
-            }
+          } else if (event.type === "action_card") {
+            const ac = event.card;
+            const cardId = generateCardId();
+            const card = await createCard({
+              id: cardId,
+              messageId: assistantMessageId,
+              conversationId: conversationId || undefined,
+              pattern: (ac.pattern || "approval") as CardPattern,
+              status: "pending",
+              title: ac.title || "Action",
+              data: ac.data || {},
+              handler: ac.handler || null,
+            });
+            controller.enqueue(
+              sseEncode({ type: "action_card", card })
+            );
           } else if (event.type === "pending_change") {
             pendingChangeId = event.changeId;
             controller.enqueue(
