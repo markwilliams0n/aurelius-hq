@@ -4,6 +4,23 @@
 
 ## Just Completed
 
+**2026-02-10**
+
+Telegram coding session fixes (PER-234):
+- New messages (not silent edits) for waiting state — user actually gets notified
+- Reply hint always shows, Finish button added to waiting keyboard
+- lastMessage fallback for tool-only turns, Telegram replies sync card state
+
+Web browser capability (PER-235):
+- 6 tools: web_open, web_snapshot, web_get_text, web_click, web_fill, web_screenshot
+- Wraps `agent-browser` CLI with per-conversation sessions
+- Code agent also gets `Bash(npx agent-browser:*)` access
+- DB migration: `capability:browser` config key
+
+Cleanup:
+- Removed 2 stale worktrees + 2 orphaned branches (already merged code agent work)
+- Deleted 11 old coding session cards from DB
+
 **2026-02-09**
 
 Code agent refactor (feature/refactor-code-agent → main, PR #24, PER-233):
@@ -26,11 +43,9 @@ Nothing active — clean slate.
 ## Up Next
 
 - [ ] **Investigate 15 remaining skipped Gmail threads** — items archived in triage but still in Gmail inbox
-- [ ] **Test aurelius-can-code end-to-end** — manual smoke test with real coding task
+- [ ] **Test coding sessions end-to-end** — verify Telegram notification flow with the fixes
 - [ ] **Test vault end-to-end** (PER-200) — manual testing of all vault functionality
-- [ ] **Phase 2: Telegram control plane** — inline keyboards, callback queries, reply-to-session
 - [ ] **Phase 3: Memory integration** — Supermemory summaries on start/complete/approve
-- [ ] **Linear: move PER-233 to Done** — auth expired, needs `/trg-linear:setup`
 
 ## Known Issues (Documented)
 
