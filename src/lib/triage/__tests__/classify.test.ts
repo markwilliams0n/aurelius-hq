@@ -73,6 +73,7 @@ function makeRule(overrides: Partial<TriageRule> = {}): TriageRule {
     guidance: null,
     status: "active",
     source: "user_chat",
+    order: 0,
     version: 1,
     createdBy: "user",
     matchCount: 0,
@@ -97,13 +98,13 @@ describe("classifyItem", () => {
 
     vi.mocked(matchRule).mockReturnValue(true);
 
-    const result = await classifyItem(item, [rule]);
+    const { classification } = await classifyItem(item, [rule]);
 
-    expect(result.tier).toBe("rule");
-    expect(result.confidence).toBe(1.0);
-    expect(result.batchType).toBe("archive");
-    expect(result.ruleId).toBe("rule-1");
-    expect(result.reason).toContain("Archive Alice");
+    expect(classification.tier).toBe("rule");
+    expect(classification.confidence).toBe(1.0);
+    expect(classification.batchType).toBe("archive");
+    expect(classification.ruleId).toBe("rule-1");
+    expect(classification.reason).toContain("Archive Alice");
   });
 
   it("falls through to Ollama when no rule matches", async () => {
@@ -117,11 +118,11 @@ describe("classifyItem", () => {
       reason: "FYI update from colleague",
     });
 
-    const result = await classifyItem(item, [rule]);
+    const { classification } = await classifyItem(item, [rule]);
 
-    expect(result.tier).toBe("ollama");
-    expect(result.confidence).toBe(0.85);
-    expect(result.batchType).toBe("note-archive");
+    expect(classification.tier).toBe("ollama");
+    expect(classification.confidence).toBe(0.85);
+    expect(classification.batchType).toBe("note-archive");
     expect(classifyWithOllama).toHaveBeenCalledOnce();
   });
 
@@ -135,9 +136,11 @@ describe("classifyItem", () => {
       reason: "Uncertain classification",
     });
     vi.mocked(classifyWithKimi).mockResolvedValue({
-      batchType: "attention",
-      confidence: 0.9,
-      reason: "Contains action items",
+      classification: {
+        batchType: "attention",
+        confidence: 0.9,
+        reason: "Contains action items",
+      },
       enrichment: {
         summary: "Request for review",
         suggestedPriority: "high",
@@ -145,13 +148,13 @@ describe("classifyItem", () => {
       },
     });
 
-    const result = await classifyItem(item, []);
+    const { classification, enrichment } = await classifyItem(item, []);
 
-    expect(result.tier).toBe("kimi");
-    expect(result.confidence).toBe(0.9);
-    expect(result.batchType).toBe("attention");
-    expect(result.enrichment).toBeDefined();
-    expect(result.enrichment?.summary).toBe("Request for review");
+    expect(classification.tier).toBe("kimi");
+    expect(classification.confidence).toBe(0.9);
+    expect(classification.batchType).toBe("attention");
+    expect(enrichment).toBeDefined();
+    expect(enrichment?.summary).toBe("Request for review");
     expect(classifyWithKimi).toHaveBeenCalledOnce();
   });
 
@@ -161,16 +164,18 @@ describe("classifyItem", () => {
     vi.mocked(matchRule).mockReturnValue(false);
     vi.mocked(classifyWithOllama).mockResolvedValue(null);
     vi.mocked(classifyWithKimi).mockResolvedValue({
-      batchType: "spam",
-      confidence: 0.95,
-      reason: "Phishing attempt",
+      classification: {
+        batchType: "spam",
+        confidence: 0.95,
+        reason: "Phishing attempt",
+      },
       enrichment: {},
     });
 
-    const result = await classifyItem(item, []);
+    const { classification } = await classifyItem(item, []);
 
-    expect(result.tier).toBe("kimi");
-    expect(result.batchType).toBe("spam");
+    expect(classification.tier).toBe("kimi");
+    expect(classification.batchType).toBe("spam");
     expect(classifyWithOllama).toHaveBeenCalledOnce();
     expect(classifyWithKimi).toHaveBeenCalledOnce();
   });
@@ -182,12 +187,12 @@ describe("classifyItem", () => {
     vi.mocked(classifyWithOllama).mockResolvedValue(null);
     vi.mocked(classifyWithKimi).mockResolvedValue(null);
 
-    const result = await classifyItem(item, []);
+    const { classification } = await classifyItem(item, []);
 
-    expect(result.tier).toBe("kimi");
-    expect(result.batchType).toBeNull();
-    expect(result.confidence).toBe(0);
-    expect(result.reason).toBe("Classification failed");
+    expect(classification.tier).toBe("kimi");
+    expect(classification.batchType).toBeNull();
+    expect(classification.confidence).toBe(0);
+    expect(classification.reason).toBe("Classification failed");
   });
 
   it("passes guidance notes from guidance rules to AI classifiers", async () => {
@@ -207,9 +212,11 @@ describe("classifyItem", () => {
     vi.mocked(matchRule).mockReturnValue(false);
     vi.mocked(classifyWithOllama).mockResolvedValue(null);
     vi.mocked(classifyWithKimi).mockResolvedValue({
-      batchType: null,
-      confidence: 0.8,
-      reason: "VIP sender, needs attention",
+      classification: {
+        batchType: null,
+        confidence: 0.8,
+        reason: "VIP sender, needs attention",
+      },
       enrichment: {},
     });
 

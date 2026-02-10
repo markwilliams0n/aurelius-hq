@@ -5,9 +5,12 @@
  */
 
 import { google } from 'googleapis';
-import { promises as fs, existsSync } from 'fs';
-import path from 'path';
+import { existsSync } from 'fs';
 import crypto from 'crypto';
+import {
+  getSyncState as getConnectorSyncState,
+  setSyncState as setConnectorSyncState,
+} from '@/lib/connectors/sync-state';
 import type {
   GmailMessage,
   ParsedEmail,
@@ -16,8 +19,6 @@ import type {
   GmailMessagePart,
   GmailSyncState
 } from './types';
-
-const SYNC_STATE_PATH = path.join(process.cwd(), '.gmail-sync-state.json');
 
 // Environment variables
 const SERVICE_ACCOUNT_PATH = process.env.GOOGLE_SERVICE_ACCOUNT_PATH;
@@ -73,22 +74,18 @@ async function getGmailClient() {
 }
 
 /**
- * Get sync state
+ * Get sync state from database
  */
 export async function getSyncState(): Promise<GmailSyncState> {
-  try {
-    const content = await fs.readFile(SYNC_STATE_PATH, 'utf-8');
-    return JSON.parse(content);
-  } catch {
-    return {};
-  }
+  const state = await getConnectorSyncState<GmailSyncState>('sync:gmail');
+  return state ?? {};
 }
 
 /**
- * Save sync state
+ * Save sync state to database
  */
 export async function saveSyncState(state: GmailSyncState): Promise<void> {
-  await fs.writeFile(SYNC_STATE_PATH, JSON.stringify(state, null, 2));
+  await setConnectorSyncState('sync:gmail', state as Record<string, unknown>);
 }
 
 /**

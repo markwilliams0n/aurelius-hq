@@ -4,8 +4,10 @@
  * Web API client for Slack with bot token auth.
  */
 
-import { promises as fs } from 'fs';
-import path from 'path';
+import {
+  getSyncState as getConnectorSyncState,
+  setSyncState as setConnectorSyncState,
+} from '@/lib/connectors/sync-state';
 import type {
   SlackMessage,
   SlackChannel,
@@ -19,7 +21,6 @@ import type {
 } from './types';
 
 const SLACK_API_URL = 'https://slack.com/api';
-const SYNC_STATE_PATH = path.join(process.cwd(), '.slack-sync-state.json');
 
 // Cache for user info to avoid repeated API calls (with TTL)
 interface CachedUser {
@@ -243,22 +244,18 @@ export function buildMessageUrl(
 }
 
 /**
- * Get sync state from file
+ * Get sync state from database
  */
 export async function getSyncState(): Promise<SlackSyncState> {
-  try {
-    const content = await fs.readFile(SYNC_STATE_PATH, 'utf-8');
-    return JSON.parse(content);
-  } catch {
-    return {};
-  }
+  const state = await getConnectorSyncState<SlackSyncState>('sync:slack');
+  return state ?? {};
 }
 
 /**
- * Save sync state to file
+ * Save sync state to database
  */
 export async function saveSyncState(state: SlackSyncState): Promise<void> {
-  await fs.writeFile(SYNC_STATE_PATH, JSON.stringify(state, null, 2));
+  await setConnectorSyncState('sync:slack', state as Record<string, unknown>);
 }
 
 /**

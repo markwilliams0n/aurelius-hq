@@ -2,9 +2,11 @@ import { chat } from "@/lib/ai/client";
 import { logAiCost } from "./ai-cost";
 
 export type KimiClassificationResult = {
-  batchType: string | null;
-  confidence: number;
-  reason: string;
+  classification: {
+    batchType: string | null;
+    confidence: number;
+    reason: string;
+  };
   enrichment: {
     summary?: string;
     suggestedPriority?: string;
@@ -86,12 +88,14 @@ Respond with ONLY valid JSON, no markdown fences:
     const parsed = JSON.parse(jsonMatch[0]);
 
     return {
-      batchType: parsed.batchType ?? null,
-      confidence:
-        typeof parsed.confidence === "number"
-          ? Math.max(0, Math.min(1, parsed.confidence))
-          : 0,
-      reason: String(parsed.reason || "No reason provided"),
+      classification: {
+        batchType: parsed.batchType ?? null,
+        confidence:
+          typeof parsed.confidence === "number"
+            ? Math.max(0, Math.min(1, parsed.confidence))
+            : 0,
+        reason: String(parsed.reason || "No reason provided"),
+      },
       enrichment: {
         summary: parsed.enrichment?.summary,
         suggestedPriority: parsed.enrichment?.suggestedPriority,

@@ -18,11 +18,14 @@ export type ClassificationResult = {
   confidence: number;
   reason: string;
   ruleId?: string;
-  enrichment?: {
-    summary?: string;
-    suggestedPriority?: string;
-    suggestedTags?: string[];
-  };
+  // enrichment removed — Kimi enrichment goes directly to enrichment column
+};
+
+/** Enrichment data returned separately by Kimi classification */
+export type ClassificationEnrichment = {
+  summary?: string;
+  suggestedPriority?: string;
+  suggestedTags?: string[];
 };
 
 /**
@@ -38,14 +41,16 @@ const INDIVIDUAL_CONNECTORS = new Set(["granola"]);
 export async function classifyItem(
   item: InboxItem,
   rules?: TriageRule[]
-): Promise<ClassificationResult> {
+): Promise<{ classification: ClassificationResult; enrichment?: ClassificationEnrichment }> {
   // Items from certain connectors always stay individual
   if (INDIVIDUAL_CONNECTORS.has(item.connector)) {
     return {
-      batchType: null,
-      tier: "rule",
-      confidence: 1,
-      reason: `${item.connector} items are always kept for individual review`,
+      classification: {
+        batchType: null,
+        tier: "rule",
+        confidence: 1,
+        reason: `${item.connector} items are always kept for individual review`,
+      },
     };
   }
 
@@ -64,11 +69,13 @@ export async function classifyItem(
       }
 
       return {
-        batchType,
-        tier: "rule",
-        confidence: 1.0,
-        reason: `Matched rule: ${rule.name}`,
-        ruleId: rule.id,
+        classification: {
+          batchType,
+          tier: "rule",
+          confidence: 1.0,
+          reason: `Matched rule: ${rule.name}`,
+          ruleId: rule.id,
+        },
       };
     }
   }
@@ -93,10 +100,12 @@ export async function classifyItem(
 
   if (ollamaResult && ollamaResult.confidence >= OLLAMA_CONFIDENCE_THRESHOLD) {
     return {
-      batchType: ollamaResult.batchType,
-      tier: "ollama",
-      confidence: ollamaResult.confidence,
-      reason: ollamaResult.reason,
+      classification: {
+        batchType: ollamaResult.batchType,
+        tier: "ollama",
+        confidence: ollamaResult.confidence,
+        reason: ollamaResult.reason,
+      },
     };
   }
 
@@ -115,20 +124,24 @@ export async function classifyItem(
 
   if (kimiResult) {
     return {
-      batchType: kimiResult.batchType,
-      tier: "kimi",
-      confidence: kimiResult.confidence,
-      reason: kimiResult.reason,
+      classification: {
+        batchType: kimiResult.classification.batchType,
+        tier: "kimi",
+        confidence: kimiResult.classification.confidence,
+        reason: kimiResult.classification.reason,
+      },
       enrichment: kimiResult.enrichment,
     };
   }
 
   // Fallback: classification failed entirely
   return {
-    batchType: null,
-    tier: "kimi",
-    confidence: 0,
-    reason: "Classification failed",
+    classification: {
+      batchType: null,
+      tier: "kimi",
+      confidence: 0,
+      reason: "Classification failed",
+    },
   };
 }
 
@@ -154,18 +167,18 @@ export async function classifyNewItems(): Promise<{
 
     for (const item of items) {
       try {
-        const result = await classifyItem(item, rules);
-        byTier[result.tier]++;
+        const { classification: classResult, enrichment: classEnrichment } = await classifyItem(item, rules);
+        byTier[classResult.tier]++;
 
-        // Build classification data for the DB column
+        // Build classification data for the DB column (no enrichment nesting)
         const classification = {
           batchCardId: null,
-          batchType: result.batchType,
-          tier: result.tier,
-          confidence: result.confidence,
-          reason: result.reason,
+          batchType: classResult.batchType,
+          tier: classResult.tier,
+          confidence: classResult.confidence,
+          reason: classResult.reason,
           classifiedAt: new Date().toISOString(),
-          ...(result.ruleId ? { ruleId: result.ruleId } : {}),
+          ...(classResult.ruleId ? { ruleId: classResult.ruleId } : {}),
         };
 
         // Build the update — classification + optional enrichment merge
@@ -174,13 +187,13 @@ export async function classifyNewItems(): Promise<{
           updatedAt: new Date(),
         };
 
-        // If Kimi returned enrichment, merge it into existing enrichment
-        if (result.enrichment) {
+        // If Kimi returned enrichment, merge it into the enrichment column directly
+        if (classEnrichment) {
           const existingEnrichment =
             (item.enrichment as Record<string, unknown>) || {};
           updateData.enrichment = {
             ...existingEnrichment,
-            ...result.enrichment,
+            ...classEnrichment,
           };
         }
 

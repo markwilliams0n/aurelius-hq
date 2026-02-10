@@ -7,8 +7,10 @@
  * 2. Personal API key (LINEAR_API_KEY) — fallback for backwards compat
  */
 
-import { promises as fs } from 'fs';
-import path from 'path';
+import {
+  getSyncState as getConnectorSyncState,
+  setSyncState as setConnectorSyncState,
+} from '@/lib/connectors/sync-state';
 import type {
   LinearNotification,
   LinearNotificationsResponse,
@@ -17,7 +19,6 @@ import type {
 
 const LINEAR_API_URL = 'https://api.linear.app/graphql';
 const LINEAR_TOKEN_URL = 'https://api.linear.app/oauth/token';
-const SYNC_STATE_PATH = path.join(process.cwd(), '.linear-sync-state.json');
 
 // In-memory OAuth token cache
 let cachedToken: { accessToken: string; expiresAt: number } | null = null;
@@ -374,22 +375,18 @@ export async function getCurrentUser(): Promise<{
 }
 
 /**
- * Get sync state from file
+ * Get sync state from database
  */
 export async function getSyncState(): Promise<LinearSyncState> {
-  try {
-    const content = await fs.readFile(SYNC_STATE_PATH, 'utf-8');
-    return JSON.parse(content);
-  } catch {
-    return {};
-  }
+  const state = await getConnectorSyncState<LinearSyncState>('sync:linear');
+  return state ?? {};
 }
 
 /**
- * Save sync state to file
+ * Save sync state to database
  */
 export async function saveSyncState(state: LinearSyncState): Promise<void> {
-  await fs.writeFile(SYNC_STATE_PATH, JSON.stringify(state, null, 2));
+  await setConnectorSyncState('sync:linear', state as Record<string, unknown>);
 }
 
 /**

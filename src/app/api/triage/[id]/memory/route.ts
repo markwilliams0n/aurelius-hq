@@ -6,17 +6,45 @@ import { appendToDailyNote } from "@/lib/memory/daily-notes";
 import { addMemory } from "@/lib/memory/supermemory";
 import { logActivity } from "@/lib/activity";
 import { isOllamaAvailable, generate } from "@/lib/memory/ollama";
+import { upsertEntity } from "@/lib/memory/entities";
+import { createFact } from "@/lib/memory/facts";
 
 type MemoryMode = "full" | "summary";
+
+interface ExtractedEntity {
+  name: string;
+  type: "person" | "company" | "project";
+  role?: string;
+  facts: string[];
+}
+
+interface ExtractedFact {
+  content: string;
+  category: "status" | "preference" | "relationship" | "context" | "milestone";
+  entityName?: string;
+  confidence: string;
+}
+
+interface ExtractedMemory {
+  entities?: ExtractedEntity[];
+  facts?: ExtractedFact[];
+  actionItems?: Array<{ description: string; assignee?: string }>;
+  summary?: string;
+  topics?: string[];
+}
 
 /**
  * POST /api/triage/[id]/memory - Save triage item to memory
  *
- * Body: { mode?: "full" | "summary" }
- *   - "summary" (default): Ollama summarizes before sending to Supermemory (saves tokens)
- *   - "full": Send raw content to Supermemory
+ * Two modes based on request body shape:
  *
- * Daily notes always get full content regardless of mode.
+ * 1. Single-item mode (default): { mode?: "full" | "summary" }
+ *    - "summary" (default): Ollama summarizes before sending to Supermemory
+ *    - "full": Send raw content to Supermemory
+ *
+ * 2. Bulk/extracted mode: { extractedMemory: ExtractedMemory }
+ *    - Saves pre-extracted entities, facts, action items to memory
+ *    - Used by Granola meeting imports and similar structured data
  */
 export async function POST(
   request: Request,
@@ -24,15 +52,23 @@ export async function POST(
 ) {
   const { id } = await params;
 
-  // Parse mode from body
-  let mode: MemoryMode = "summary";
+  // Parse body — determine flow based on shape
+  let body: Record<string, unknown> = {};
   try {
-    const body = await request.json().catch(() => ({}));
-    if (body.mode === "full" || body.mode === "summary") {
-      mode = body.mode;
-    }
+    body = await request.json().catch(() => ({}));
   } catch {
-    // No body, use default
+    // No body, use defaults
+  }
+
+  // If body has extractedMemory, use the bulk flow
+  if (body.extractedMemory) {
+    return handleBulkMemory(id, body.extractedMemory as ExtractedMemory);
+  }
+
+  // Otherwise, single-item flow
+  let mode: MemoryMode = "summary";
+  if (body.mode === "full" || body.mode === "summary") {
+    mode = body.mode as MemoryMode;
   }
 
   // Query database for the item
@@ -237,4 +273,107 @@ async function extractAndSaveMemory(
   });
 
   return { effectiveMode };
+}
+
+/**
+ * Handle bulk/extracted memory save — entities, facts, action items
+ * from structured data (e.g. Granola meeting imports).
+ */
+async function handleBulkMemory(itemId: string, extractedMemory: ExtractedMemory) {
+  try {
+    let savedCount = 0;
+    const errors: string[] = [];
+
+    // Save entities and their facts
+    if (extractedMemory.entities) {
+      for (const entity of extractedMemory.entities) {
+        try {
+          const savedEntity = await upsertEntity(entity.name, entity.type, {
+            role: entity.role,
+            sourceItemId: itemId,
+          });
+          savedCount++;
+
+          for (const factContent of entity.facts) {
+            try {
+              await createFact(
+                savedEntity.id,
+                factContent,
+                "context",
+                "document",
+                itemId
+              );
+              savedCount++;
+            } catch (factError) {
+              console.error(`Failed to save fact for ${entity.name}:`, factError);
+              errors.push(`Fact for ${entity.name}: ${factContent.slice(0, 30)}...`);
+            }
+          }
+        } catch (entityError) {
+          console.error(`Failed to save entity ${entity.name}:`, entityError);
+          errors.push(`Entity: ${entity.name}`);
+        }
+      }
+    }
+
+    // Save standalone facts
+    if (extractedMemory.facts) {
+      for (const fact of extractedMemory.facts) {
+        try {
+          let entityId: string | null = null;
+          if (fact.entityName) {
+            const entity = await upsertEntity(fact.entityName, "person", {});
+            entityId = entity.id;
+          }
+
+          if (entityId) {
+            await createFact(
+              entityId,
+              fact.content,
+              fact.category as "status" | "preference" | "relationship" | "context" | "milestone",
+              "document",
+              itemId
+            );
+          } else {
+            console.log(`Skipping fact without entity: ${fact.content.slice(0, 50)}...`);
+          }
+          savedCount++;
+        } catch (factError) {
+          console.error(`Failed to save fact:`, factError);
+          errors.push(`Fact: ${fact.content.slice(0, 30)}...`);
+        }
+      }
+    }
+
+    // Append summary to daily notes if present
+    if (extractedMemory.summary) {
+      try {
+        const noteEntry = `### Meeting Memory Saved
+
+**Summary:** ${extractedMemory.summary}
+
+${extractedMemory.topics?.length ? `**Topics:** ${extractedMemory.topics.join(", ")}` : ""}
+
+${extractedMemory.actionItems?.length ? `**Action Items:**\n${extractedMemory.actionItems.map(a => `- ${a.description}${a.assignee ? ` (@${a.assignee})` : ""}`).join("\n")}` : ""}
+
+*${savedCount} items saved to memory*
+`;
+        await appendToDailyNote(noteEntry);
+      } catch (noteError) {
+        console.error("Failed to append to daily notes:", noteError);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      saved: savedCount,
+      errors: errors.length > 0 ? errors : undefined,
+    });
+  } catch (error) {
+    console.error("Bulk memory save failed:", error);
+    return NextResponse.json(
+      { error: "Failed to save memory", details: String(error) },
+      { status: 500 }
+    );
+  }
 }

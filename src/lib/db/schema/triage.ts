@@ -203,6 +203,7 @@ export const triageRules = pgTable(
     // Metadata
     status: ruleStatusEnum("status").default("active").notNull(),
     source: ruleSourceEnum("source").notNull(),
+    order: integer("order").default(0),
     version: integer("version").default(1).notNull(),
     createdBy: text("created_by").default("user").notNull(),
 

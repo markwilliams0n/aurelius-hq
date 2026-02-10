@@ -126,7 +126,7 @@ export function TaskCreatorPanel({ item, onClose, onCreated }: TaskCreatorPanelP
     setTasks((prev) => prev.filter((_, i) => i !== idx));
   }, []);
 
-  // Send chat message for task modification
+  // Send chat message for task modification (uses unified /api/chat SSE endpoint)
   const handleChat = useCallback(async () => {
     if (!chatInput.trim() || chatLoading) return;
 
@@ -139,46 +139,99 @@ export function TaskCreatorPanel({ item, onClose, onCreated }: TaskCreatorPanelP
     const fullMessage = `Current suggested tasks:\n${currentTaskList}\n\nUser request: ${message}`;
 
     try {
-      const res = await fetch("/api/triage/chat", {
+      const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          itemId: item.id,
-          item: {
-            connector: item.connector,
-            senderName: item.senderName || item.sender,
-            subject: item.subject,
-            preview: item.preview,
-          },
           message: fullMessage,
-          history: chatHistory.slice(-6),
+          conversationId: `task-creator-${item.id}`,
+          context: {
+            surface: "triage" as const,
+            triageItem: {
+              connector: item.connector,
+              sender: item.sender,
+              senderName: item.senderName,
+              subject: item.subject,
+              preview: item.preview,
+            },
+          },
         }),
       });
 
       if (!res.ok) throw new Error("Chat failed");
-      const data = await res.json();
+
+      // Read SSE stream and collect full response
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullResponse = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === "text") {
+                fullResponse += data.content;
+              }
+            } catch {
+              // Skip invalid JSON
+            }
+          }
+        }
+      }
+
+      // Process remaining buffer
+      if (buffer.startsWith("data: ")) {
+        try {
+          const data = JSON.parse(buffer.slice(6));
+          if (data.type === "text") {
+            fullResponse += data.content;
+          }
+        } catch {
+          // Skip
+        }
+      }
 
       setChatHistory((prev) => [
         ...prev,
         { role: "user", content: message },
-        { role: "assistant", content: data.response },
+        { role: "assistant", content: fullResponse },
       ]);
 
-      // Check for task updates in the response
-      if (data.action === "update_tasks" && data.actionData?.tasks) {
-        const updatedTasks: ExtractedTask[] = data.actionData.tasks.map((t: any) => ({
-          description: t.description,
-          assignee: t.assignee || null,
-          assigneeType: t.assigneeType || "self",
-          dueDate: t.dueDate || null,
-          confidence: t.confidence || "high",
-          selected: true,
-        }));
-        setTasks(updatedTasks);
-      } else {
-        // Try to parse task modifications from the response text
-        // Look for numbered lists or bullet points as new tasks
-        const lines = data.response.split("\n");
+      // Check for task update JSON in the response
+      const actionMatch = fullResponse.match(/\{"action"[\s\S]*\}\s*$/);
+      if (actionMatch) {
+        try {
+          const actionJson = JSON.parse(actionMatch[0]);
+          if (actionJson.action === "update_tasks" && actionJson.tasks) {
+            const updatedTasks: ExtractedTask[] = actionJson.tasks.map((t: any) => ({
+              description: t.description,
+              assignee: t.assignee || null,
+              assigneeType: t.assigneeType || "self",
+              dueDate: t.dueDate || null,
+              confidence: t.confidence || "high",
+              selected: true,
+            }));
+            setTasks(updatedTasks);
+          }
+        } catch {
+          // Invalid JSON, ignore
+        }
+      }
+
+      // Fallback: try to parse task modifications from numbered/bullet lists
+      if (!actionMatch) {
+        const lines = fullResponse.split("\n");
         const newTasks: ExtractedTask[] = [];
         for (const line of lines) {
           const match = line.match(/^[\s]*[-*\d.]+[\s]+(.+)$/);

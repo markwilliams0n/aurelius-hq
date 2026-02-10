@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { triageRules, type TriageRule, type NewTriageRule } from "@/lib/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and, asc } from "drizzle-orm";
 
 // ── Seed rules for common automated services ─────────────────────────────────
 
@@ -131,10 +131,14 @@ export function matchRule(rule: TriageRule, item: MatchableItem): boolean {
 }
 
 /**
- * Get all active rules (status = "active")
+ * Get all active rules (status = "active"), ordered by `order` column then creation date.
  */
 export async function getActiveRules(): Promise<TriageRule[]> {
-  return db.select().from(triageRules).where(eq(triageRules.status, "active"));
+  return db
+    .select()
+    .from(triageRules)
+    .where(eq(triageRules.status, "active"))
+    .orderBy(asc(triageRules.order), asc(triageRules.createdAt));
 }
 
 /**
@@ -204,4 +208,23 @@ export async function incrementRuleMatchCount(id: string): Promise<void> {
       lastMatchedAt: new Date(),
     })
     .where(eq(triageRules.id, id));
+}
+
+/**
+ * Find an existing active rule that matches a specific sender trigger.
+ * Used for dedup — prevents creating duplicate rules when reclassifying the same sender.
+ */
+export async function findExistingRuleBySender(
+  sender: string
+): Promise<TriageRule | null> {
+  const results = await db
+    .select()
+    .from(triageRules)
+    .where(
+      and(
+        sql`${triageRules.trigger}->>'sender' = ${sender}`,
+        eq(triageRules.status, "active")
+      )
+    );
+  return results[0] ?? null;
 }

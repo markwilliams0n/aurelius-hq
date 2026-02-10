@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { inboxItems } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getOrCreateBatchCard } from "@/lib/triage/batch-cards";
-import { createRule } from "@/lib/triage/rules";
+import { createRule, updateRule, findExistingRuleBySender } from "@/lib/triage/rules";
 
 export async function POST(request: Request) {
   try {
@@ -89,20 +89,38 @@ export async function POST(request: Request) {
       })
       .where(eq(inboxItems.id, itemId));
 
-    // Create a structured triage rule
+    // Dedup: check for existing active rule matching this sender
     const displayName = senderName || sender;
-    const rule = await createRule({
-      name: `Reclassify ${displayName} → ${toBatchType}`,
-      type: "structured",
-      source: "override",
-      trigger: { sender },
-      action: { type: "batch", batchType: toBatchType },
-      description: `Auto-created when user reclassified item from ${fromBatchType} to ${toBatchType}`,
-    });
+    const existingRule = await findExistingRuleBySender(sender);
+
+    let ruleId: string;
+    if (existingRule) {
+      // Update existing rule's action instead of creating a duplicate
+      const updated = await updateRule(existingRule.id, {
+        action: { type: "batch", batchType: toBatchType },
+        name: `Reclassify ${displayName} → ${toBatchType}`,
+        description: `Updated when user reclassified item from ${fromBatchType} to ${toBatchType}`,
+      });
+      if (!updated) {
+        return NextResponse.json({ error: "Rule was deleted during update" }, { status: 409 });
+      }
+      ruleId = updated.id;
+    } else {
+      // Create new rule
+      const rule = await createRule({
+        name: `Reclassify ${displayName} → ${toBatchType}`,
+        type: "structured",
+        source: "override",
+        trigger: { sender },
+        action: { type: "batch", batchType: toBatchType },
+        description: `Auto-created when user reclassified item from ${fromBatchType} to ${toBatchType}`,
+      });
+      ruleId = rule.id;
+    }
 
     return NextResponse.json({
       success: true,
-      ruleId: rule.id,
+      ruleId,
       newCardId,
     });
   } catch (error) {

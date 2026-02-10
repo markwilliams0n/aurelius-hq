@@ -1,22 +1,37 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { TriageRule } from "@/lib/db/schema";
 
+// Use vi.hoisted so the mock object is available when vi.mock is hoisted
+const { mockChain } = vi.hoisted(() => {
+  const chain: Record<string, ReturnType<typeof vi.fn>> = {
+    select: vi.fn(),
+    from: vi.fn(),
+    where: vi.fn(),
+    orderBy: vi.fn(),
+    insert: vi.fn(),
+    values: vi.fn(),
+    update: vi.fn(),
+    set: vi.fn(),
+    delete: vi.fn(),
+    returning: vi.fn().mockResolvedValue([]),
+  };
+
+  // Every chained call returns the same object so methods can be called in any order
+  for (const key of Object.keys(chain)) {
+    if (key !== "returning") {
+      chain[key] = vi.fn().mockReturnValue(chain);
+    }
+  }
+
+  return { mockChain: chain };
+});
+
 // Mock the database module before importing anything that uses it
 vi.mock("@/lib/db", () => ({
-  db: {
-    select: vi.fn().mockReturnThis(),
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    insert: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    update: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-    delete: vi.fn().mockReturnThis(),
-    returning: vi.fn().mockResolvedValue([]),
-  },
+  db: mockChain,
 }));
 
-import { matchRule } from "../rules";
+import { matchRule, getActiveRules, findExistingRuleBySender } from "../rules";
 import type { MatchableItem } from "../rules";
 
 // Helper to create a minimal structured rule for testing
@@ -31,6 +46,7 @@ function makeRule(overrides: Partial<TriageRule> = {}): TriageRule {
     guidance: null,
     status: "active",
     source: "user_chat",
+    order: 0,
     version: 1,
     createdBy: "user",
     matchCount: 0,
@@ -258,5 +274,72 @@ describe("matchRule", () => {
       const item = makeItem();
       expect(matchRule(rule, item)).toBe(true);
     });
+  });
+});
+
+describe("getActiveRules", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Re-wire chain returns after clearing
+    for (const key of Object.keys(mockChain)) {
+      if (key !== "returning") {
+        mockChain[key].mockReturnValue(mockChain);
+      }
+    }
+  });
+
+  it("calls orderBy so rules are returned in deterministic order", async () => {
+    const rules = [
+      makeRule({ id: "r1", order: 1 }),
+      makeRule({ id: "r2", order: 2 }),
+    ];
+    mockChain.orderBy.mockResolvedValueOnce(rules);
+
+    const result = await getActiveRules();
+
+    expect(result).toEqual(rules);
+    expect(mockChain.select).toHaveBeenCalled();
+    expect(mockChain.where).toHaveBeenCalled();
+    expect(mockChain.orderBy).toHaveBeenCalled();
+  });
+
+  it("returns empty array when no active rules exist", async () => {
+    mockChain.orderBy.mockResolvedValueOnce([]);
+
+    const result = await getActiveRules();
+    expect(result).toEqual([]);
+  });
+});
+
+describe("findExistingRuleBySender", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    for (const key of Object.keys(mockChain)) {
+      if (key !== "returning") {
+        mockChain[key].mockReturnValue(mockChain);
+      }
+    }
+  });
+
+  it("returns the existing rule when one matches the sender", async () => {
+    const existing = makeRule({
+      id: "existing-rule",
+      trigger: { sender: "alice@example.com" },
+    });
+    mockChain.where.mockResolvedValueOnce([existing]);
+
+    const result = await findExistingRuleBySender("alice@example.com");
+
+    expect(result).toEqual(existing);
+    expect(mockChain.select).toHaveBeenCalled();
+    expect(mockChain.where).toHaveBeenCalled();
+  });
+
+  it("returns null when no rule matches the sender", async () => {
+    mockChain.where.mockResolvedValueOnce([]);
+
+    const result = await findExistingRuleBySender("unknown@example.com");
+
+    expect(result).toBeNull();
   });
 });
