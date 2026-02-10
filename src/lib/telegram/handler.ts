@@ -12,6 +12,7 @@ import {
   saveConversation,
   type StoredMessage,
 } from '@/lib/conversation/persistence';
+import { trimHistory } from '@/lib/conversation/history';
 import {
   sendMessage,
   editMessage,
@@ -265,11 +266,12 @@ async function handleChatMessage(message: TelegramMessage): Promise<void> {
     // Get conversation history from database
     const storedHistory = await loadConversation(conversationId);
 
-    // Convert stored history to AI message format
+    // Convert stored history to AI message format and trim to token budget
     const aiHistory: Message[] = storedHistory.map((m) => ({
       role: m.role,
       content: m.content,
     }));
+    const trimmedHistory = trimHistory(aiHistory, 8000);
 
     // Build agent context with Telegram-specific additions
     const telegramContext = `## Telegram Context
@@ -290,7 +292,7 @@ CRITICAL — Telegram has FULL interactive capability:
     });
 
     // Build messages for AI
-    const aiMessages: Message[] = [...aiHistory, { role: 'user', content: userText }];
+    const aiMessages: Message[] = [...trimmedHistory, { role: 'user', content: userText }];
 
     // Collect text response, detect action cards, and track tool usage
     let fullResponse = '';

@@ -5,6 +5,7 @@ import { buildAgentContext } from "@/lib/ai/context";
 import { extractAndSaveMemories } from "@/lib/memory/extraction";
 import { emitMemoryEvent } from "@/lib/memory/events";
 import { loadConversation, saveConversation, type StoredMessage } from "@/lib/conversation/persistence";
+import { trimHistory } from "@/lib/conversation/history";
 import { createCard, generateCardId } from "@/lib/action-cards/db";
 import { sseEncode, SSE_HEADERS } from "@/lib/sse/server";
 import type { CardPattern } from "@/lib/types/action-card";
@@ -40,18 +41,19 @@ export async function POST(request: NextRequest) {
     ? await loadConversation(conversationId)
     : [];
 
-  // Convert stored history to AI message format (without timestamp)
+  // Convert stored history to AI message format and trim to token budget
   const aiHistory: Message[] = storedHistory.map((m) => ({
     role: m.role,
     content: m.content,
   }));
+  const trimmedHistory = trimHistory(aiHistory, 8000);
 
   // Build agent context (recent notes + QMD search + soul config)
   const { systemPrompt } = await buildAgentContext({ query: message, context });
 
   // Build messages for AI
   const aiMessages: Message[] = [
-    ...aiHistory,
+    ...trimmedHistory,
     { role: "user", content: message },
   ];
 
