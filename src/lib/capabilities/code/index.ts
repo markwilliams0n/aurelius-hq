@@ -1,7 +1,7 @@
 import type { Capability, ToolDefinition, ToolResult } from '../types';
 import { nanoid } from 'nanoid';
-import { slugifyTask } from './prompts';
-import { getActiveSessions } from '@/lib/action-cards/handlers/code';
+import { slugifyTask } from '@/lib/code/prompts';
+import { getActiveSessions } from '@/lib/code/session-manager';
 import { getCardsByPattern } from '@/lib/action-cards/db';
 import { readFileSync, existsSync } from 'fs';
 import path from 'path';

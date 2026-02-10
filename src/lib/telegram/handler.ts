@@ -42,7 +42,7 @@ import {
   formatSessionTelegram,
   finalizeZombieSession,
 } from '@/lib/action-cards/handlers/code';
-import { worktreeExists } from '@/lib/capabilities/code/worktree';
+import { worktreeExists } from '@/lib/code/worktree';
 
 // Register all card handlers so dispatchCardAction can find them
 import '@/lib/action-cards/handlers/code';

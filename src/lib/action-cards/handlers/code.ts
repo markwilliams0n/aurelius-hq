@@ -7,59 +7,28 @@ import {
   getChangedFiles,
   getWorktreeLog,
   worktreeExists,
-} from "@/lib/capabilities/code/worktree";
-import { startSession, type ActiveSession } from "@/lib/capabilities/code/executor";
-import { buildCodePrompt } from "@/lib/capabilities/code/prompts";
+} from "@/lib/code/worktree";
+import { startSession, type ActiveSession } from "@/lib/code/executor";
+import { buildCodePrompt } from "@/lib/code/prompts";
 import { getCard, updateCard } from "../db";
 import {
   sendOwnerMessage,
   editOwnerMessage,
   type InlineKeyboardMarkup,
 } from "@/lib/telegram/client";
+import {
+  getActiveSessions,
+  getSession as getActiveSession,
+  setSession,
+  removeSession,
+  getTelegramMessageId,
+  setTelegramMessage,
+  getSessionForTelegramMessage,
+  finalizeZombieSession,
+} from "@/lib/code/session-manager";
 
-// ---------------------------------------------------------------------------
-// Active session tracking — stored on globalThis to survive Next.js HMR
-// ---------------------------------------------------------------------------
-
-const globalStore = globalThis as unknown as {
-  __codeActiveSessions?: Map<string, ActiveSession>;
-  __codeTelegramMessages?: Map<string, number>;
-  __codeTelegramToSession?: Map<number, string>;
-  __codeSigtermRegistered?: boolean;
-};
-
-if (!globalStore.__codeActiveSessions) globalStore.__codeActiveSessions = new Map();
-if (!globalStore.__codeTelegramMessages) globalStore.__codeTelegramMessages = new Map();
-if (!globalStore.__codeTelegramToSession) globalStore.__codeTelegramToSession = new Map();
-
-const activeSessions = globalStore.__codeActiveSessions;
-/** Map of sessionId → Telegram message_id for the session's status message. */
-const sessionTelegramMessages = globalStore.__codeTelegramMessages;
-/** Reverse map: Telegram message_id → sessionId (for reply detection). */
-export const telegramToSession = globalStore.__codeTelegramToSession;
-
-export function getActiveSessions(): Map<string, ActiveSession> {
-  // Prune dead sessions (process exited but map entry remains after HMR)
-  for (const [id, session] of activeSessions) {
-    if (session.process && 'exitCode' in session.process && session.process.exitCode !== null) {
-      activeSessions.delete(id);
-    }
-  }
-  return activeSessions;
-}
-
-// Kill all active sessions on server shutdown to prevent orphaned processes
-// Only register once (globalThis persists across HMR)
-if (!globalStore.__codeSigtermRegistered) {
-  globalStore.__codeSigtermRegistered = true;
-  process.on('SIGTERM', () => {
-    for (const [id, session] of activeSessions) {
-      console.log(`[code-session] Killing session ${id} on SIGTERM`);
-      session.kill();
-    }
-    activeSessions.clear();
-  });
-}
+// Re-export for consumers that import from this file
+export { getActiveSessions, finalizeZombieSession, telegramToSession } from "@/lib/code/session-manager";
 
 // ---------------------------------------------------------------------------
 // Telegram session message — one message per session, edited on state changes
@@ -132,20 +101,16 @@ async function updateSessionTelegram(
   keyboard?: InlineKeyboardMarkup,
 ): Promise<void> {
   try {
-    const existingMsgId = sessionTelegramMessages.get(sessionId);
+    const existingMsgId = getTelegramMessageId(sessionId);
     if (existingMsgId) {
       const newId = await editOwnerMessage(existingMsgId, text, { replyMarkup: keyboard });
       if (newId && newId !== existingMsgId) {
-        // Update both maps
-        telegramToSession.delete(existingMsgId);
-        sessionTelegramMessages.set(sessionId, newId);
-        telegramToSession.set(newId, sessionId);
+        setTelegramMessage(sessionId, newId);
       }
     } else {
       const msgId = await sendOwnerMessage(text, { replyMarkup: keyboard });
       if (msgId) {
-        sessionTelegramMessages.set(sessionId, msgId);
-        telegramToSession.set(msgId, sessionId);
+        setTelegramMessage(sessionId, msgId);
       }
     }
   } catch {
@@ -166,7 +131,7 @@ async function finalizeSession(
   totalTurns: number,
   totalCostUsd: number | null,
 ): Promise<void> {
-  activeSessions.delete(sessionId);
+  removeSession(sessionId);
 
   if (!cardId) return;
 
@@ -241,13 +206,13 @@ registerCardHandler("code:start", {
       sendMessage: () => {},
       closeInput: () => {},
     } as ActiveSession;
-    activeSessions.set(sessionId, placeholder);
+    setSession(sessionId, placeholder);
 
     let worktree: { path: string; branchName: string };
     try {
       worktree = createWorktree(branchName, sessionId);
     } catch (err) {
-      activeSessions.delete(sessionId);
+      removeSession(sessionId);
       const msg = err instanceof Error ? err.message : String(err);
       return { status: "error", error: `Failed to create worktree: ${msg}` };
     }
@@ -309,7 +274,7 @@ registerCardHandler("code:start", {
         },
 
         async onError(error) {
-          activeSessions.delete(sessionId);
+          removeSession(sessionId);
 
           try {
             cleanupWorktree(worktree.path, branchName);
@@ -336,14 +301,14 @@ registerCardHandler("code:start", {
         },
       });
     } catch (err) {
-      activeSessions.delete(sessionId);
+      removeSession(sessionId);
       try { cleanupWorktree(worktree.path, branchName); } catch { /* best effort */ }
       const msg = err instanceof Error ? err.message : String(err);
       return { status: "error", error: `Failed to start session: ${msg}` };
     }
 
     // Replace placeholder with real session handle
-    activeSessions.set(sessionId, session);
+    setSession(sessionId, session);
 
     // Listen for process exit to finalize the session
     session.process.on('exit', () => {
@@ -393,7 +358,7 @@ registerCardHandler("code:respond", {
       return { status: "error", error: "Missing sessionId or message" };
     }
 
-    const session = activeSessions.get(sessionId);
+    const session = getActiveSession(sessionId);
     if (!session) {
       return { status: "error", error: "No active session found" };
     }
@@ -449,7 +414,7 @@ registerCardHandler("code:finish", {
       return { status: "error", error: "Missing sessionId" };
     }
 
-    const session = activeSessions.get(sessionId);
+    const session = getActiveSession(sessionId);
     if (!session) {
       return { status: "error", error: "No active session found" };
     }
@@ -541,10 +506,10 @@ registerCardHandler("code:stop", {
     }
 
     // Kill active session if it exists
-    const session = activeSessions.get(sessionId);
+    const session = getActiveSession(sessionId);
     if (session) {
       session.kill();
-      activeSessions.delete(sessionId);
+      removeSession(sessionId);
     }
 
     // Best-effort worktree cleanup
@@ -598,7 +563,7 @@ registerCardHandler("code:resume", {
       sendMessage: () => {},
       closeInput: () => {},
     } as ActiveSession;
-    activeSessions.set(sessionId, placeholder);
+    setSession(sessionId, placeholder);
 
     let totalTurns = (data.totalTurns as number) || 0;
     let totalCostUsd = (data.totalCostUsd as number) ?? null;
@@ -659,7 +624,7 @@ registerCardHandler("code:resume", {
         },
 
         async onError(error) {
-          activeSessions.delete(sessionId);
+          removeSession(sessionId);
           // DON'T clean up worktree — it may have partial work worth keeping
 
           if (cardId) {
@@ -680,12 +645,12 @@ registerCardHandler("code:resume", {
         },
       });
     } catch (err) {
-      activeSessions.delete(sessionId);
+      removeSession(sessionId);
       const msg = err instanceof Error ? err.message : String(err);
       return { status: "error", error: `Failed to resume session: ${msg}` };
     }
 
-    activeSessions.set(sessionId, session);
+    setSession(sessionId, session);
 
     session.process.on('exit', () => {
       if (session.state === 'completed' || session.state === 'waiting_for_input') {
@@ -715,49 +680,3 @@ registerCardHandler("code:resume", {
   },
 });
 
-// ---------------------------------------------------------------------------
-// Zombie detection — auto-finalize sessions whose process died
-// ---------------------------------------------------------------------------
-
-/**
- * Check if a code session card is a "zombie" — card says running/waiting
- * but there's no active process. If the worktree still exists, auto-finalize
- * it to "completed" state so the user can approve/reject.
- *
- * Returns the effective state after finalization.
- */
-export async function finalizeZombieSession(cardId: string): Promise<'completed' | 'error'> {
-  const card = await getCard(cardId);
-  if (!card) return 'error';
-
-  const data = card.data as Record<string, unknown>;
-  const wtPath = data.worktreePath as string;
-  const sessionId = data.sessionId as string;
-
-  if (!wtPath || !worktreeExists(sessionId)) return 'error';
-
-  try {
-    const stats = getWorktreeStats(wtPath);
-    const changedFiles = getChangedFiles(wtPath);
-    const log = getWorktreeLog(wtPath);
-
-    await updateCard(cardId, {
-      data: {
-        ...data,
-        state: 'completed',
-        result: {
-          sessionId,
-          turns: data.totalTurns || 0,
-          costUsd: data.totalCostUsd ?? null,
-          stats,
-          changedFiles,
-          log,
-        },
-      },
-    });
-
-    return 'completed';
-  } catch {
-    return 'error';
-  }
-}
