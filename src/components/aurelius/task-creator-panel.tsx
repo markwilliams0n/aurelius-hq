@@ -13,6 +13,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { parseSSELines } from "@/lib/sse/client";
 import { toast } from "sonner";
 import { TriageItem } from "./triage-card";
 
@@ -173,33 +174,20 @@ export function TaskCreatorPanel({ item, onClose, onCreated }: TaskCreatorPanelP
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.type === "text") {
-                fullResponse += data.content;
-              }
-            } catch {
-              // Skip invalid JSON
-            }
+        buffer = parseSSELines(buffer, (data) => {
+          if (data.type === "text") {
+            fullResponse += data.content as string;
           }
-        }
+        });
       }
 
       // Process remaining buffer
-      if (buffer.startsWith("data: ")) {
-        try {
-          const data = JSON.parse(buffer.slice(6));
+      if (buffer) {
+        parseSSELines(buffer + "\n", (data) => {
           if (data.type === "text") {
-            fullResponse += data.content;
+            fullResponse += data.content as string;
           }
-        } catch {
-          // Skip
-        }
+        });
       }
 
       setChatHistory((prev) => [

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { ActionCardData } from "@/lib/types/action-card";
 import type { ChatContext } from "@/lib/types/chat-context";
+import { parseSSELines } from "@/lib/sse/client";
 import { toast } from "sonner";
 
 export type ChatMessage = {
@@ -15,11 +16,6 @@ type ChatStats = {
   model: string;
   tokenCount: number;
   factsSaved: number;
-};
-
-type SSEEvent = {
-  type: string;
-  [key: string]: unknown;
 };
 
 const generateMessageId = () =>
@@ -138,8 +134,8 @@ export function useChat(options: UseChatOptions) {
   }, [loadConversation, isStreaming, pollInterval]);
 
   // Process an SSE event
-  const processEvent = useCallback((data: SSEEvent) => {
-    switch (data.type) {
+  const processEvent = useCallback((data: Record<string, unknown>) => {
+    switch (data.type as string) {
       case "text":
         streamingContentRef.current += data.content as string;
         const newContent = streamingContentRef.current;
@@ -276,29 +272,12 @@ export function useChat(options: UseChatOptions) {
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              processEvent(data);
-            } catch {
-              // Skip invalid JSON
-            }
-          }
-        }
+        buffer = parseSSELines(buffer, processEvent);
       }
 
       // Process remaining buffer
-      if (buffer.startsWith("data: ")) {
-        try {
-          const data = JSON.parse(buffer.slice(6));
-          processEvent(data);
-        } catch {
-          // Skip
-        }
+      if (buffer) {
+        parseSSELines(buffer + "\n", processEvent);
       }
     } catch (error) {
       console.error("Chat error:", error);

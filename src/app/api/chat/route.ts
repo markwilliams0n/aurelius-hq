@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { conversations } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { createCard, generateCardId } from "@/lib/action-cards/db";
+import { sseEncode, SSE_HEADERS } from "@/lib/sse/server";
 import type { CardPattern } from "@/lib/types/action-card";
 import type { ChatContext } from "@/lib/types/chat-context";
 
@@ -74,7 +75,6 @@ export async function POST(request: NextRequest) {
   ];
 
   // Create streaming response
-  const encoder = new TextEncoder();
   let fullResponse = "";
   let pendingChangeId: string | null = null;
 
@@ -87,9 +87,7 @@ export async function POST(request: NextRequest) {
       try {
         // Tell the client which assistant message ID to use for this response
         controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({ type: "assistant_message_id", id: assistantMessageId })}\n\n`
-          )
+          sseEncode({ type: "assistant_message_id", id: assistantMessageId })
         );
 
         // Stream the response
@@ -101,21 +99,15 @@ export async function POST(request: NextRequest) {
           if (event.type === "text") {
             fullResponse += event.content;
             controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({ type: "text", content: event.content })}\n\n`
-              )
+              sseEncode({ type: "text", content: event.content })
             );
           } else if (event.type === "tool_use") {
             controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({ type: "tool_use", toolName: event.toolName, toolInput: event.toolInput })}\n\n`
-              )
+              sseEncode({ type: "tool_use", toolName: event.toolName, toolInput: event.toolInput })
             );
           } else if (event.type === "tool_result") {
             controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({ type: "tool_result", toolName: event.toolName, result: event.result })}\n\n`
-              )
+              sseEncode({ type: "tool_result", toolName: event.toolName, result: event.result })
             );
             // Check if tool result contains an action card — persist to DB and emit
             try {
@@ -134,12 +126,7 @@ export async function POST(request: NextRequest) {
                   handler: ac.handler || null,
                 });
                 controller.enqueue(
-                  encoder.encode(
-                    `data: ${JSON.stringify({
-                      type: "action_card",
-                      card,
-                    })}\n\n`
-                  )
+                  sseEncode({ type: "action_card", card })
                 );
               }
             } catch {
@@ -148,9 +135,7 @@ export async function POST(request: NextRequest) {
           } else if (event.type === "pending_change") {
             pendingChangeId = event.changeId;
             controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({ type: "pending_change", changeId: event.changeId })}\n\n`
-              )
+              sseEncode({ type: "pending_change", changeId: event.changeId })
             );
           }
         }
@@ -206,9 +191,7 @@ export async function POST(request: NextRequest) {
             .returning();
 
           controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({ type: "conversation", id: newConv.id })}\n\n`
-            )
+            sseEncode({ type: "conversation", id: newConv.id })
           );
         }
 
@@ -243,35 +226,21 @@ export async function POST(request: NextRequest) {
 
         // Send stats event
         controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({
-              type: "stats",
-              model: DEFAULT_MODEL,
-              tokenCount: estimatedTokens,
-            })}\n\n`
-          )
+          sseEncode({ type: "stats", model: DEFAULT_MODEL, tokenCount: estimatedTokens })
         );
 
         // Send done event
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
+        controller.enqueue(sseEncode({ type: "done" }));
         controller.close();
       } catch (error) {
         console.error("Chat error:", error);
         controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({ type: "error", message: "Chat failed" })}\n\n`
-          )
+          sseEncode({ type: "error", message: "Chat failed" })
         );
         controller.close();
       }
     },
   });
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
+  return new Response(stream, { headers: SSE_HEADERS });
 }
