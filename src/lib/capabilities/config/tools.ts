@@ -120,14 +120,14 @@ export async function handleConfigTool(
 
       return {
         result: JSON.stringify({
-          action_card: {
-            pattern: "config",
-            handler: "config:save",
-            title: `Config: ${key}`,
-            data: cardData,
-          },
           summary: `Showing ${key} configuration`,
         }),
+        actionCard: {
+          pattern: "config",
+          handler: "config:save",
+          title: `Config: ${key}`,
+          data: cardData,
+        },
       };
     }
 

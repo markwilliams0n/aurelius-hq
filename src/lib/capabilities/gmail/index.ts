@@ -89,23 +89,23 @@ async function handleGmailTool(
 
   return {
     result: JSON.stringify({
-      action_card: {
-        pattern: 'approval',
-        handler: 'gmail:send-email',
-        title: `Email reply to ${item.senderName || item.sender}`,
-        data: {
-          itemId: item.id,
-          to: recipient,
-          cc: cc || undefined,
-          bcc: bcc || undefined,
-          subject,
-          body,
-          senderName: item.senderName || item.sender,
-          senderEmail: item.sender,
-        },
-      },
       summary: `Drafted reply to ${item.senderName || item.sender}: ${subject}`,
     }),
+    actionCard: {
+      pattern: 'approval',
+      handler: 'gmail:send-email',
+      title: `Email reply to ${item.senderName || item.sender}`,
+      data: {
+        itemId: item.id,
+        to: recipient,
+        cc: cc || undefined,
+        bcc: bcc || undefined,
+        subject,
+        body,
+        senderName: item.senderName || item.sender,
+        senderEmail: item.sender,
+      },
+    },
   };
 }
 

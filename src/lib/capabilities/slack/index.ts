@@ -97,25 +97,25 @@ async function handleSlackTool(
     // Return action card for the SSE stream
     return {
       result: JSON.stringify({
-        action_card: {
-          pattern: 'approval',
-          handler: 'slack:send-message',
-          title: `Slack message to #${channel.name}`,
-          data: {
-            recipientType: 'channel',
-            recipientId: channel.id,
-            recipientName: `#${channel.name}`,
-            channelName: channel.name,
-            includeMe: true,
-            message,
-            threadTs,
-            myUserId,
-            sendAs: 'user',
-            canSendAsUser: canSendAsUser(),
-          },
-        },
         summary: `Drafted message for #${channel.name}`,
       }),
+      actionCard: {
+        pattern: 'approval',
+        handler: 'slack:send-message',
+        title: `Slack message to #${channel.name}`,
+        data: {
+          recipientType: 'channel',
+          recipientId: channel.id,
+          recipientName: `#${channel.name}`,
+          channelName: channel.name,
+          includeMe: true,
+          message,
+          threadTs,
+          myUserId,
+          sendAs: 'user',
+          canSendAsUser: canSendAsUser(),
+        },
+      },
     };
   } else {
     // DM to a person
@@ -140,25 +140,25 @@ async function handleSlackTool(
 
     return {
       result: JSON.stringify({
-        action_card: {
-          pattern: 'approval',
-          handler: 'slack:send-message',
-          title: `Slack DM to ${user.realName || user.displayName}`,
-          data: {
-            recipientType: 'dm',
-            recipientId: user.id,
-            recipientName: user.realName || user.displayName,
-            recipient: user.realName || user.displayName,
-            channelName: null,
-            includeMe: true,
-            message,
-            myUserId,
-            sendAs: 'user',
-            canSendAsUser: canSendAsUser(),
-          },
-        },
         summary: `Drafted DM for ${user.realName || user.displayName}`,
       }),
+      actionCard: {
+        pattern: 'approval',
+        handler: 'slack:send-message',
+        title: `Slack DM to ${user.realName || user.displayName}`,
+        data: {
+          recipientType: 'dm',
+          recipientId: user.id,
+          recipientName: user.realName || user.displayName,
+          recipient: user.realName || user.displayName,
+          channelName: null,
+          includeMe: true,
+          message,
+          myUserId,
+          sendAs: 'user',
+          canSendAsUser: canSendAsUser(),
+        },
+      },
     };
   }
 }
