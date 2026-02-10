@@ -4,9 +4,7 @@ import { chatStreamWithTools, DEFAULT_MODEL, type Message } from "@/lib/ai/clien
 import { buildAgentContext } from "@/lib/ai/context";
 import { extractAndSaveMemories } from "@/lib/memory/extraction";
 import { emitMemoryEvent } from "@/lib/memory/events";
-import { db } from "@/lib/db";
-import { conversations } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { loadConversation, saveConversation, type StoredMessage } from "@/lib/conversation/persistence";
 import { createCard, generateCardId } from "@/lib/action-cards/db";
 import { sseEncode, SSE_HEADERS } from "@/lib/sse/server";
 import type { CardPattern } from "@/lib/types/action-card";
@@ -14,14 +12,6 @@ import type { ChatContext } from "@/lib/types/chat-context";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-// Stored message type (with timestamp and stable ID for DB)
-type StoredMessage = {
-  id?: string; // stable ID for card<->message association
-  role: "user" | "assistant";
-  content: string;
-  timestamp: string;
-};
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -46,18 +36,9 @@ export async function POST(request: NextRequest) {
   }
 
   // Get conversation history if exists
-  let storedHistory: StoredMessage[] = [];
-  if (conversationId) {
-    const [conv] = await db
-      .select()
-      .from(conversations)
-      .where(eq(conversations.id, conversationId))
-      .limit(1);
-
-    if (conv) {
-      storedHistory = (conv.messages as StoredMessage[]) || [];
-    }
-  }
+  const storedHistory = conversationId
+    ? await loadConversation(conversationId)
+    : [];
 
   // Convert stored history to AI message format (without timestamp)
   const aiHistory: Message[] = storedHistory.map((m) => ({
@@ -150,41 +131,10 @@ export async function POST(request: NextRequest) {
           },
         ];
 
-        if (conversationId) {
-          // Check if conversation exists (may not for first triage-{itemId} message)
-          const [existing] = await db
-            .select({ id: conversations.id })
-            .from(conversations)
-            .where(eq(conversations.id, conversationId))
-            .limit(1);
-
-          if (existing) {
-            await db
-              .update(conversations)
-              .set({
-                messages: newStoredMessages,
-                updatedAt: new Date(),
-              })
-              .where(eq(conversations.id, conversationId));
-          } else {
-            // First message in this conversation — create with the provided ID
-            await db
-              .insert(conversations)
-              .values({
-                id: conversationId,
-                messages: newStoredMessages,
-              });
-          }
-        } else {
-          const [newConv] = await db
-            .insert(conversations)
-            .values({
-              messages: newStoredMessages,
-            })
-            .returning();
-
+        const savedId = await saveConversation(newStoredMessages, conversationId);
+        if (!conversationId) {
           controller.enqueue(
-            sseEncode({ type: "conversation", id: newConv.id })
+            sseEncode({ type: "conversation", id: savedId })
           );
         }
 
