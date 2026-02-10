@@ -6,6 +6,7 @@ import { TriageCard, TriageItem } from "@/components/aurelius/triage-card";
 import { TriageBatchCard } from "@/components/aurelius/triage-batch-card";
 import { TriageListView } from "@/components/aurelius/triage-list-view";
 import type { BatchCardWithItems } from "@/lib/triage/batch-cards";
+import { useTriageData, useTriageRules } from "@/hooks/use-triage-data";
 import { TriageActionMenu } from "@/components/aurelius/triage-action-menu";
 import { TriageReplyComposer } from "@/components/aurelius/triage-reply-composer";
 import { TriageSidebar } from "@/components/aurelius/triage-sidebar";
@@ -63,19 +64,37 @@ const CONNECTOR_FILTERS: Array<{
   { value: "granola", label: "Granola", icon: CalendarDays },
 ];
 
-// Cache for triage data to avoid refetching on every page visit
-let triageCache: {
-  data: { items: TriageItem[]; stats: any; tasksByItemId: Record<string, any[]>; senderCounts: Record<string, number>; batchCards: BatchCardWithItems[] } | null;
-  timestamp: number;
-} = { data: null, timestamp: 0 };
-
-const CACHE_STALE_MS = 5 * 60 * 1000; // 5 minutes
-
 export function TriageClient({ userEmail }: { userEmail?: string }) {
-  const [items, setItems] = useState<TriageItem[]>([]);
-  const [batchCards, setBatchCards] = useState<BatchCardWithItems[]>([]);
+  // SWR-managed data — source of truth for server state
+  const {
+    items: fetchedItems,
+    stats,
+    batchCards: fetchedBatchCards,
+    tasksByItemId,
+    senderCounts,
+    isLoading,
+    mutate,
+  } = useTriageData();
+  const { triageRules, mutateRules } = useTriageRules();
+
+  // Local state for optimistic updates (synced from SWR, modified locally)
+  const [localItems, setLocalItems] = useState<TriageItem[]>([]);
+  const [localBatchCards, setLocalBatchCards] = useState<BatchCardWithItems[]>([]);
+
+  // Sync local state from SWR when new data arrives
+  useEffect(() => {
+    if (fetchedItems.length > 0 || !isLoading) {
+      setLocalItems(fetchedItems);
+    }
+  }, [fetchedItems, isLoading]);
+
+  useEffect(() => {
+    if (fetchedBatchCards.length > 0 || !isLoading) {
+      setLocalBatchCards(fetchedBatchCards);
+    }
+  }, [fetchedBatchCards, isLoading]);
+
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("triage");
   const [connectorFilter, setConnectorFilter] = useState<ConnectorFilter>("all");
   const [lastAction, setLastAction] = useState<{
@@ -83,10 +102,6 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     itemId: string;
     item: TriageItem;
   } | null>(null);
-  const [stats, setStats] = useState({ new: 0, archived: 0, snoozed: 0, actioned: 0 });
-  const [tasksByItemId, setTasksByItemId] = useState<Record<string, any[]>>({});
-  const [senderCounts, setSenderCounts] = useState<Record<string, number>>({});
-  const [triageRules, setTriageRules] = useState<any[]>([]);
   const [animatingOut, setAnimatingOut] = useState<"left" | "right" | "up" | null>(null);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -105,84 +120,16 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
 
   const sidebarWidth = isSidebarExpanded ? 480 : 320;
 
-  // Fetch triage items with stale-while-revalidate caching
-  const fetchItems = useCallback(async (opts?: { skipCache?: boolean }) => {
-    const now = Date.now();
-    const cached = triageCache.data;
-    const isStale = now - triageCache.timestamp > CACHE_STALE_MS;
-
-    // Serve from cache immediately if available
-    if (cached && !opts?.skipCache) {
-      setItems(cached.items);
-      setStats(cached.stats);
-      setTasksByItemId(cached.tasksByItemId);
-      setSenderCounts(cached.senderCounts);
-      setBatchCards(cached.batchCards);
-      setIsLoading(false);
-
-      // If cache is fresh, don't refetch
-      if (!isStale) return;
-    }
-
-    // Fetch fresh data (in background if we served from cache)
-    try {
-      const response = await fetch("/api/triage");
-      const data = await response.json();
-      const mappedItems = data.items.map((item: any) => ({
-        ...item,
-        dbId: item.id,
-        id: item.externalId || item.id,
-      }));
-
-      // Update cache
-      triageCache = {
-        data: {
-          items: mappedItems,
-          stats: data.stats,
-          tasksByItemId: data.tasksByItemId || {},
-          senderCounts: data.senderCounts || {},
-          batchCards: data.batchCards || [],
-        },
-        timestamp: Date.now(),
-      };
-
-      setItems(mappedItems);
-      setStats(data.stats);
-      setTasksByItemId(data.tasksByItemId || {});
-      setSenderCounts(data.senderCounts || {});
-      setBatchCards(data.batchCards || []);
-
-      // Fetch triage rules in parallel
-      try {
-        const rulesRes = await fetch("/api/triage/rules");
-        const rulesData = await rulesRes.json();
-        setTriageRules(rulesData.rules || []);
-      } catch (rulesError) {
-        console.error("Failed to fetch triage rules:", rulesError);
-      }
-    } catch (error) {
-      console.error("Failed to fetch triage items:", error);
-      if (!cached) toast.error("Failed to load triage items");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Initial fetch
-  useEffect(() => {
-    fetchItems();
-  }, [fetchItems]);
-
   // Filter items by connector
   const filteredItems = connectorFilter === "all"
-    ? items
-    : items.filter((item) => item.connector === connectorFilter);
+    ? localItems
+    : localItems.filter((item) => item.connector === connectorFilter);
 
-  // Batch card navigation: batch cards occupy indices 0..batchCards.length-1,
-  // individual items start at batchCards.length
-  const batchCardCount = batchCards.length;
+  // Batch card navigation: batch cards occupy indices 0..localBatchCards.length-1,
+  // individual items start at localBatchCards.length
+  const batchCardCount = localBatchCards.length;
   const isOnBatchCard = currentIndex < batchCardCount;
-  const currentBatchCard = isOnBatchCard ? batchCards[currentIndex] : null;
+  const currentBatchCard = isOnBatchCard ? localBatchCards[currentIndex] : null;
   const individualItemIndex = currentIndex - batchCardCount;
 
   // Current item (from filtered list, offset by batch card count)
@@ -198,11 +145,11 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
 
   // Get counts per connector
   const connectorCounts = {
-    all: items.length,
-    gmail: items.filter((i) => i.connector === "gmail").length,
-    slack: items.filter((i) => i.connector === "slack").length,
-    linear: items.filter((i) => i.connector === "linear").length,
-    granola: items.filter((i) => i.connector === "granola").length,
+    all: localItems.length,
+    gmail: localItems.filter((i) => i.connector === "gmail").length,
+    slack: localItems.filter((i) => i.connector === "slack").length,
+    linear: localItems.filter((i) => i.connector === "linear").length,
+    granola: localItems.filter((i) => i.connector === "granola").length,
   };
 
   // Batch card action handler
@@ -218,11 +165,9 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           }),
         });
 
-        // Remove the batch card from state and refresh
-        setBatchCards((prev) => prev.filter((c) => c.id !== cardId));
-        // Invalidate cache and refresh
-        triageCache = { data: null, timestamp: 0 };
-        fetchItems({ skipCache: true });
+        // Remove the batch card from local state optimistically, then revalidate
+        setLocalBatchCards((prev) => prev.filter((c) => c.id !== cardId));
+        mutate();
         toast.success(
           `Batch action complete: ${checkedIds.length} processed, ${uncheckedIds.length} kept`
         );
@@ -231,7 +176,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
         toast.error("Batch action failed");
       }
     },
-    [fetchItems]
+    [mutate]
   );
 
   // Reclassify handler — moves item between batch groups and creates a rule
@@ -259,8 +204,8 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
         });
         if (!res.ok) throw new Error("Reclassify failed");
 
-        // Remove item from current batch card in state
-        setBatchCards((prev) =>
+        // Remove item from current batch card in local state
+        setLocalBatchCards((prev) =>
           prev
             .map((card) => {
               const cardBatchType = (card.data?.batchType as string) || "";
@@ -288,13 +233,13 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
   const handleDeleteRule = useCallback(async (ruleId: string) => {
     try {
       await fetch(`/api/triage/rules/${ruleId}`, { method: "DELETE" });
-      setTriageRules((prev) => prev.filter((r) => r.id !== ruleId));
+      mutateRules();
       toast.success("Rule deleted");
     } catch (error) {
       console.error("Failed to delete rule:", error);
       toast.error("Failed to delete rule");
     }
-  }, []);
+  }, [mutateRules]);
 
   // Rule input handler
   const handleRuleInput = useCallback(async (input: string) => {
@@ -304,12 +249,13 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ input, source: "user_chat" }),
       });
+      mutateRules();
       toast.success("Rule created from your input");
     } catch (error) {
       console.error("Failed to create rule:", error);
       toast.error("Failed to create rule");
     }
-  }, []);
+  }, [mutateRules]);
 
   // Archive action (←) - swipe animation + optimistic
   const handleArchive = useCallback(() => {
@@ -329,12 +275,12 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     }).catch((error) => {
       console.error("Failed to archive:", error);
       toast.error("Failed to archive - item restored");
-      setItems((prev) => [itemToArchive, ...prev]);
+      setLocalItems((prev) => [itemToArchive, ...prev]);
     });
 
     // Remove from list after brief animation
     setTimeout(() => {
-      setItems((prev) => prev.filter((i) => i.id !== itemToArchive.id));
+      setLocalItems((prev) => prev.filter((i) => i.id !== itemToArchive.id));
       setAnimatingOut(null);
     }, 150);
 
@@ -452,7 +398,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     }
 
     // Remove from list after API confirms
-    setItems((prev) => prev.filter((i) => i.id !== itemToAction.id));
+    setLocalItems((prev) => prev.filter((i) => i.id !== itemToAction.id));
     setAnimatingOut(null);
 
     toast.success("Marked for action (3 days)", {
@@ -481,12 +427,12 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     }).catch((error) => {
       console.error("Failed to mark as spam:", error);
       toast.error("Failed to mark as spam - item restored");
-      setItems((prev) => [itemToSpam, ...prev]);
+      setLocalItems((prev) => [itemToSpam, ...prev]);
     });
 
     // Remove from list after brief animation
     setTimeout(() => {
-      setItems((prev) => prev.filter((i) => i.id !== itemToSpam.id));
+      setLocalItems((prev) => prev.filter((i) => i.id !== itemToSpam.id));
       setAnimatingOut(null);
     }, 150);
 
@@ -517,12 +463,12 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     }).catch((error) => {
       console.error("Failed to snooze:", error);
       toast.error("Failed to snooze - item restored");
-      setItems((prev) => [itemToSnooze, ...prev]);
+      setLocalItems((prev) => [itemToSnooze, ...prev]);
     });
 
     // Remove from list after brief animation
     setTimeout(() => {
-      setItems((prev) => prev.filter((i) => i.id !== itemToSnooze.id));
+      setLocalItems((prev) => prev.filter((i) => i.id !== itemToSnooze.id));
       setAnimatingOut(null);
     }, 150);
 
@@ -573,7 +519,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
         // Remove item from individual items list (it's now in a batch card)
         setAnimatingOut("right");
         await new Promise((resolve) => setTimeout(resolve, 200));
-        setItems((prev) => prev.filter((i) => i.id !== currentItem.id));
+        setLocalItems((prev) => prev.filter((i) => i.id !== currentItem.id));
         setAnimatingOut(null);
         toast.success(`Classified as ${data.batchType} — rule created`);
       } catch (error) {
@@ -596,7 +542,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
       if (action === "snooze" || action === "actioned") {
         setAnimatingOut("right");
         await new Promise((resolve) => setTimeout(resolve, 200));
-        setItems((prev) => prev.filter((i) => i.id !== currentItem.id));
+        setLocalItems((prev) => prev.filter((i) => i.id !== currentItem.id));
         setAnimatingOut(null);
       }
 
@@ -616,7 +562,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
 
     if (action.type === "bulk-archive") {
       const itemsToRestore = bulkUndoRef.current;
-      setItems((prev) => [...itemsToRestore, ...prev]);
+      setLocalItems((prev) => [...itemsToRestore, ...prev]);
       setCurrentIndex(0);
 
       // Restore all via API (use dbId for reliable lookup)
@@ -640,7 +586,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
       }
 
       // Immediately add item back to front and reset index to show it
-      setItems((prev) => [itemToRestore, ...prev]);
+      setLocalItems((prev) => [itemToRestore, ...prev]);
       setCurrentIndex(0);
 
       // Fire restore API in background (use dbId for reliable lookup)
@@ -674,8 +620,8 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     })
       .then(() => {
         // Final refresh when heartbeat completes
-        triageCache = { data: null, timestamp: 0 };
-        fetchItems({ skipCache: true });
+        mutate();
+        mutateRules();
         toast.success("Sync complete");
         setIsSyncing(false);
       })
@@ -686,16 +632,15 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
       });
 
     // Refresh triage data immediately (shows current DB state)
-    triageCache = { data: null, timestamp: 0 };
-    await fetchItems({ skipCache: true });
-  }, [isSyncing, fetchItems]);
+    await mutate();
+  }, [isSyncing, mutate, mutateRules]);
 
   // Bulk archive selected items (list view)
   const handleBulkArchive = useCallback(async () => {
     if (selectedIds.size === 0) return;
 
     const idsToArchive = Array.from(selectedIds);
-    const itemsToArchive = items.filter((i) => selectedIds.has(i.id));
+    const itemsToArchive = localItems.filter((i) => selectedIds.has(i.id));
     const count = idsToArchive.length;
 
     // Store for undo
@@ -703,7 +648,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     bulkUndoRef.current = itemsToArchive;
 
     // Optimistically remove items
-    setItems((prev) => prev.filter((i) => !selectedIds.has(i.id)));
+    setLocalItems((prev) => prev.filter((i) => !selectedIds.has(i.id)));
     setSelectedIds(new Set());
 
     // Fire archive API calls (fire-and-forget, use dbId for reliable lookup)
@@ -723,7 +668,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
         onClick: () => handleUndo(),
       },
     });
-  }, [selectedIds, items, handleUndo]);
+  }, [selectedIds, localItems, handleUndo]);
 
   // List view: toggle select
   const handleToggleSelect = useCallback((id: string) => {
@@ -954,7 +899,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ action: "restore" }),
                 });
-                await fetchItems({ skipCache: true });
+                await mutate();
                 toast.success("Restored");
               } catch (error) {
                 console.error("Failed to undo:", error);
@@ -1219,7 +1164,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           item={currentItem}
           onClose={handleCloseOverlay}
           onCreated={() => {
-            triageCache = { data: null, timestamp: 0 };
+            mutate();
             handleActionComplete("actioned");
           }}
         />
