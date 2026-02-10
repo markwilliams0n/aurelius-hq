@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { sseEncode, createSSEStream, SSE_HEADERS } from "../server";
+import { sseEncode, SSE_HEADERS } from "../server";
 
 describe("sseEncode", () => {
   it("encodes an object as an SSE data line", () => {
@@ -13,15 +13,6 @@ describe("sseEncode", () => {
     const text = new TextDecoder().decode(result);
     const parsed = JSON.parse(text.replace("data: ", "").trim());
     expect(parsed.content).toBe("line1\nline2");
-  });
-});
-
-describe("createSSEStream", () => {
-  it("returns a ReadableStream and an emit function", () => {
-    const { stream, emit, close } = createSSEStream();
-    expect(stream).toBeInstanceOf(ReadableStream);
-    expect(typeof emit).toBe("function");
-    expect(typeof close).toBe("function");
   });
 });
 

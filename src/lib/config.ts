@@ -3,6 +3,12 @@ import { configs, configKeyEnum, pendingConfigChanges } from "@/lib/db/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { logConfigChange } from "@/lib/system-events";
 
+// Post-update hooks registered by other modules (avoids circular imports)
+const onUpdateHooks: Array<(key: string) => void> = [];
+export function onConfigUpdate(hook: (key: string) => void) {
+  onUpdateHooks.push(hook);
+}
+
 export type ConfigKey = (typeof configKeyEnum.enumValues)[number];
 
 export async function getConfig(key: ConfigKey) {
@@ -60,6 +66,9 @@ export async function updateConfig(
     .returning();
 
   logConfigChange(key, createdBy);
+
+  // Notify registered hooks (e.g., cache invalidation)
+  for (const hook of onUpdateHooks) hook(key);
 
   return newConfig;
 }

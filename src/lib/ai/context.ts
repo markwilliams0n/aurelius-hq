@@ -9,7 +9,7 @@ import { buildChatPrompt } from './prompts';
 import { DEFAULT_MODEL } from './client';
 import { buildMemoryContext } from '@/lib/memory/search';
 import { getRecentNotes } from '@/lib/memory/daily-notes';
-import { getConfig } from '@/lib/config';
+import { getConfig, onConfigUpdate } from '@/lib/config';
 import { emitMemoryEvent } from '@/lib/memory/events';
 import { getCapabilityPrompts } from '@/lib/capabilities';
 import { createTTLCache } from './context-cache';
@@ -32,6 +32,12 @@ const recentNotesCache = createTTLCache(
   () => getRecentNotes(),
   60 * 1000,
 );
+
+// Invalidate caches when config is updated
+onConfigUpdate((key) => {
+  if (key === "soul") soulConfigCache.invalidate();
+  if (key.startsWith("capability:")) capabilityPromptsCache.invalidate();
+});
 
 export interface AgentContextOptions {
   /** The user's message - used for semantic search */
