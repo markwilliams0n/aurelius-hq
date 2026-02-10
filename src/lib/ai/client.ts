@@ -60,7 +60,8 @@ export type ChatStreamEvent =
   | { type: "text"; content: string }
   | { type: "tool_use"; toolName: string; toolInput: Record<string, unknown> }
   | { type: "tool_result"; toolName: string; result: string }
-  | { type: "pending_change"; changeId: string };
+  | { type: "pending_change"; changeId: string }
+  | { type: "action_card"; card: { pattern: string; title: string; data: Record<string, unknown>; handler?: string } };
 
 // Streaming chat completion with tool support (multi-turn)
 export async function* chatStreamWithTools(
@@ -167,7 +168,7 @@ export async function* chatStreamWithTools(
       yield { type: "tool_use", toolName, toolInput: parsedArgs };
 
       try {
-        const { result: toolResult, pendingChangeId } = await handleToolCall(
+        const { result: toolResult, pendingChangeId, actionCard } = await handleToolCall(
           toolName,
           parsedArgs,
           conversationId
@@ -179,6 +180,10 @@ export async function* chatStreamWithTools(
         if (pendingChangeId) {
           console.log("[AI Client] Pending change created:", pendingChangeId);
           yield { type: "pending_change", changeId: pendingChangeId };
+        }
+
+        if (actionCard) {
+          yield { type: "action_card", card: actionCard };
         }
 
         // Add assistant message with tool call and tool result to conversation

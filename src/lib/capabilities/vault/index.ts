@@ -214,21 +214,21 @@ async function handleSave(
 
     return {
       result: JSON.stringify({
-        action_card: {
-          pattern: 'vault',
-          handler: 'vault:supermemory',
-          title: `Updated in Vault: ${item.title}`,
-          data: {
-            vault_item_id: item.id,
-            title: item.title,
-            type: item.type,
-            tags: item.tags,
-            sensitive: item.sensitive,
-            supermemoryStatus: item.supermemoryStatus,
-          },
-        },
         summary: `Updated existing "${item.title}" in vault (was "${duplicate.title}")`,
       }),
+      actionCard: {
+        pattern: 'vault',
+        handler: 'vault:supermemory',
+        title: `Updated in Vault: ${item.title}`,
+        data: {
+          vault_item_id: item.id,
+          title: item.title,
+          type: item.type,
+          tags: item.tags,
+          sensitive: item.sensitive,
+          supermemoryStatus: item.supermemoryStatus,
+        },
+      },
     };
   }
 
@@ -245,21 +245,21 @@ async function handleSave(
 
   return {
     result: JSON.stringify({
-      action_card: {
-        pattern: 'vault',
-        handler: 'vault:supermemory',
-        title: `Saved to Vault: ${item.title}`,
-        data: {
-          vault_item_id: item.id,
-          title: item.title,
-          type: item.type,
-          tags: item.tags,
-          sensitive: item.sensitive,
-          supermemoryStatus: item.supermemoryStatus,
-        },
-      },
       summary: `Saved "${item.title}" to vault as ${item.type}${item.sensitive ? ' (sensitive)' : ''}`,
     }),
+    actionCard: {
+      pattern: 'vault',
+      handler: 'vault:supermemory',
+      title: `Saved to Vault: ${item.title}`,
+      data: {
+        vault_item_id: item.id,
+        title: item.title,
+        type: item.type,
+        tags: item.tags,
+        sensitive: item.sensitive,
+        supermemoryStatus: item.supermemoryStatus,
+      },
+    },
   };
 }
 
@@ -278,17 +278,16 @@ async function handleSearch(
     if (item.sensitive) {
       return {
         result: JSON.stringify({
-          action_card: {
-            pattern: 'vault',
-            handler: null,
-            title: `Vault: ${item.title}`,
-            data: {
-              ...formatted,
-              reveal_available: true,
-            },
-          },
           summary: `Found "${item.title}" (sensitive — use Reveal to view value)`,
         }),
+        actionCard: {
+          pattern: 'vault',
+          title: `Vault: ${item.title}`,
+          data: {
+            ...formatted,
+            reveal_available: true,
+          },
+        },
       };
     }
 
@@ -339,17 +338,16 @@ async function handleSearch(
   if (firstSensitive) {
     return {
       result: JSON.stringify({
-        action_card: {
-          pattern: 'vault',
-          handler: null,
-          title: `Vault search: ${items.length} result${items.length === 1 ? '' : 's'}`,
-          data: {
-            results,
-            first_sensitive_id: firstSensitive.id,
-          },
-        },
         summary: `Found ${items.length} result${items.length === 1 ? '' : 's'} for "${query}"${sensitiveNote}`,
       }),
+      actionCard: {
+        pattern: 'vault',
+        title: `Vault search: ${items.length} result${items.length === 1 ? '' : 's'}`,
+        data: {
+          results,
+          first_sensitive_id: firstSensitive.id,
+        },
+      },
     };
   }
 

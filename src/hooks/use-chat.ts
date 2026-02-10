@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { ActionCardData } from "@/lib/types/action-card";
 import type { ChatContext } from "@/lib/types/chat-context";
+import { readSSEStream } from "@/lib/sse/client";
 import { toast } from "sonner";
 
 export type ChatMessage = {
@@ -15,11 +16,6 @@ type ChatStats = {
   model: string;
   tokenCount: number;
   factsSaved: number;
-};
-
-type SSEEvent = {
-  type: string;
-  [key: string]: unknown;
 };
 
 const generateMessageId = () =>
@@ -90,13 +86,14 @@ export function useChat(options: UseChatOptions) {
           factsSaved: data.factsSaved || 0,
         }));
 
-        // Hydrate persisted action cards on initial load
+        // Hydrate persisted action cards on initial load (only pending ones)
         if (data.actionCards?.length > 0 && isInitial) {
           const cardMap = new Map<string, ActionCardData[]>();
           const messageIdSet = new Set(loadedMessages.map((m) => m.id));
           const lastAssistantMsg = [...loadedMessages].reverse().find((m) => m.role === "assistant");
           const fallbackId = lastAssistantMsg?.id || "orphan";
           for (const card of data.actionCards as ActionCardData[]) {
+            if (card.status !== "pending") continue;
             const targetId = card.messageId && messageIdSet.has(card.messageId)
               ? card.messageId
               : fallbackId;
@@ -138,8 +135,8 @@ export function useChat(options: UseChatOptions) {
   }, [loadConversation, isStreaming, pollInterval]);
 
   // Process an SSE event
-  const processEvent = useCallback((data: SSEEvent) => {
-    switch (data.type) {
+  const processEvent = useCallback((data: Record<string, unknown>) => {
+    switch (data.type as string) {
       case "text":
         streamingContentRef.current += data.content as string;
         const newContent = streamingContentRef.current;
@@ -162,15 +159,6 @@ export function useChat(options: UseChatOptions) {
           (data.toolName as string) || "unknown",
           data.result as string
         );
-        // Check for action cards in tool results
-        try {
-          const parsed = JSON.parse(data.result as string);
-          if (parsed.action_card) {
-            // Card will arrive as its own event from the server
-          }
-        } catch {
-          // Not JSON — fine
-        }
         break;
 
       case "pending_change":
@@ -265,41 +253,7 @@ export function useChat(options: UseChatOptions) {
 
       if (!response.ok) throw new Error("Chat request failed");
 
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("No response body");
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              processEvent(data);
-            } catch {
-              // Skip invalid JSON
-            }
-          }
-        }
-      }
-
-      // Process remaining buffer
-      if (buffer.startsWith("data: ")) {
-        try {
-          const data = JSON.parse(buffer.slice(6));
-          processEvent(data);
-        } catch {
-          // Skip
-        }
-      }
+      await readSSEStream(response, processEvent);
     } catch (error) {
       console.error("Chat error:", error);
       toast.error("Failed to send message");

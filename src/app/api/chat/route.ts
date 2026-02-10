@@ -4,23 +4,15 @@ import { chatStreamWithTools, DEFAULT_MODEL, type Message } from "@/lib/ai/clien
 import { buildAgentContext } from "@/lib/ai/context";
 import { extractAndSaveMemories } from "@/lib/memory/extraction";
 import { emitMemoryEvent } from "@/lib/memory/events";
-import { db } from "@/lib/db";
-import { conversations } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { loadConversation, saveConversation, type StoredMessage } from "@/lib/conversation/persistence";
+import { trimHistory } from "@/lib/conversation/history";
 import { createCard, generateCardId } from "@/lib/action-cards/db";
+import { sseEncode, SSE_HEADERS } from "@/lib/sse/server";
 import type { CardPattern } from "@/lib/types/action-card";
 import type { ChatContext } from "@/lib/types/chat-context";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-// Stored message type (with timestamp and stable ID for DB)
-type StoredMessage = {
-  id?: string; // stable ID for card<->message association
-  role: "user" | "assistant";
-  content: string;
-  timestamp: string;
-};
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -45,38 +37,28 @@ export async function POST(request: NextRequest) {
   }
 
   // Get conversation history if exists
-  let storedHistory: StoredMessage[] = [];
-  if (conversationId) {
-    const [conv] = await db
-      .select()
-      .from(conversations)
-      .where(eq(conversations.id, conversationId))
-      .limit(1);
+  const storedHistory = conversationId
+    ? await loadConversation(conversationId)
+    : [];
 
-    if (conv) {
-      storedHistory = (conv.messages as StoredMessage[]) || [];
-    }
-  }
-
-  // Convert stored history to AI message format (without timestamp)
+  // Convert stored history to AI message format and trim to token budget
   const aiHistory: Message[] = storedHistory.map((m) => ({
     role: m.role,
     content: m.content,
   }));
+  const trimmedHistory = trimHistory(aiHistory, 8000);
 
   // Build agent context (recent notes + QMD search + soul config)
   const { systemPrompt } = await buildAgentContext({ query: message, context });
 
   // Build messages for AI
   const aiMessages: Message[] = [
-    ...aiHistory,
+    ...trimmedHistory,
     { role: "user", content: message },
   ];
 
   // Create streaming response
-  const encoder = new TextEncoder();
   let fullResponse = "";
-  let pendingChangeId: string | null = null;
 
   // Generate stable IDs for this exchange (used to associate cards with messages)
   const userMessageId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -87,12 +69,10 @@ export async function POST(request: NextRequest) {
       try {
         // Tell the client which assistant message ID to use for this response
         controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({ type: "assistant_message_id", id: assistantMessageId })}\n\n`
-          )
+          sseEncode({ type: "assistant_message_id", id: assistantMessageId })
         );
 
-        // Stream the response
+        // Stream the response — forward events to SSE, intercept where needed
         for await (const event of chatStreamWithTools(
           aiMessages,
           systemPrompt,
@@ -100,58 +80,24 @@ export async function POST(request: NextRequest) {
         )) {
           if (event.type === "text") {
             fullResponse += event.content;
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({ type: "text", content: event.content })}\n\n`
-              )
-            );
-          } else if (event.type === "tool_use") {
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({ type: "tool_use", toolName: event.toolName, toolInput: event.toolInput })}\n\n`
-              )
-            );
-          } else if (event.type === "tool_result") {
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({ type: "tool_result", toolName: event.toolName, result: event.result })}\n\n`
-              )
-            );
-            // Check if tool result contains an action card — persist to DB and emit
-            try {
-              const parsed = JSON.parse(event.result);
-              if (parsed.action_card) {
-                const cardId = generateCardId();
-                const ac = parsed.action_card;
-                const card = await createCard({
-                  id: cardId,
-                  messageId: assistantMessageId,
-                  conversationId: conversationId || undefined,
-                  pattern: (ac.pattern || "approval") as CardPattern,
-                  status: "pending",
-                  title: ac.title || "Action",
-                  data: ac.data || {},
-                  handler: ac.handler || null,
-                });
-                controller.enqueue(
-                  encoder.encode(
-                    `data: ${JSON.stringify({
-                      type: "action_card",
-                      card,
-                    })}\n\n`
-                  )
-                );
-              }
-            } catch {
-              // Not JSON or no action_card — that's fine
-            }
-          } else if (event.type === "pending_change") {
-            pendingChangeId = event.changeId;
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({ type: "pending_change", changeId: event.changeId })}\n\n`
-              )
-            );
+            controller.enqueue(sseEncode(event));
+          } else if (event.type === "action_card") {
+            // Persist action card to DB before forwarding to client
+            const ac = event.card;
+            const card = await createCard({
+              id: generateCardId(),
+              messageId: assistantMessageId,
+              conversationId: conversationId || undefined,
+              pattern: (ac.pattern || "approval") as CardPattern,
+              status: "pending",
+              title: ac.title || "Action",
+              data: ac.data || {},
+              handler: ac.handler || null,
+            });
+            controller.enqueue(sseEncode({ type: "action_card", card }));
+          } else {
+            // tool_use, tool_result, pending_change — forward as-is
+            controller.enqueue(sseEncode(event));
           }
         }
 
@@ -172,43 +118,10 @@ export async function POST(request: NextRequest) {
           },
         ];
 
-        if (conversationId) {
-          // Check if conversation exists (may not for first triage-{itemId} message)
-          const [existing] = await db
-            .select({ id: conversations.id })
-            .from(conversations)
-            .where(eq(conversations.id, conversationId))
-            .limit(1);
-
-          if (existing) {
-            await db
-              .update(conversations)
-              .set({
-                messages: newStoredMessages,
-                updatedAt: new Date(),
-              })
-              .where(eq(conversations.id, conversationId));
-          } else {
-            // First message in this conversation — create with the provided ID
-            await db
-              .insert(conversations)
-              .values({
-                id: conversationId,
-                messages: newStoredMessages,
-              });
-          }
-        } else {
-          const [newConv] = await db
-            .insert(conversations)
-            .values({
-              messages: newStoredMessages,
-            })
-            .returning();
-
+        const savedId = await saveConversation(newStoredMessages, conversationId);
+        if (!conversationId) {
           controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({ type: "conversation", id: newConv.id })}\n\n`
-            )
+            sseEncode({ type: "conversation", id: savedId })
           );
         }
 
@@ -243,35 +156,21 @@ export async function POST(request: NextRequest) {
 
         // Send stats event
         controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({
-              type: "stats",
-              model: DEFAULT_MODEL,
-              tokenCount: estimatedTokens,
-            })}\n\n`
-          )
+          sseEncode({ type: "stats", model: DEFAULT_MODEL, tokenCount: estimatedTokens })
         );
 
         // Send done event
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
+        controller.enqueue(sseEncode({ type: "done" }));
         controller.close();
       } catch (error) {
         console.error("Chat error:", error);
         controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({ type: "error", message: "Chat failed" })}\n\n`
-          )
+          sseEncode({ type: "error", message: "Chat failed" })
         );
         controller.close();
       }
     },
   });
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
+  return new Response(stream, { headers: SSE_HEADERS });
 }

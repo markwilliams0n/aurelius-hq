@@ -322,24 +322,24 @@ export async function handleTaskTool(
 
         return {
           result: JSON.stringify({
-            action_card: {
-              pattern: 'approval',
-              handler: 'linear:create-issue',
-              title: `Create task: ${truncatedTitle}`,
-              data: {
-                title,
-                description,
-                teamId: team.id,
-                teamName: team.name,
-                projectId,
-                projectName: projectDisplay,
-                assigneeId,
-                assigneeName: assigneeDisplay,
-                priority,
-              },
-            },
             summary: `Drafted Linear task: ${truncatedTitle}`,
           }),
+          actionCard: {
+            pattern: 'approval',
+            handler: 'linear:create-issue',
+            title: `Create task: ${truncatedTitle}`,
+            data: {
+              title,
+              description,
+              teamId: team.id,
+              teamName: team.name,
+              projectId,
+              projectName: projectDisplay,
+              assigneeId,
+              assigneeName: assigneeDisplay,
+              priority,
+            },
+          },
         };
       } catch (error) {
         return {

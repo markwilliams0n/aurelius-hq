@@ -129,19 +129,19 @@ function handleStartSession(toolInput: Record<string, unknown>): ToolResult {
 
   return {
     result: JSON.stringify({
-      action_card: {
-        pattern: 'code',
-        handler: 'code:start',
-        title: `Coding: ${truncatedTask}`,
-        data: {
-          sessionId,
-          task,
-          context,
-          branchName,
-        },
-      },
       summary: `Prepared coding session: ${truncatedTask}`,
     }),
+    actionCard: {
+      pattern: 'code',
+      handler: 'code:start',
+      title: `Coding: ${truncatedTask}`,
+      data: {
+        sessionId,
+        task,
+        context,
+        branchName,
+      },
+    },
   };
 }
 

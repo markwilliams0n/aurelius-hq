@@ -7,9 +7,12 @@
 import { chatStreamWithTools, type Message } from '@/lib/ai/client';
 import { buildAgentContext } from '@/lib/ai/context';
 import { extractAndSaveMemories } from '@/lib/memory/extraction';
-import { db } from '@/lib/db';
-import { conversations } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import {
+  loadConversation,
+  saveConversation,
+  type StoredMessage,
+} from '@/lib/conversation/persistence';
+import { trimHistory } from '@/lib/conversation/history';
 import {
   sendMessage,
   editMessage,
@@ -49,72 +52,10 @@ import '@/lib/action-cards/handlers/config';
 import '@/lib/action-cards/handlers/gmail';
 import '@/lib/action-cards/handlers/linear';
 
-// Stored message type (matches web chat format)
-type StoredMessage = {
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: string;
-};
-
 // Use a shared conversation ID so Telegram and web chat share history
 // This ensures all messages appear in both interfaces
 // Using a fixed UUID since the database column is uuid type
 const SHARED_CONVERSATION_ID = '00000000-0000-0000-0000-000000000000';
-
-/**
- * Get conversation history from the database
- */
-async function getConversationHistory(
-  conversationId: string
-): Promise<StoredMessage[]> {
-  try {
-    const [conv] = await db
-      .select()
-      .from(conversations)
-      .where(eq(conversations.id, conversationId))
-      .limit(1);
-
-    if (conv) {
-      return (conv.messages as StoredMessage[]) || [];
-    }
-  } catch (error) {
-    console.error('Failed to get conversation history:', error);
-  }
-  return [];
-}
-
-/**
- * Save conversation to the database
- */
-async function saveConversation(
-  conversationId: string,
-  messages: StoredMessage[]
-): Promise<void> {
-  try {
-    const [existing] = await db
-      .select()
-      .from(conversations)
-      .where(eq(conversations.id, conversationId))
-      .limit(1);
-
-    if (existing) {
-      await db
-        .update(conversations)
-        .set({
-          messages: messages,
-          updatedAt: new Date(),
-        })
-        .where(eq(conversations.id, conversationId));
-    } else {
-      await db.insert(conversations).values({
-        id: conversationId,
-        messages: messages,
-      });
-    }
-  } catch (error) {
-    console.error('Failed to save conversation:', error);
-  }
-}
 
 /**
  * Handle a /start command
@@ -142,7 +83,7 @@ Just send me a message to start chatting!`;
  */
 async function handleClearCommand(message: TelegramMessage): Promise<void> {
   const conversationId = SHARED_CONVERSATION_ID;
-  await saveConversation(conversationId, []);
+  await saveConversation([], conversationId);
   await sendMessage(message.chat.id, '✓ Conversation history cleared. Fresh start!');
 }
 
@@ -323,13 +264,14 @@ async function handleChatMessage(message: TelegramMessage): Promise<void> {
 
   try {
     // Get conversation history from database
-    const storedHistory = await getConversationHistory(conversationId);
+    const storedHistory = await loadConversation(conversationId);
 
-    // Convert stored history to AI message format
+    // Convert stored history to AI message format and trim to token budget
     const aiHistory: Message[] = storedHistory.map((m) => ({
       role: m.role,
       content: m.content,
     }));
+    const trimmedHistory = trimHistory(aiHistory, 8000);
 
     // Build agent context with Telegram-specific additions
     const telegramContext = `## Telegram Context
@@ -350,7 +292,7 @@ CRITICAL — Telegram has FULL interactive capability:
     });
 
     // Build messages for AI
-    const aiMessages: Message[] = [...aiHistory, { role: 'user', content: userText }];
+    const aiMessages: Message[] = [...trimmedHistory, { role: 'user', content: userText }];
 
     // Collect text response, detect action cards, and track tool usage
     let fullResponse = '';
@@ -366,25 +308,18 @@ CRITICAL — Telegram has FULL interactive capability:
         fullResponse += event.content;
       } else if (event.type === 'tool_use') {
         toolsUsed.add(event.toolName);
-      } else if (event.type === 'tool_result') {
-        try {
-          const parsed = JSON.parse(event.result);
-          if (parsed.action_card) {
-            const ac = parsed.action_card;
-            const card = await createCard({
-              id: generateCardId(),
-              conversationId,
-              pattern: (ac.pattern || 'approval') as CardPattern,
-              status: 'pending',
-              title: ac.title || 'Action',
-              data: ac.data || {},
-              handler: ac.handler || null,
-            });
-            collectedCards.push(card);
-          }
-        } catch {
-          // Not JSON or no action_card — that's fine
-        }
+      } else if (event.type === 'action_card') {
+        const ac = event.card;
+        const card = await createCard({
+          id: generateCardId(),
+          conversationId,
+          pattern: (ac.pattern || 'approval') as CardPattern,
+          status: 'pending',
+          title: ac.title || 'Action',
+          data: ac.data || {},
+          handler: ac.handler || null,
+        });
+        collectedCards.push(card);
       }
     }
 
@@ -408,7 +343,7 @@ CRITICAL — Telegram has FULL interactive capability:
       },
     ];
 
-    await saveConversation(conversationId, newStoredMessages);
+    await saveConversation(newStoredMessages, conversationId);
 
     // Extract and save memories — let extraction decide what's notable
     try {
