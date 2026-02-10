@@ -81,19 +81,31 @@ export async function getCapabilityPrompts(): Promise<string> {
   return `## Available Capabilities\n\n${nonEmpty.join('\n\n---\n\n')}`;
 }
 
+// Build tool → capability dispatch map at module load (O(1) lookup)
+const toolDispatchMap = new Map<string, Capability>();
+for (const cap of ALL_CAPABILITIES) {
+  for (const tool of cap.tools) {
+    toolDispatchMap.set(tool.name, cap);
+  }
+}
+
 /** Dispatch a tool call to the right capability handler */
 export async function handleToolCall(
   toolName: string,
   toolInput: Record<string, unknown>,
   conversationId?: string
 ): Promise<ToolResult> {
-  for (const cap of ALL_CAPABILITIES) {
-    const result = await cap.handleTool(toolName, toolInput, conversationId);
-    if (result !== null) {
-      logCapabilityUse(cap.name, toolName);
-      return result;
-    }
+  const cap = toolDispatchMap.get(toolName);
+  if (!cap) {
+    return { result: JSON.stringify({ error: `Unknown tool: ${toolName}` }) };
   }
+
+  const result = await cap.handleTool(toolName, toolInput, conversationId);
+  if (result !== null) {
+    logCapabilityUse(cap.name, toolName);
+    return result;
+  }
+
   return { result: JSON.stringify({ error: `Unknown tool: ${toolName}` }) };
 }
 
