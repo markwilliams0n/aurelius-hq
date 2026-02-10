@@ -38,10 +38,12 @@ import type { ActionCardData, CardPattern } from '@/lib/types/action-card';
 import {
   getActiveSessions,
   telegramToSession,
+  finalizeZombieSession,
+} from '@/lib/code/session-manager';
+import {
   getSessionKeyboard,
   formatSessionTelegram,
-  finalizeZombieSession,
-} from '@/lib/action-cards/handlers/code';
+} from '@/lib/code/telegram';
 import { worktreeExists } from '@/lib/code/worktree';
 
 // Register all card handlers so dispatchCardAction can find them
