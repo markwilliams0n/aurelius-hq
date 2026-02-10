@@ -14,7 +14,8 @@ export const gmailConnector: Connector = {
   async sync() {
     const r = await syncGmailMessages();
     const detail = [
-      r.synced > 0 ? `${r.synced} synced` : null,
+      r.synced > 0 ? `${r.synced} new` : null,
+      r.skipped > 0 ? `${r.skipped} existing` : null,
       r.archived > 0 ? `${r.archived} archived` : null,
     ].filter(Boolean).join(', ');
 
