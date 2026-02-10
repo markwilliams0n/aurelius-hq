@@ -38,13 +38,6 @@ const activeSessions = globalStore.__codeActiveSessions;
 const telegramMessages = globalStore.__codeTelegramMessages;
 const telegramToSessionMap = globalStore.__codeTelegramToSession;
 
-/**
- * Direct access to the telegramToSession Map.
- * Used by telegram/handler.ts for .get()/.set() — will be removed when
- * telegram handler is updated to use the function API instead.
- */
-export const telegramToSession = telegramToSessionMap;
-
 // Kill all active sessions on server shutdown
 if (!globalStore.__codeSigtermRegistered) {
   globalStore.__codeSigtermRegistered = true;

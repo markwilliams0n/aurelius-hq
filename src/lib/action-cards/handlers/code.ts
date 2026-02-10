@@ -14,7 +14,7 @@ import { notifySessionState } from "@/lib/code/telegram";
 import { spawnSession } from "@/lib/code/lifecycle";
 
 // Re-export for consumers that import from this file
-export { getActiveSessions, finalizeZombieSession, telegramToSession } from "@/lib/code/session-manager";
+export { getActiveSessions, finalizeZombieSession, getSessionForTelegramMessage, setTelegramMessage } from "@/lib/code/session-manager";
 export { getSessionKeyboard, formatSessionTelegram } from "@/lib/code/telegram";
 
 // ---------------------------------------------------------------------------

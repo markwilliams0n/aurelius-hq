@@ -37,7 +37,8 @@ import { dispatchCardAction } from '@/lib/action-cards/registry';
 import type { ActionCardData, CardPattern } from '@/lib/types/action-card';
 import {
   getActiveSessions,
-  telegramToSession,
+  getSessionForTelegramMessage,
+  setTelegramMessage,
   finalizeZombieSession,
 } from '@/lib/code/session-manager';
 import {
@@ -448,7 +449,7 @@ async function renderSessionCard(
 
   const msg = await sendMessage(chatId, text, { replyMarkup: keyboard });
   if (sessionId && msg) {
-    telegramToSession.set(msg.message_id, sessionId);
+    setTelegramMessage(sessionId, msg.message_id);
   }
   return true;
 }
@@ -732,7 +733,7 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
   // Check if this is a reply to a coding session status message
   if (message.reply_to_message) {
     const repliedMsgId = message.reply_to_message.message_id;
-    const sessionId = telegramToSession.get(repliedMsgId);
+    const sessionId = getSessionForTelegramMessage(repliedMsgId);
     if (sessionId) {
       const handled = await handleSessionReply(message, sessionId);
       if (handled) return;

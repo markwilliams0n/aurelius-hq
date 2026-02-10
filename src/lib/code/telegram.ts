@@ -115,7 +115,9 @@ export async function updateSessionTelegram(
 // Convenience: notify session state change
 // ---------------------------------------------------------------------------
 
-/** Send a Telegram notification for a session state change. */
+/** Send a Telegram notification for a session state change. Fire-and-forget — the
+ *  underlying updateSessionTelegram is async but wrapped in try/catch, so callers
+ *  don't need to await. */
 export function notifySessionState(
   sessionId: string,
   state: 'running' | 'waiting' | 'completed' | 'error',

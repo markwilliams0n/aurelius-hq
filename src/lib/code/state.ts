@@ -40,15 +40,6 @@ export function deriveSessionMode(
 // Display helpers
 // ---------------------------------------------------------------------------
 
-/** Format milliseconds as a human-readable duration. */
-export function formatDuration(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const rem = seconds % 60;
-  return `${minutes}m ${rem}s`;
-}
-
 /** Format a timestamp as relative time (e.g. "5m ago", "2h ago"). */
 export function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();

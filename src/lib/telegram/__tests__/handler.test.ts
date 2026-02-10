@@ -105,15 +105,22 @@ vi.mock('@/lib/action-cards/registry', () => ({
   dispatchCardAction: vi.fn().mockResolvedValue({ status: 'confirmed' }),
 }));
 
-// Mock all action card handlers
-vi.mock('@/lib/action-cards/handlers/code', () => ({
+// Mock code session-manager
+vi.mock('@/lib/code/session-manager', () => ({
   getActiveSessions: vi.fn().mockReturnValue(new Map()),
-  telegramToSession: new Map(),
-  getSessionKeyboard: vi.fn().mockReturnValue({ inline_keyboard: [] }),
-  formatSessionTelegram: vi.fn().mockReturnValue('Session info'),
+  getSessionForTelegramMessage: vi.fn().mockReturnValue(undefined),
+  setTelegramMessage: vi.fn(),
   finalizeZombieSession: vi.fn().mockResolvedValue('error'),
 }));
 
+// Mock code telegram notifications
+vi.mock('@/lib/code/telegram', () => ({
+  getSessionKeyboard: vi.fn().mockReturnValue({ inline_keyboard: [] }),
+  formatSessionTelegram: vi.fn().mockReturnValue('Session info'),
+}));
+
+// Mock all action card handlers
+vi.mock('@/lib/action-cards/handlers/code', () => ({}));
 vi.mock('@/lib/action-cards/handlers/slack', () => ({}));
 vi.mock('@/lib/action-cards/handlers/vault', () => ({}));
 vi.mock('@/lib/action-cards/handlers/config', () => ({}));
@@ -121,7 +128,7 @@ vi.mock('@/lib/action-cards/handlers/gmail', () => ({}));
 vi.mock('@/lib/action-cards/handlers/linear', () => ({}));
 
 // Mock code worktree
-vi.mock('@/lib/capabilities/code/worktree', () => ({
+vi.mock('@/lib/code/worktree', () => ({
   worktreeExists: vi.fn().mockReturnValue(false),
 }));
 

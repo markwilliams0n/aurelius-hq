@@ -8,7 +8,8 @@ import { toast } from "sonner";
 import { Code, RefreshCw, Loader2, Terminal, Plus, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ActionCardData } from "@/lib/types/action-card";
-import { timeAgo } from "@/lib/code/state";
+import type { CodeSessionData, SessionMode } from "@/lib/code/types";
+import { deriveSessionMode, timeAgo } from "@/lib/code/state";
 import { cn } from "@/lib/utils";
 
 type SessionGroup = "active" | "completed" | "failed";
@@ -23,6 +24,15 @@ function classifyCard(card: ActionCardData): SessionGroup {
   // pending = waiting for user to start
   return "active";
 }
+
+const STATUS_CONFIG: Record<SessionMode, { label: string; color: string }> = {
+  loading: { label: "Loading", color: "text-muted-foreground" },
+  pending: { label: "Pending", color: "text-amber-400" },
+  running: { label: "Running", color: "text-amber-400" },
+  waiting: { label: "Needs Response", color: "text-blue-400" },
+  completed: { label: "Completed", color: "text-green-400" },
+  error: { label: "Failed", color: "text-red-400" },
+};
 
 const GROUP_META: Record<SessionGroup, { label: string; dotClass: string }> = {
   active: { label: "Active", dotClass: "bg-amber-400 animate-pulse" },
@@ -238,20 +248,8 @@ export function CodeSessionsClient() {
                           const data = card.data as Record<string, unknown>;
                           const task = (data.task as string) || card.title;
                           const branch = data.branchName as string | undefined;
-                          const statusLabel =
-                            card.status === "error"
-                              ? "Failed"
-                              : card.status === "confirmed"
-                                ? data.result
-                                  ? "Completed"
-                                  : "Running"
-                                : "Pending";
-                          const statusColor =
-                            card.status === "error"
-                              ? "text-red-400"
-                              : card.status === "confirmed" && data.result
-                                ? "text-green-400"
-                                : "text-amber-400";
+                          const mode = deriveSessionMode(card.status, data as unknown as CodeSessionData);
+                          const { label: statusLabel, color: statusColor } = STATUS_CONFIG[mode];
 
                           return (
                             <Link

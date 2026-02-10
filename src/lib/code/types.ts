@@ -8,9 +8,6 @@
 // Session states
 // ---------------------------------------------------------------------------
 
-/** Runtime state of the executor process. */
-export type ExecutorState = 'running' | 'waiting_for_input' | 'completed' | 'error';
-
 /** Stored state in the card's JSONB data field (includes terminal states). */
 export type CodeSessionState =
   | 'running'
