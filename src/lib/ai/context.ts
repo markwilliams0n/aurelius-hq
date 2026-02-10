@@ -12,7 +12,26 @@ import { getRecentNotes } from '@/lib/memory/daily-notes';
 import { getConfig } from '@/lib/config';
 import { emitMemoryEvent } from '@/lib/memory/events';
 import { getCapabilityPrompts } from '@/lib/capabilities';
+import { createTTLCache } from './context-cache';
 import type { ChatContext } from '@/lib/types/chat-context';
+
+// Cache soul config for 5 minutes (rarely changes)
+const soulConfigCache = createTTLCache(
+  () => getConfig('soul').then(c => c?.content || null),
+  5 * 60 * 1000,
+);
+
+// Cache capability prompts for 5 minutes (change only on deploy or config edit)
+const capabilityPromptsCache = createTTLCache(
+  () => getCapabilityPrompts(),
+  5 * 60 * 1000,
+);
+
+// Cache recent notes for 60 seconds (changes with daily activity)
+const recentNotesCache = createTTLCache(
+  () => getRecentNotes(),
+  60 * 1000,
+);
 
 export interface AgentContextOptions {
   /** The user's message - used for semantic search */
@@ -100,16 +119,14 @@ export async function buildAgentContext(
 ): Promise<AgentContext> {
   const { query, modelId = DEFAULT_MODEL, additionalContext } = options;
 
-  // Gather all context pieces in parallel
+  // Gather all context pieces in parallel (cached where possible)
   const startTime = Date.now();
-  const [recentNotes, memoryContext, soulConfigResult, capabilityPrompts] = await Promise.all([
-    getRecentNotes(),
-    buildMemoryContext(query),
-    getConfig('soul'),
-    getCapabilityPrompts(),
+  const [recentNotes, memoryContext, soulConfig, capabilityPrompts] = await Promise.all([
+    recentNotesCache.get(),
+    buildMemoryContext(query),  // query-specific, not cacheable
+    soulConfigCache.get(),
+    capabilityPromptsCache.get(),
   ]);
-
-  const soulConfig = soulConfigResult?.content || null;
 
   // Build the system prompt
   let systemPrompt = buildChatPrompt({
