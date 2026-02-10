@@ -73,6 +73,7 @@ function makeRule(overrides: Partial<TriageRule> = {}): TriageRule {
     guidance: null,
     status: "active",
     source: "user_chat",
+    order: 0,
     version: 1,
     createdBy: "user",
     matchCount: 0,
