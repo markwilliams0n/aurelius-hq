@@ -22,10 +22,12 @@ import { runDailyMaintenance } from '@/lib/jobs/daily-maintenance';
 import { classifyNewItems } from '@/lib/triage/classify';
 import { seedDefaultRules } from '@/lib/triage/rules';
 
-// --- Public type exports (preserved for callers) ---
+// --- Public type exports (re-exported from connectors/types for backward compatibility) ---
 
-export type HeartbeatStep = 'backup' | 'granola' | 'gmail' | 'linear' | 'slack' | 'classify' | 'learning';
-export type HeartbeatStepStatus = 'start' | 'done' | 'skip' | 'error';
+export type { HeartbeatStep, HeartbeatStepStatus } from '@/lib/connectors/types';
+
+import type { HeartbeatStep, HeartbeatStepStatus } from '@/lib/connectors/types';
+
 export type ProgressCallback = (step: HeartbeatStep, status: HeartbeatStepStatus, detail?: string) => void;
 
 export interface HeartbeatOptions {
@@ -176,10 +178,10 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
   );
 
   return {
-    granola: sync.connectorResults.granola,
-    gmail: sync.connectorResults.gmail,
-    linear: sync.connectorResults.linear,
-    slack: sync.connectorResults.slack,
+    granola: sync.connectorResults.granola as GranolaSyncResult | undefined,
+    gmail: sync.connectorResults.gmail as GmailSyncResult | undefined,
+    linear: sync.connectorResults.linear as LinearSyncResult | undefined,
+    slack: sync.connectorResults.slack as SlackSyncResult | undefined,
     backup: maintenance.backup,
     learning: maintenance.learning,
     steps,
