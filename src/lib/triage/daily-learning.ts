@@ -105,7 +105,8 @@ Only suggest rules with confidence >= 0.6. If no patterns are worth suggesting, 
   // 5. Call Kimi
   const response = await chat(
     `Analyze these ${recentActions.length} triage actions and suggest rule improvements.`,
-    systemPrompt
+    systemPrompt,
+    { maxTokens: 1024 }
   );
 
   // 6. Log AI cost
