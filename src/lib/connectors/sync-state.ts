@@ -8,6 +8,7 @@
 
 import { db } from '@/lib/db';
 import { configs } from '@/lib/db/schema';
+import { eq, and } from 'drizzle-orm';
 import { getConfig, type ConfigKey } from '@/lib/config';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -79,22 +80,38 @@ export async function getSyncState<T = Record<string, unknown>>(
 
 /**
  * Save sync state for a connector to the database.
- * Uses the existing config versioning system (each write creates a new version).
- * Writes as "system" actor since this is automated connector state.
+ * Unlike user-facing configs (which version every change), sync state is
+ * machine-managed and updates in-place to avoid row accumulation (~384/day).
  */
 export async function setSyncState(
   key: SyncStateKey,
   state: Record<string, unknown>
 ): Promise<void> {
   const current = await getConfig(key as ConfigKey);
-  const nextVersion = (current?.version ?? 0) + 1;
 
-  await db
-    .insert(configs)
-    .values({
-      key: key as ConfigKey,
-      content: JSON.stringify(state),
-      version: nextVersion,
-      createdBy: 'system',
-    });
+  if (current) {
+    // Update existing row in-place — no versioning needed for machine state
+    await db
+      .update(configs)
+      .set({
+        content: JSON.stringify(state),
+        createdAt: new Date(),
+      })
+      .where(
+        and(
+          eq(configs.key, key as ConfigKey),
+          eq(configs.version, current.version)
+        )
+      );
+  } else {
+    // First write — create the row
+    await db
+      .insert(configs)
+      .values({
+        key: key as ConfigKey,
+        content: JSON.stringify(state),
+        version: 1,
+        createdBy: 'system',
+      });
+  }
 }

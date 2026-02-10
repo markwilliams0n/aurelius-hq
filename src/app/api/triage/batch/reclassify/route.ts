@@ -101,7 +101,10 @@ export async function POST(request: Request) {
         name: `Reclassify ${displayName} → ${toBatchType}`,
         description: `Updated when user reclassified item from ${fromBatchType} to ${toBatchType}`,
       });
-      ruleId = updated!.id;
+      if (!updated) {
+        return NextResponse.json({ error: "Rule was deleted during update" }, { status: 409 });
+      }
+      ruleId = updated.id;
     } else {
       // Create new rule
       const rule = await createRule({
