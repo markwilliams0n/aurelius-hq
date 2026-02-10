@@ -1,32 +1,11 @@
 "use client";
 
 import type { ActionCardData } from "@/lib/types/action-card";
+import type { CodeResult } from "@/lib/code/types";
 
 interface CodeCardContentProps {
   card: ActionCardData;
   onAction?: (action: string, data?: Record<string, unknown>) => void;
-}
-
-interface CodeResult {
-  turns: number;
-  durationMs: number;
-  costUsd: number | null;
-  stats: {
-    filesChanged: number;
-    insertions: number;
-    deletions: number;
-    summary: string;
-  };
-  changedFiles: string[];
-  log: string;
-}
-
-function formatDuration(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes}m ${remainingSeconds}s`;
 }
 
 function StatusDot({ className, pulse }: { className: string; pulse?: boolean }) {
@@ -86,8 +65,8 @@ export function CodeCardContent({ card, onAction }: CodeCardContentProps) {
           <StatusDot className="bg-green-500" />
           <span className="font-medium text-green-400">Session complete</span>
           <span className="text-muted-foreground">
-            {formatDuration(result.durationMs)} &middot; {result.turns} turn
-            {result.turns !== 1 ? "s" : ""}
+            {result.turns} turn{result.turns !== 1 ? "s" : ""}
+            {result.costUsd !== null && ` · $${result.costUsd.toFixed(2)}`}
           </span>
         </div>
 

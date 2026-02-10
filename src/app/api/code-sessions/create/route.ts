@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { createCard, generateCardId } from "@/lib/action-cards/db";
-import { slugifyTask } from "@/lib/capabilities/code/prompts";
+import { slugifyTask } from "@/lib/code/prompts";
 import { nanoid } from "nanoid";
 
 /**

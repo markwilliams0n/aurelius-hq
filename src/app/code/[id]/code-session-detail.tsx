@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ActionCardData } from "@/lib/types/action-card";
+import type { SessionMode, CodeSessionData } from "@/lib/code/types";
+import { deriveSessionMode } from "@/lib/code/state";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -42,23 +44,9 @@ interface ProgressResponse {
   };
 }
 
-type SessionMode = "loading" | "pending" | "running" | "waiting" | "completed" | "error";
-
 function getMode(card: ProgressResponse["card"] | null): SessionMode {
   if (!card) return "loading";
-  if (card.status === "error") return "error";
-  if (card.status === "dismissed") return "error";
-  if (card.status === "confirmed") {
-    const data = card.data as Record<string, unknown>;
-    // Check the bidirectional state field first
-    const state = data.state as string | undefined;
-    if (state === "waiting") return "waiting";
-    if (state === "completed") return "completed";
-    if (state === "running") return "running";
-    // Fallback: if result exists without state field, it's completed
-    return data.result ? "completed" : "running";
-  }
-  return "pending";
+  return deriveSessionMode(card.status, card.data as unknown as CodeSessionData);
 }
 
 // ---------------------------------------------------------------------------

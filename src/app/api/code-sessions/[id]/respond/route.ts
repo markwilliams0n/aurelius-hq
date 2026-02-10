@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getCard, updateCard } from "@/lib/action-cards/db";
-import { getActiveSessions } from "@/lib/action-cards/handlers/code";
+import { getActiveSessions } from "@/lib/code/session-manager";
 
 /**
  * POST /api/code-sessions/[id]/respond
