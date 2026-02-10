@@ -106,6 +106,24 @@ export async function getCardsByPattern(
 }
 
 /**
+ * Find the card ID for a given coding session ID.
+ */
+export async function getCardIdBySessionId(sessionId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ id: actionCards.id })
+    .from(actionCards)
+    .where(
+      and(
+        eq(actionCards.pattern, 'code'),
+        sql`${actionCards.data}->>'sessionId' = ${sessionId}`,
+      ),
+    )
+    .limit(1);
+
+  return row?.id ?? null;
+}
+
+/**
  * Get coding session cards that are actionable (waiting for response or completed awaiting approval).
  * Returns confirmed code-pattern cards where data.state is 'waiting' or 'completed'.
  */

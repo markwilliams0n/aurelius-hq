@@ -29,7 +29,10 @@ export function getSessionKeyboard(
       return { inline_keyboard: [[{ text: '\u{1F6D1} Stop', callback_data: `code:stop:${cardId}` }]] };
     case 'waiting':
       return { inline_keyboard: [
-        [{ text: '\u{1F6D1} Stop', callback_data: `code:stop:${cardId}` }],
+        [
+          { text: '\u{2705} Finish', callback_data: `code:finish:${cardId}` },
+          { text: '\u{1F6D1} Stop', callback_data: `code:stop:${cardId}` },
+        ],
       ] };
     case 'completed':
       return { inline_keyboard: [
@@ -67,10 +70,12 @@ export function formatSessionTelegram(
   lines.push(`Task: ${truncatedTask}`);
   lines.push(`Turns: ${totalTurns} \u{00B7} Cost: ${costStr}`);
 
-  if (state === 'waiting' && extra?.lastMessage) {
-    const preview = extra.lastMessage.length > 1000 ? extra.lastMessage.slice(0, 997) + '...' : extra.lastMessage;
-    lines.push('');
-    lines.push(`Claude says:\n${preview}`);
+  if (state === 'waiting') {
+    if (extra?.lastMessage) {
+      const preview = extra.lastMessage.length > 1000 ? extra.lastMessage.slice(0, 997) + '...' : extra.lastMessage;
+      lines.push('');
+      lines.push(`Claude says:\n${preview}`);
+    }
     lines.push('');
     lines.push('\u{1F4AC} Reply to this message to respond.');
   } else if (state === 'error' && extra?.error) {
@@ -87,14 +92,36 @@ export function formatSessionTelegram(
 // Send / edit
 // ---------------------------------------------------------------------------
 
-/** Send or edit the Telegram status message for a session. */
+/**
+ * Send or edit the Telegram status message for a session.
+ *
+ * For 'waiting' state we always send a NEW message so the user gets a
+ * notification (editing an existing message is silent in Telegram).
+ * For other states we edit the existing message to avoid clutter.
+ */
 export async function updateSessionTelegram(
   sessionId: string,
+  state: 'running' | 'waiting' | 'completed' | 'error',
   text: string,
   keyboard?: InlineKeyboardMarkup,
 ): Promise<void> {
   try {
     const existingMsgId = getTelegramMessageId(sessionId);
+
+    // Waiting = always send a new message so Telegram delivers a notification
+    if (state === 'waiting') {
+      // Edit old message to remove stale buttons (best effort)
+      if (existingMsgId) {
+        editOwnerMessage(existingMsgId, text.split('\n')[0] + '\n\n(see below)').catch(() => {});
+      }
+      const msgId = await sendOwnerMessage(text, { replyMarkup: keyboard });
+      if (msgId) {
+        setTelegramMessage(sessionId, msgId);
+      }
+      return;
+    }
+
+    // Other states — edit existing or send new
     if (existingMsgId) {
       const newId = await editOwnerMessage(existingMsgId, text, { replyMarkup: keyboard });
       if (newId && newId !== existingMsgId) {
@@ -129,6 +156,7 @@ export function notifySessionState(
 ): void {
   updateSessionTelegram(
     sessionId,
+    state,
     formatSessionTelegram(state, task, totalTurns, totalCostUsd, extra),
     cardId ? getSessionKeyboard(state, cardId) : undefined,
   );

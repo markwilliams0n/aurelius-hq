@@ -29,6 +29,7 @@ import {
   createCard,
   generateCardId,
   getCard,
+  getCardIdBySessionId,
   getPendingCards,
   getActionableCodingSessions,
   updateCard,
@@ -44,6 +45,7 @@ import {
 import {
   getSessionKeyboard,
   formatSessionTelegram,
+  notifySessionState,
 } from '@/lib/code/telegram';
 import { worktreeExists } from '@/lib/code/worktree';
 
@@ -626,11 +628,12 @@ async function handleCallbackQuery(
         approve: result.successMessage || 'Approved!',
         reject: result.successMessage || 'Rejected',
         resume: 'Session resumed',
+        finish: 'Session finishing...',
       };
       await answerCallbackQuery(callbackQueryId, { text: labels[action] || 'Done' });
 
-      // Don't change card status for resume (session handler manages it)
-      if (action !== 'resume') {
+      // Don't change card status for resume/finish (session handler manages it)
+      if (action !== 'resume' && action !== 'finish') {
         await updateCard(cardId, {
           status: result.status === 'needs_confirmation' ? 'pending' : result.status,
           ...(result.result && { result: result.result }),
@@ -640,10 +643,10 @@ async function handleCallbackQuery(
       // Edit the button message to show it's been handled (removes buttons)
       try {
         const emojiMap: Record<string, string> = {
-          approve: '\u{2705}', reject: '\u{274C}', stop: '\u{1F6D1}', resume: '\u{25B6}\u{FE0F}',
+          approve: '\u{2705}', reject: '\u{274C}', stop: '\u{1F6D1}', resume: '\u{25B6}\u{FE0F}', finish: '\u{2705}',
         };
         const labelMap: Record<string, string> = {
-          approve: 'Merged', reject: 'Rejected', stop: 'Stopped', resume: 'Resuming...',
+          approve: 'Merged', reject: 'Rejected', stop: 'Stopped', resume: 'Resuming...', finish: 'Finishing...',
         };
         const emoji = emojiMap[action] || '\u{2705}';
         const label = labelMap[action] || 'Done';
@@ -693,6 +696,23 @@ async function handleSessionReply(
 
   const text = message.text || '';
   session.sendMessage(text);
+
+  // Update card state to running so it stays in sync
+  const cardId = await getCardIdBySessionId(sessionId);
+  if (cardId) {
+    const card = await getCard(cardId);
+    if (card?.status === 'confirmed') {
+      const data = card.data as Record<string, unknown>;
+      await updateCard(cardId, {
+        data: { ...data, state: 'running', lastMessage: undefined },
+      });
+      const task = (data.task as string) || 'Unknown task';
+      const totalTurns = (data.totalTurns as number) || 0;
+      const totalCostUsd = (data.totalCostUsd as number) ?? null;
+      notifySessionState(sessionId, 'running', cardId, task, totalTurns, totalCostUsd);
+    }
+  }
+
   await sendMessage(chatId, '\u{2705} Response sent — session resuming.', {
     replyToMessageId: repliedMsgId,
   });

@@ -103,6 +103,7 @@ const ALLOWED_TOOLS = [
   'Bash(head:*)',
   'Bash(tail:*)',
   'Bash(wc:*)',
+  'Bash(npx agent-browser:*)',
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -269,7 +270,7 @@ function parseStream(
           turns: (event.num_turns as number | undefined) ?? 0,
           durationMs: (event.duration_ms as number | undefined) ?? 0,
           costUsd: (event.total_cost_usd as number | undefined) ?? null,
-          text: lastTextForTurn,
+          text: lastTextForTurn || resultText,
         };
 
         // Emit as a progress event too, so the handler can see it
