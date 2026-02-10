@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { configs, configKeyEnum, pendingConfigChanges } from "@/lib/db/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { logConfigChange } from "@/lib/system-events";
 
 export type ConfigKey = (typeof configKeyEnum.enumValues)[number];
@@ -47,15 +47,14 @@ export async function updateConfig(
   content: string,
   createdBy: "user" | "aurelius"
 ) {
-  const current = await getConfig(key);
-  const nextVersion = (current?.version ?? 0) + 1;
-
+  // Atomically compute next version in the INSERT to avoid race conditions
+  // on the unique(key, version) constraint
   const [newConfig] = await db
     .insert(configs)
     .values({
       key,
       content,
-      version: nextVersion,
+      version: sql<number>`(SELECT coalesce(max(version), 0) + 1 FROM configs WHERE key = ${key})`,
       createdBy,
     })
     .returning();

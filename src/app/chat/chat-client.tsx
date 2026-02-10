@@ -5,7 +5,6 @@ import { ChatMessage } from "@/components/aurelius/chat-message";
 import { ChatInput } from "@/components/aurelius/chat-input";
 import { ChatStatus } from "@/components/aurelius/chat-status";
 import { AppShell } from "@/components/aurelius/app-shell";
-import { ChatMemoryPanel } from "@/components/aurelius/chat-memory-panel";
 import { ToolPanel, PanelContent } from "@/components/aurelius/tool-panel";
 import { ActionCard } from "@/components/aurelius/action-card";
 import { CardContent } from "@/components/aurelius/cards/card-content";
@@ -147,7 +146,7 @@ export function ChatClient() {
     );
   }
 
-  // Determine which sidebar to show
+  // Show tool panel sidebar only when there's active content
   const rightSidebar = toolPanelContent ? (
     <ToolPanel
       content={toolPanelContent}
@@ -157,9 +156,7 @@ export function ChatClient() {
       width={panelWidth}
       onWidthChange={setPanelWidth}
     />
-  ) : (
-    <ChatMemoryPanel />
-  );
+  ) : null;
 
   return (
     <AppShell rightSidebar={rightSidebar} wideSidebar={!!toolPanelContent} sidebarWidth={panelWidth}>

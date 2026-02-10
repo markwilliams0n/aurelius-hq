@@ -86,13 +86,14 @@ export function useChat(options: UseChatOptions) {
           factsSaved: data.factsSaved || 0,
         }));
 
-        // Hydrate persisted action cards on initial load
+        // Hydrate persisted action cards on initial load (only pending ones)
         if (data.actionCards?.length > 0 && isInitial) {
           const cardMap = new Map<string, ActionCardData[]>();
           const messageIdSet = new Set(loadedMessages.map((m) => m.id));
           const lastAssistantMsg = [...loadedMessages].reverse().find((m) => m.role === "assistant");
           const fallbackId = lastAssistantMsg?.id || "orphan";
           for (const card of data.actionCards as ActionCardData[]) {
+            if (card.status !== "pending") continue;
             const targetId = card.messageId && messageIdSet.has(card.messageId)
               ? card.messageId
               : fallbackId;
