@@ -22,3 +22,30 @@ export function parseSSELines(
 
   return remainder;
 }
+
+/**
+ * Read an SSE response stream, parsing each event and calling `onEvent`.
+ * Handles chunked reads, buffering, and remainder flushing.
+ */
+export async function readSSEStream(
+  response: Response,
+  onEvent: (data: Record<string, unknown>) => void,
+): Promise<void> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("No response body");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    buffer = parseSSELines(buffer, onEvent);
+  }
+
+  // Flush any trailing data
+  if (buffer) {
+    parseSSELines(buffer + "\n", onEvent);
+  }
+}

@@ -13,7 +13,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { parseSSELines } from "@/lib/sse/client";
+import { readSSEStream } from "@/lib/sse/client";
 import { toast } from "sonner";
 import { TriageItem } from "./triage-card";
 
@@ -162,33 +162,12 @@ export function TaskCreatorPanel({ item, onClose, onCreated }: TaskCreatorPanelP
       if (!res.ok) throw new Error("Chat failed");
 
       // Read SSE stream and collect full response
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("No response body");
-
-      const decoder = new TextDecoder();
-      let buffer = "";
       let fullResponse = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        buffer = parseSSELines(buffer, (data) => {
-          if (data.type === "text") {
-            fullResponse += data.content as string;
-          }
-        });
-      }
-
-      // Process remaining buffer
-      if (buffer) {
-        parseSSELines(buffer + "\n", (data) => {
-          if (data.type === "text") {
-            fullResponse += data.content as string;
-          }
-        });
-      }
+      await readSSEStream(res, (data) => {
+        if (data.type === "text") {
+          fullResponse += data.content as string;
+        }
+      });
 
       setChatHistory((prev) => [
         ...prev,

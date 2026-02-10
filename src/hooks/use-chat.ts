@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { ActionCardData } from "@/lib/types/action-card";
 import type { ChatContext } from "@/lib/types/chat-context";
-import { parseSSELines } from "@/lib/sse/client";
+import { readSSEStream } from "@/lib/sse/client";
 import { toast } from "sonner";
 
 export type ChatMessage = {
@@ -252,24 +252,7 @@ export function useChat(options: UseChatOptions) {
 
       if (!response.ok) throw new Error("Chat request failed");
 
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("No response body");
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        buffer = parseSSELines(buffer, processEvent);
-      }
-
-      // Process remaining buffer
-      if (buffer) {
-        parseSSELines(buffer + "\n", processEvent);
-      }
+      await readSSEStream(response, processEvent);
     } catch (error) {
       console.error("Chat error:", error);
       toast.error("Failed to send message");
