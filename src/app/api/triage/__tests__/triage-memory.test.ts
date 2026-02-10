@@ -80,6 +80,15 @@ vi.mock('@/lib/activity', () => ({
   logActivity: vi.fn().mockResolvedValue({ id: 'activity-1' }),
 }));
 
+// Mock memory entities and facts (added after bulk memory merge)
+vi.mock('@/lib/memory/entities', () => ({
+  upsertEntity: vi.fn().mockResolvedValue({ id: 'entity-1', name: 'Test' }),
+}));
+
+vi.mock('@/lib/memory/facts', () => ({
+  createFact: vi.fn().mockResolvedValue({ id: 'fact-1' }),
+}));
+
 import { POST } from '../[id]/memory/route';
 import { appendToDailyNote } from '@/lib/memory/daily-notes';
 import { addMemory } from '@/lib/memory/supermemory';
