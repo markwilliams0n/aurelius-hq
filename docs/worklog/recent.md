@@ -4,6 +4,26 @@ Work completed in the last 2-4 weeks.
 
 ---
 
+## 2026-02-08
+
+### Backlog Sweep (overnight autonomous session)
+- PER-199: Fixed 32 TypeScript errors (stale test fixtures, type mismatches)
+- PER-210: Linear `create_task` → action card approval flow
+- PER-187: Triage sender context (items aware of same-sender history)
+- PER-177: Dynamic cortex topology — derived from capability registry + DB
+- PER-206: Vault wizard — confirmed all 8 plan tasks already implemented, closed
+- PER-149: macOS native notifications alongside Telegram (osascript)
+- PER-211: Gmail agent capability with `draft_email` tool + action card approval
+- PER-209, PER-207, PER-178: Closed — already done
+
+### Aurelius Can Code (PR #19, PER-213)
+- `code` capability with `start_coding_session` tool
+- Executor spawns `claude -p` with NDJSON stream parsing, worktree isolation
+- Action card approval flow with code card UI (4 states)
+
+### Pending Actions Page (PR #18, PER-174)
+- `/actions` page with grouped pending cards, sidebar badge, 30s polling
+
 ## 2026-02-07
 
 ### Unified Chat Across App (PER-188)

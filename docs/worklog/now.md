@@ -6,74 +6,31 @@
 
 **2026-02-09**
 
-Chat system refactor (feature/refactor-chat → main, PR #23, PER-232):
-- Extracted shared utilities: SSE encoder/parser, conversation persistence, history trimming, TTL cache
-- Structured action cards: capabilities return typed `actionCard` field instead of JSON-in-strings
-- O(1) tool dispatch via Map, TTL caching for soul config/capability prompts/notes
-- Bug fixes: completed action cards no longer reappear on reload, config version race condition fixed (atomic SQL), stale memory sidebar removed
-- Config cache invalidation via hook pattern (soul/capability caches bust immediately on edit)
-- 14 commits, 25 files, +717/-469 lines, 283 tests pass
+Code agent refactor (feature/refactor-code-agent → main, PR #24, PER-233):
+- Decomposed 764-line god object (`handlers/code.ts`) into 8 focused modules under `src/lib/code/`
+- New: types.ts, state.ts, session-manager.ts, telegram.ts, lifecycle.ts
+- Moved: executor.ts, worktree.ts, prompts.ts from capabilities/code/ to lib/code/
+- Shared `spawnSession()` replaces duplicated start/resume logic
+- UI components now use shared types + `deriveSessionMode` (fixes "Needs Response" in list)
+- Migrated telegram/handler.ts from raw Map to function API, fixed stale test mocks
+- handlers/code.ts: 764 → 286 lines, 4 commits, 283 tests pass
 
-Gmail sync & triage reliability fixes (feature/follow-up-enhancement → main, PR #21, PER-229):
-- Gmail archive/spam now uses `threads.modify` (was per-message, didn't work for multi-message threads)
-- Retroactive cleanup: archived 23 stale Gmail threads stuck in inbox
-- Dedup prevention: unique index on (connector, external_id) + onConflictDoNothing
-- All triage API calls use `dbId` (was using remapped `externalId`, causing 404s)
-- Batch card checked state re-syncs on item changes (stale-while-revalidate fix)
-- `handleActionNeeded` awaits API before removing from state (race condition fix)
-- `reclassifyNullBatchItems` respects user "remove from group" decisions
-- 261 tests pass, TypeScript clean
-
-Smart triage classification & batch actions (feature/triage-enhancements → main, PR #20, PER-219):
-- 3-pass classification pipeline: rules → Ollama → Kimi (cloud LLM via OpenRouter)
-- Batch card UI with domain groups (notifications, finance, newsletters, calendar, spam)
-- Rule system with CRUD, auto-creation on reclassify, NL parsing
-- Individual item classify via `g` shortcut + action menu number keys
-- Calendar "Accept & Archive", daily learning loop, AI cost logging
-- Bug fixes: Gmail sync on batch archive, reappearing items after uncheck, SQL injection, OpenRouter max_tokens
-- 25 commits, 41 files, +7,500 lines
-
-Test suite fix (feature/test-fixes branch, PER-218):
-- Fixed 39 failing tests across 7 test files — all caused by implementation drift
-- 260/260 tests now pass, TypeScript clean
-
-**2026-02-08 (overnight session)**
-
-Backlog sweep — worked through Linear project issues autonomously:
-- PER-199: Fixed 32 TypeScript errors (stale test fixtures, type mismatches)
-- PER-210: Linear `create_task` → action card approval flow
-- PER-187: Triage sender context (items aware of same-sender history)
-- PER-177: Dynamic cortex topology — derived from capability registry + DB instead of hardcoded
-- PER-206: Vault wizard — confirmed all 8 plan tasks already implemented, closed
-- PER-149: macOS native notifications alongside Telegram (osascript)
-- PER-211: Gmail agent capability with `draft_email` tool + action card approval
-- PER-209: Parent issue closed — all agent actions now use action card flow (Slack, Linear, Gmail)
-- PER-207: Linear hooks & statusline — already done, closed
-- PER-178: Triage enhancements test plan — branch already merged, closed with all 8 children
-
-**2026-02-08 (earlier)**
-
-Aurelius Can Code (feature/aurelius-can-code → main, PR #19, PER-213):
-- `code` capability with `start_coding_session` tool
-- Executor spawns `claude -p` with NDJSON stream parsing, worktree isolation
-- Action card approval flow with code card UI (4 states)
-- 16 files, +1,919 lines, 11 commits
-
-Pending Actions Page (PR #18, PER-174):
-- `/actions` page with grouped pending cards, sidebar badge, 30s polling
+Triage refactor (PR #22, PER-230) + Chat refactor (PR #23, PER-232):
+- Triage: 8-phase cleanup, separated classify/rules/connectors/sync
+- Chat: shared utilities, structured events, O(1) dispatch, TTL caching, bug fixes
 
 ## In Progress
 
-Nothing active — clean slate. PER-232 merged.
+Nothing active — clean slate.
 
 ## Up Next
 
-- [x] **Test triage pipeline end-to-end** — Gmail sync verified working, batch groups forming, rules applying
 - [ ] **Investigate 15 remaining skipped Gmail threads** — items archived in triage but still in Gmail inbox
 - [ ] **Test aurelius-can-code end-to-end** — manual smoke test with real coding task
 - [ ] **Test vault end-to-end** (PER-200) — manual testing of all vault functionality
 - [ ] **Phase 2: Telegram control plane** — inline keyboards, callback queries, reply-to-session
 - [ ] **Phase 3: Memory integration** — Supermemory summaries on start/complete/approve
+- [ ] **Linear: move PER-233 to Done** — auth expired, needs `/trg-linear:setup`
 
 ## Known Issues (Documented)
 
