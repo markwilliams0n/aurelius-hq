@@ -6,6 +6,14 @@
 
 **2026-02-09**
 
+Chat system refactor (feature/refactor-chat → main, PR #23, PER-232):
+- Extracted shared utilities: SSE encoder/parser, conversation persistence, history trimming, TTL cache
+- Structured action cards: capabilities return typed `actionCard` field instead of JSON-in-strings
+- O(1) tool dispatch via Map, TTL caching for soul config/capability prompts/notes
+- Bug fixes: completed action cards no longer reappear on reload, config version race condition fixed (atomic SQL), stale memory sidebar removed
+- Config cache invalidation via hook pattern (soul/capability caches bust immediately on edit)
+- 14 commits, 25 files, +717/-469 lines, 283 tests pass
+
 Gmail sync & triage reliability fixes (feature/follow-up-enhancement → main, PR #21, PER-229):
 - Gmail archive/spam now uses `threads.modify` (was per-message, didn't work for multi-message threads)
 - Retroactive cleanup: archived 23 stale Gmail threads stuck in inbox
@@ -56,7 +64,7 @@ Pending Actions Page (PR #18, PER-174):
 
 ## In Progress
 
-Nothing active — clean slate.
+Nothing active — clean slate. PER-232 merged.
 
 ## Up Next
 
