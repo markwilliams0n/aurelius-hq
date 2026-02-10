@@ -166,6 +166,7 @@ export const CONFIG_DESCRIPTIONS: Record<ConfigKey, string> = {
   "capability:vault": "Instructions for the Vault capability — how the agent manages the document library and fact store.",
   "capability:code": "Instructions for the Code capability — how the agent spawns Claude Code sessions in git worktrees.",
   "capability:gmail": "Instructions for the Gmail capability — search, retrieval, attachments, and email drafting.",
+  "capability:browser": "Instructions for the Browser capability — how the agent browses the web for research.",
   "sync:gmail": "Gmail connector sync state (lastSyncedAt, historyId).",
   "sync:granola": "Granola connector sync state (lastSyncedAt).",
   "sync:linear": "Linear connector sync state (lastSyncAt, lastNotificationId).",

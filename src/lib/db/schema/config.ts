@@ -8,7 +8,7 @@ import {
   unique,
 } from "drizzle-orm/pg-core";
 
-export const configKeyEnum = pgEnum("config_key", ["soul", "system_prompt", "agents", "processes", "capability:tasks", "capability:config", "prompt:email_draft", "capability:slack", "slack:directory", "capability:vault", "capability:code", "capability:gmail", "sync:gmail", "sync:granola", "sync:linear", "sync:slack"]);
+export const configKeyEnum = pgEnum("config_key", ["soul", "system_prompt", "agents", "processes", "capability:tasks", "capability:config", "prompt:email_draft", "capability:slack", "slack:directory", "capability:vault", "capability:code", "capability:gmail", "capability:browser", "sync:gmail", "sync:granola", "sync:linear", "sync:slack"]);
 export const actorEnum = pgEnum("actor", ["system", "user", "aurelius"]);
 export const pendingStatusEnum = pgEnum("pending_status", ["pending", "approved", "rejected"]);
 
