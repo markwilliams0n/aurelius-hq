@@ -12,13 +12,16 @@ import { insertInboxItemWithTasks } from '@/lib/triage/insert-with-tasks';
 import {
   isConfigured,
   getCredentials,
-  saveCredentials,
   getDocumentsSince,
   getDocument,
   getDocumentTranscript,
   type GranolaDocumentFull,
   type GranolaTranscriptUtterance,
 } from './client';
+import {
+  getSyncState,
+  setSyncState,
+} from '@/lib/connectors/sync-state';
 import {
   extractMeetingMemory,
   extractAttendeesAsEntities,
@@ -277,9 +280,12 @@ export async function syncGranolaMeetings(): Promise<GranolaSyncResult> {
   const creds = await getCredentials();
   if (!creds) return result;
 
+  // Read sync state from DB (separate from credentials)
+  const syncState = await getSyncState<{ lastSyncedAt?: string }>('sync:granola');
+
   // Determine sync window - default to last 7 days if never synced
-  const lastSynced = creds.last_synced_at
-    ? new Date(creds.last_synced_at)
+  const lastSynced = syncState?.lastSyncedAt
+    ? new Date(syncState.lastSyncedAt)
     : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   console.log(`[Granola] Fetching meetings since ${lastSynced.toISOString()}`);
@@ -368,10 +374,9 @@ export async function syncGranolaMeetings(): Promise<GranolaSyncResult> {
       }
     }
 
-    // Update last synced timestamp
-    await saveCredentials({
-      ...creds,
-      last_synced_at: new Date().toISOString(),
+    // Update last synced timestamp in DB (credentials stay in file)
+    await setSyncState('sync:granola', {
+      lastSyncedAt: new Date().toISOString(),
     });
 
     console.log(`[Granola] Sync complete: ${result.synced} synced, ${result.skipped} skipped, ${result.errors} errors`);

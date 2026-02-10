@@ -8,6 +8,10 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
+import {
+  getSyncState as getConnectorSyncState,
+  setSyncState as setConnectorSyncState,
+} from '@/lib/connectors/sync-state';
 
 const WORKOS_AUTH_URL = 'https://api.workos.com/user_management/authenticate';
 const GRANOLA_API_URL = 'https://api.granola.ai';
@@ -75,7 +79,7 @@ async function syncFromGranolaApp(): Promise<GranolaCredentials | null> {
       ? (typeof appData.user_info === 'string' ? JSON.parse(appData.user_info) : appData.user_info)
       : null;
 
-    // Get our existing credentials for the client_id and last_synced_at
+    // Get our existing credentials for the client_id
     const existing = await getCredentialsInternal();
 
     const creds: GranolaCredentials = {
@@ -85,7 +89,7 @@ async function syncFromGranolaApp(): Promise<GranolaCredentials | null> {
         ? tokens.obtained_at + (tokens.expires_in * 1000)
         : undefined,
       client_id: existing?.client_id || 'client_01JZJ0XBDAT8PHJWQY09Y0VD61',
-      last_synced_at: existing?.last_synced_at,
+      // Note: last_synced_at is now stored in the database (sync:granola config key)
     };
 
     // Save the updated credentials

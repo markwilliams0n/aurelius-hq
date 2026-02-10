@@ -74,6 +74,12 @@ vi.mock('@/lib/ai/client', () => ({
   chat: vi.fn(() => Promise.resolve('This is a test summary.')),
 }));
 
+// Mock the connector sync state (used by client internally)
+vi.mock('@/lib/connectors/sync-state', () => ({
+  getSyncState: vi.fn(() => Promise.resolve(null)),
+  setSyncState: vi.fn(() => Promise.resolve()),
+}));
+
 // Mock the Gmail client
 vi.mock('../client', () => ({
   isConfigured: vi.fn(() => true),
