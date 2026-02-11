@@ -18,6 +18,7 @@ import {
   Sun,
   Moon,
   Monitor,
+  CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemoryDebug } from "./memory-debug-provider";
@@ -31,6 +32,7 @@ const navItems = [
   { href: "/vault", icon: Archive, label: "Vault" },
   { href: "/memory", icon: Brain, label: "Memory" },
   { href: "/system", icon: Activity, label: "System" },
+  { href: "/credits", icon: CreditCard, label: "Credits" },
   { href: "/config", icon: Settings, label: "Cortex" },
 ];
 
