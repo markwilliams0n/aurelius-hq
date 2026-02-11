@@ -6,6 +6,13 @@
 
 **2026-02-10**
 
+Autonomous code agent design (PER-236):
+- Researched OpenHands, Claude Code headless, SWE-agent, Devin, Cursor background agents, GitHub Copilot agent
+- Designed two-phase autonomous flow: read-only planning → headless execution with `--dangerously-skip-permissions`
+- 20-min auto-approve on plans, GitHub PRs as output, dual trigger (user command + heartbeat)
+- Configurable via `capability:code-agent` config key (cost/time ceilings, allowed tools, heartbeat toggle)
+- Design doc: `docs/plans/2026-02-10-autonomous-code-agent-design.md`
+
 Telegram coding session fixes (PER-234):
 - New messages (not silent edits) for waiting state — user actually gets notified
 - Reply hint always shows, Finish button added to waiting keyboard
@@ -42,6 +49,7 @@ Nothing active — clean slate.
 
 ## Up Next
 
+- [ ] **Implement autonomous code agent** (PER-236) — plan → execute → PR workflow per design doc
 - [ ] **Investigate 15 remaining skipped Gmail threads** — items archived in triage but still in Gmail inbox
 - [ ] **Test coding sessions end-to-end** — verify Telegram notification flow with the fixes
 - [ ] **Test vault end-to-end** (PER-200) — manual testing of all vault functionality
