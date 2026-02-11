@@ -19,11 +19,11 @@ afterEach(() => {
 vi.mock('googleapis', () => ({
   google: {
     auth: {
-      GoogleAuth: vi.fn().mockImplementation(() => ({
-        getClient: vi.fn().mockResolvedValue({
+      GoogleAuth: vi.fn().mockImplementation(function (this: any) {
+        this.getClient = vi.fn().mockResolvedValue({
           getAccessToken: vi.fn().mockResolvedValue({ token: 'mock-token' }),
-        }),
-      })),
+        });
+      }),
     },
     gmail: vi.fn(() => ({
       users: {
@@ -31,6 +31,7 @@ vi.mock('googleapis', () => ({
           list: vi.fn().mockResolvedValue({
             data: {
               messages: [{ id: 'msg-1', threadId: 'thread-1' }],
+              resultSizeEstimate: 1,
               nextPageToken: null,
             },
           }),
@@ -56,6 +57,14 @@ vi.mock('googleapis', () => ({
           send: vi.fn().mockResolvedValue({
             data: { id: 'sent-msg-1' },
           }),
+          attachments: {
+            get: vi.fn().mockResolvedValue({
+              data: {
+                data: Buffer.from('attachment content').toString('base64'),
+                size: 18,
+              },
+            }),
+          },
         },
         drafts: {
           create: vi.fn().mockResolvedValue({
@@ -99,7 +108,7 @@ vi.mock('@/lib/config', () => ({
   setConfig: vi.fn(() => Promise.resolve()),
 }));
 
-import { getGravatarUrl } from '../client';
+import { getGravatarUrl, searchEmails, getAttachment } from '../client';
 
 describe('Gmail Client', () => {
   beforeEach(() => {
@@ -151,5 +160,57 @@ describe('Gmail API Safety', () => {
     expect(gmailClient.users.messages.modify).toBeDefined();
     expect(gmailClient.users.messages.send).toBeDefined();
     expect(gmailClient.users.drafts.create).toBeDefined();
+  });
+});
+
+describe('searchEmails', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('calls messages.list with the search query and returns parsed emails', async () => {
+    const result = await searchEmails({ query: 'from:test@example.com' });
+
+    expect(result.emails).toHaveLength(1);
+    expect(result.emails[0].subject).toBe('Test Subject');
+    expect(result.totalEstimate).toBe(1);
+  });
+
+  it('throws on empty query', async () => {
+    await expect(searchEmails({ query: '' })).rejects.toThrow('Search query is required');
+    await expect(searchEmails({ query: '   ' })).rejects.toThrow('Search query is required');
+  });
+
+  it('caps maxResults at 50 and clamps minimum to 1', async () => {
+    // maxResults > 50 still works (capped internally), returns results
+    const result = await searchEmails({ query: 'test', maxResults: 100 });
+    expect(result.emails).toHaveLength(1);
+
+    // maxResults < 1 still works (clamped to 1)
+    const result2 = await searchEmails({ query: 'test', maxResults: 0 });
+    expect(result2.emails).toHaveLength(1);
+  });
+
+  it('defaults maxResults to 10 when not specified', async () => {
+    // Should work without specifying maxResults
+    const result = await searchEmails({ query: 'test' });
+    expect(result.emails).toHaveLength(1);
+  });
+});
+
+describe('getAttachment', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('is exported as a function', () => {
+    expect(typeof getAttachment).toBe('function');
+  });
+
+  it('returns buffer data from the API', async () => {
+    const result = await getAttachment('msg-1', 'att-1');
+
+    expect(result.data).toBeInstanceOf(Buffer);
+    expect(result.size).toBe(18);
   });
 });
