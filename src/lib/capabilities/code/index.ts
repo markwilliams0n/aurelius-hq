@@ -15,7 +15,7 @@ const LOG_DIR = path.resolve(process.cwd(), 'logs', 'code-sessions');
 
 const PROMPT = `# Code Execution
 
-You can start coding sessions on the Aurelius HQ codebase using start_coding_session.
+You can start autonomous coding sessions on the Aurelius HQ codebase using start_autonomous_session.
 Use this when the user asks you to fix bugs, add features, refactor code, run tests,
 or do any development work on Aurelius itself. Also use when a Linear issue describes
 code work that can be acted on.
@@ -38,7 +38,6 @@ In Telegram, calling this tool automatically surfaces interactive cards with but
 
 ## How it works
 
-### Autonomous mode (preferred — use start_autonomous_session)
 1. You call start_autonomous_session with a task description
 2. Claude plans the changes (read-only), sends plan to Telegram
 3. Plan auto-approves after 20 minutes (or user approves sooner)
@@ -46,18 +45,8 @@ In Telegram, calling this tool automatically surfaces interactive cards with but
 5. A GitHub PR is created. User reviews and merges on GitHub.
 6. No interaction needed during execution.
 
-### Interactive mode (use start_coding_session for exploratory/uncertain tasks)
-1. You call start_coding_session with a task description
-2. An Action Card appears for the user to review and approve
-3. On approval, a Claude Code session runs in an isolated git worktree
-4. The session may ask questions — these appear in the web UI and Telegram
-5. When complete, a result card shows the diff for approve/reject
-6. On approve, changes are merged to main
-
 ## Guidelines
 
-- **Default to autonomous mode** for well-defined tasks
-- Use interactive mode only when the task is exploratory or needs back-and-forth
 - Be specific in the task description — include file paths, error messages, context
 - One focused task per session (don't combine unrelated changes)
 - Include relevant Linear issue IDs in the context field`;
@@ -87,31 +76,8 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
       required: ['task'],
     },
   },
-  {
-    name: 'start_coding_session',
-    description:
-      'Start a Claude Code session to work on the Aurelius HQ codebase. Use when the user asks to fix bugs, add features, refactor code, or do development work. Returns an action card for user approval before the session starts.',
-    parameters: {
-      type: 'object',
-      properties: {
-        task: {
-          type: 'string',
-          description: 'Description of the coding task to perform',
-        },
-        context: {
-          type: 'string',
-          description:
-            'Optional extra context — Linear issue IDs, error messages, file paths',
-        },
-        branch_name: {
-          type: 'string',
-          description:
-            'Optional branch name override (without aurelius/ prefix)',
-        },
-      },
-      required: ['task'],
-    },
-  },
+  // NOTE: start_coding_session (interactive mode) is kept in code but removed
+  // from the tools array. Re-add here if we want to bring it back.
   {
     name: 'check_coding_sessions',
     description:
