@@ -33,7 +33,7 @@ type KeyData = {
 };
 
 function formatUSD(value: number): string {
-  return `$${value.toFixed(4)}`;
+  return `$${value.toFixed(2)}`;
 }
 
 export default function CreditsPage() {
