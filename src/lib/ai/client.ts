@@ -34,8 +34,8 @@ export const DEFAULT_MODEL =
 // Model for tool use - same as default unless overridden
 const TOOL_MODEL = process.env.OPENROUTER_TOOL_MODEL || DEFAULT_MODEL;
 
-// Max tool call iterations to prevent infinite loops
-const MAX_TOOL_ITERATIONS = 5;
+// Tool call iterations before asking permission to continue
+const TOOL_ITERATION_CHECKPOINT = 25;
 
 // API request timeout in milliseconds
 const API_TIMEOUT_MS = 30000;
@@ -81,8 +81,8 @@ export async function* chatStreamWithTools(
 
   let iterations = 0;
 
-  // Loop to handle multiple tool calls
-  while (iterations < MAX_TOOL_ITERATIONS) {
+  // Loop to handle multiple tool calls (no hard limit — checkpoints ask permission)
+  while (true) {
     iterations++;
 
     const controller = new AbortController();
@@ -208,12 +208,17 @@ export async function* chatStreamWithTools(
       }
     }
 
+    // Checkpoint: after N iterations, inject a nudge asking the model to pause
+    if (iterations > 0 && iterations % TOOL_ITERATION_CHECKPOINT === 0) {
+      console.log(`[AI Client] Checkpoint at ${iterations} iterations — injecting pause prompt`);
+      conversationMessages.push({
+        role: "user",
+        content: `You've made ${iterations} tool calls. Pause here and summarize what you've done so far and what's left. Ask the user if they'd like you to continue.`,
+      });
+    }
+
     // Continue loop to see if AI wants to call more tools
   }
-
-  // Max iterations reached - inform the user
-  console.warn("[AI Client] Max tool iterations reached");
-  yield { type: "text", content: "I've completed multiple operations but reached my limit. Please let me know if you need anything else." };
 }
 
 // Fallback streaming without tools

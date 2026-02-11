@@ -21,7 +21,9 @@ export type CodeSessionState =
   | 'planning'
   | 'plan-ready'
   | 'executing'
-  | 'pushing';
+  | 'pushing'
+  | 'reviewing'
+  | 'fixing';
 
 /** UI display mode derived from card status + session state. */
 export type SessionMode =
@@ -54,6 +56,8 @@ export interface CodeSessionData {
   planApprovedAt?: string;
   prUrl?: string;
   autoApproveAt?: string;
+  reviewRound?: number;
+  reviewIssues?: string;
 }
 
 /** Configuration for autonomous code agent (stored in capability:code-agent config). */
@@ -67,6 +71,9 @@ export interface CodeAgentConfig {
     maxDurationMinutes: number;
     maxRetries: number;
     commitStrategy: 'incremental' | 'single';
+  };
+  review: {
+    maxRounds: number;
   };
   triggers: {
     heartbeatEnabled: boolean;
@@ -92,6 +99,9 @@ export const DEFAULT_CODE_AGENT_CONFIG: CodeAgentConfig = {
     maxDurationMinutes: 120,
     maxRetries: 3,
     commitStrategy: 'incremental',
+  },
+  review: {
+    maxRounds: 3,
   },
   triggers: {
     heartbeatEnabled: false,

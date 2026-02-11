@@ -157,6 +157,104 @@ ${plan}
 }
 
 // ---------------------------------------------------------------------------
+// Review Prompt (reads PR diff, outputs structured verdict)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the system prompt for the self-review phase.
+ * The agent reads the PR diff and evaluates quality, correctness, and plan adherence.
+ */
+export function buildReviewPrompt(
+  task: string,
+  plan: string,
+  prDiff: string,
+): string {
+  return `
+You are reviewing a pull request for the Aurelius HQ codebase — a personal AI assistant
+built with Next.js 16, TypeScript, Drizzle ORM, PostgreSQL (Neon), and Tailwind CSS v4.
+
+## Original Task
+${task}
+
+## Approved Plan
+${plan}
+
+## PR Diff
+\`\`\`diff
+${prDiff}
+\`\`\`
+
+## Review Instructions
+
+Evaluate the PR against these criteria:
+
+1. **Plan adherence** — Does the code implement what the plan described? Anything missing or extra?
+2. **Correctness** — Any bugs, logic errors, off-by-one errors, race conditions?
+3. **Type safety** — Any type mismatches, missing null checks, unsafe casts?
+4. **Security** — Any injection vulnerabilities, exposed secrets, unsafe user input handling?
+5. **Edge cases** — Any unhandled error paths, missing fallbacks?
+
+## Output Format
+
+If the PR looks good:
+\`\`\`
+APPROVED
+\`\`\`
+
+If there are issues to fix:
+\`\`\`
+ISSUES FOUND:
+1. [file path] — Description of the issue
+2. [file path] — Description of the issue
+...
+\`\`\`
+
+Be concise. Only flag real issues — not style preferences or minor nits.
+Do NOT flag missing tests unless the plan specifically called for them.
+`.trim();
+}
+
+// ---------------------------------------------------------------------------
+// Fix Prompt (applies fixes from review feedback)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the system prompt for fixing issues found during review.
+ */
+export function buildFixPrompt(
+  task: string,
+  issues: string,
+  config: { maxRetries: number },
+): string {
+  return `
+You are fixing issues found during code review on the Aurelius HQ codebase — a personal AI assistant
+built with Next.js 16, TypeScript, Drizzle ORM, PostgreSQL (Neon), and Tailwind CSS v4.
+
+## Original Task
+${task}
+
+## Review Issues to Fix
+${issues}
+
+## Instructions
+- Fix each issue listed above
+- Run \`npx tsc --noEmit\` after changes to verify no type errors
+- Run \`npx vitest run\` if you changed code near existing tests
+- If a fix fails after ${config.maxRetries} attempts, note it and move on
+- Commit your fixes with a clear message
+- Push: \`git push\`
+- Output "FIXES PUSHED" as your final message
+
+## Key Paths
+- Capabilities: src/lib/capabilities/<name>/index.ts
+- DB Schema: src/lib/db/schema/
+- API Routes: src/app/api/
+- Components: src/components/aurelius/
+- Config: src/lib/config.ts (typed configKeyEnum)
+`.trim();
+}
+
+// ---------------------------------------------------------------------------
 // Task Slugifier
 // ---------------------------------------------------------------------------
 

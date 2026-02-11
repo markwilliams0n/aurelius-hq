@@ -227,6 +227,67 @@ export function formatProgressMilestone(
   ].join('\n');
 }
 
+/** Format review-started notification for Telegram. */
+export function formatReviewStarted(
+  task: string,
+  reviewRound: number,
+  totalCostUsd: number | null,
+): string {
+  const truncatedTask = task.length > 50 ? task.slice(0, 47) + '...' : task;
+  const costStr = totalCostUsd !== null ? `$${totalCostUsd.toFixed(2)}` : '...';
+  const roundLabel = reviewRound === 1 ? '' : ` (round ${reviewRound})`;
+
+  return [
+    `\u{1F50D} Reviewing PR${roundLabel}`,
+    '',
+    `Task: ${truncatedTask}`,
+    `Cost so far: ${costStr}`,
+  ].join('\n');
+}
+
+/** Format review-result notification for Telegram. */
+export function formatReviewResult(
+  task: string,
+  approved: boolean,
+  issues: string | null,
+  reviewRound: number,
+): string {
+  const truncatedTask = task.length > 50 ? task.slice(0, 47) + '...' : task;
+
+  if (approved) {
+    return [
+      `\u{2705} Review Passed`,
+      '',
+      `Task: ${truncatedTask}`,
+      reviewRound > 1 ? `Passed on round ${reviewRound}` : '',
+    ].filter(Boolean).join('\n');
+  }
+
+  const truncatedIssues = issues && issues.length > 2000
+    ? issues.slice(0, 2000) + '\n...(truncated)'
+    : issues;
+
+  return [
+    `\u{1F527} Review: Fixing Issues (round ${reviewRound})`,
+    '',
+    `Task: ${truncatedTask}`,
+    '',
+    truncatedIssues ?? 'Issues found',
+  ].join('\n');
+}
+
+/** Build keyboard for PR merge after review. */
+export function getMergeKeyboard(cardId: string): InlineKeyboardMarkup {
+  return {
+    inline_keyboard: [
+      [
+        { text: '\u{2705} Merge & Deploy', callback_data: `code:approve:${cardId}` },
+        { text: '\u{274C} Reject', callback_data: `code:reject:${cardId}` },
+      ],
+    ],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Convenience: notify session state change
 // ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@
  */
 
 import { startSession, startAutonomousSession, type ActiveSession } from './executor';
-import { buildCodePrompt, buildPlanningPrompt, buildExecutionPrompt } from './prompts';
+import { buildCodePrompt, buildPlanningPrompt, buildExecutionPrompt, buildReviewPrompt, buildFixPrompt } from './prompts';
 import {
   getWorktreeStats,
   getChangedFiles,
@@ -26,7 +26,10 @@ import {
   formatPlanReady,
   formatPrReady,
   formatProgressMilestone,
+  formatReviewStarted,
+  formatReviewResult,
   getPlanKeyboard,
+  getMergeKeyboard,
 } from './telegram';
 import { getCard, updateCard, createCard, generateCardId } from '@/lib/action-cards/db';
 import type { CardHandlerResult } from '@/lib/action-cards/registry';
@@ -561,17 +564,13 @@ export async function executePlan(
     closeInput: () => {},
   });
 
-  // On completion, finalize with PR info
+  // On completion, start review phase
   autonomousSession.process.on('exit', async (code) => {
     removeSession(sessionId);
 
     if (code !== 0 && code !== null) return; // Error handled in onError
 
     try {
-      const stats = getWorktreeStats(data.worktreePath!);
-      const changedFiles = getChangedFiles(data.worktreePath!);
-      const log = getWorktreeLog(data.worktreePath!);
-
       // Extract PR URL from the last message (Claude outputs it at the end)
       const prUrlMatch = lastMessage.match(/https:\/\/github\.com\/[^\s)]+\/pull\/\d+/);
       const prUrl = prUrlMatch ? prUrlMatch[0] : null;
@@ -579,34 +578,266 @@ export async function executePlan(
       await updateCard(cardId, {
         data: {
           ...card.data,
-          state: 'completed',
+          state: 'reviewing',
           totalTurns,
           totalCostUsd,
           prUrl,
-          result: {
-            sessionId,
-            turns: totalTurns,
-            costUsd: totalCostUsd,
-            stats,
-            changedFiles,
-            log,
-          },
+          reviewRound: 1,
         },
       });
 
-      // Send PR-ready notification
-      if (config.notifications.onComplete) {
-        if (prUrl) {
-          const msg = formatPrReady(data.task, prUrl, totalTurns, totalCostUsd, stats);
-          await updateSessionTelegram(sessionId, 'waiting', msg); // 'waiting' = new message = notification
-        } else {
-          notifySessionState(sessionId, 'completed', cardId, data.task, totalTurns, totalCostUsd, {
-            filesChanged: changedFiles?.length ?? 0,
-          });
-        }
+      if (prUrl) {
+        // Start self-review
+        await reviewPR(sessionId, cardId, data.task, data.plan!, data.worktreePath!, prUrl, totalTurns, totalCostUsd, 1, config);
+      } else {
+        // No PR URL — skip review, go straight to completed
+        console.warn(`[autonomous:${sessionId}] No PR URL found, skipping review`);
+        await finalizeAutonomousSession(sessionId, cardId, data, totalTurns, totalCostUsd, null, config);
       }
     } catch (err) {
-      console.error(`[autonomous:${sessionId}] Failed to finalize:`, err);
+      console.error(`[autonomous:${sessionId}] Failed to start review:`, err);
     }
   });
+}
+
+// ---------------------------------------------------------------------------
+// Self-Review Loop — Review PR → Fix Issues → Re-review
+// ---------------------------------------------------------------------------
+
+/**
+ * Review a PR by spawning a read-only Claude session that evaluates the diff.
+ * If issues are found, spawns a fix session and loops back.
+ */
+async function reviewPR(
+  sessionId: string,
+  cardId: string,
+  task: string,
+  plan: string,
+  worktreePath: string,
+  prUrl: string,
+  totalTurns: number,
+  totalCostUsd: number | null,
+  reviewRound: number,
+  config: CodeAgentConfig,
+): Promise<void> {
+  const maxRounds = config.review.maxRounds;
+  const prNumber = prUrl.match(/\/pull\/(\d+)/)?.[1];
+  if (!prNumber) {
+    console.error(`[autonomous:${sessionId}] Cannot extract PR number from ${prUrl}`);
+    await finalizeAutonomousSession(sessionId, cardId, { task, plan, worktreePath, prUrl } as CodeSessionData, totalTurns, totalCostUsd, prUrl, config);
+    return;
+  }
+
+  console.log(`[autonomous:${sessionId}] Starting review round ${reviewRound}/${maxRounds}`);
+
+  // Notify Telegram
+  await updateSessionTelegram(
+    sessionId,
+    'running',
+    formatReviewStarted(task, reviewRound, totalCostUsd),
+  );
+
+  // Get PR diff via gh CLI
+  const { spawnSync } = await import('child_process');
+  const diffResult = spawnSync('gh', ['pr', 'diff', prNumber], {
+    cwd: worktreePath,
+    encoding: 'utf-8',
+    timeout: 30_000,
+  });
+
+  if (diffResult.status !== 0) {
+    console.error(`[autonomous:${sessionId}] Failed to get PR diff:`, diffResult.stderr);
+    await finalizeAutonomousSession(sessionId, cardId, { task, plan, worktreePath, prUrl } as CodeSessionData, totalTurns, totalCostUsd, prUrl, config);
+    return;
+  }
+
+  const prDiff = diffResult.stdout;
+  const reviewPrompt = buildReviewPrompt(task, plan, prDiff);
+
+  // Spawn review session (read-only)
+  let reviewText = '';
+  let lastText = '';
+
+  const reviewSession = startAutonomousSession({
+    sessionId: `${sessionId}-review-${reviewRound}`,
+    systemPrompt: reviewPrompt,
+    task: `Review this PR diff for correctness, plan adherence, and potential issues.`,
+    worktreePath,
+    maxCostUsd: config.planning.maxPlanningCostUsd,
+    maxDurationMinutes: 15,
+    onProgress(event) {
+      if (event.type === 'thinking' && event.text) {
+        lastText = event.text;
+        reviewText = event.text;
+      }
+    },
+    onResult() {
+      if (lastText) reviewText = lastText;
+    },
+    onError(error) {
+      console.error(`[autonomous:${sessionId}] Review error:`, error.message);
+    },
+  });
+
+  reviewSession.process.on('exit', async (code) => {
+    if (code !== 0 && code !== null) {
+      console.error(`[autonomous:${sessionId}] Review exited with code ${code}, skipping`);
+      await finalizeAutonomousSession(sessionId, cardId, { task, plan, worktreePath, prUrl } as CodeSessionData, totalTurns, totalCostUsd, prUrl, config);
+      return;
+    }
+
+    // Parse review verdict
+    const approved = reviewText.includes('APPROVED') && !reviewText.includes('ISSUES FOUND');
+    const issuesMatch = reviewText.match(/ISSUES FOUND:([\s\S]*)/);
+    const issues = issuesMatch ? issuesMatch[1].trim() : null;
+
+    if (approved) {
+      console.log(`[autonomous:${sessionId}] Review passed on round ${reviewRound}`);
+      await updateSessionTelegram(
+        sessionId,
+        'running',
+        formatReviewResult(task, true, null, reviewRound),
+      );
+      await finalizeAutonomousSession(sessionId, cardId, { task, plan, worktreePath, prUrl } as CodeSessionData, totalTurns, totalCostUsd, prUrl, config);
+    } else if (issues && reviewRound < maxRounds) {
+      console.log(`[autonomous:${sessionId}] Review found issues on round ${reviewRound}, fixing`);
+      await updateSessionTelegram(
+        sessionId,
+        'running',
+        formatReviewResult(task, false, issues, reviewRound),
+      );
+
+      await updateCard(cardId, {
+        data: { state: 'fixing', reviewRound, reviewIssues: issues },
+      });
+
+      await fixReviewIssues(sessionId, cardId, task, plan, worktreePath, prUrl, issues, totalTurns, totalCostUsd, reviewRound, config);
+    } else {
+      console.warn(`[autonomous:${sessionId}] Review round ${reviewRound} — surfacing merge card (max rounds or unstructured issues)`);
+      const warning = reviewRound >= maxRounds
+        ? `Review had unresolved issues after ${maxRounds} rounds`
+        : undefined;
+      await finalizeAutonomousSession(sessionId, cardId, { task, plan, worktreePath, prUrl } as CodeSessionData, totalTurns, totalCostUsd, prUrl, config, warning);
+    }
+  });
+}
+
+/**
+ * Fix issues found during review, then re-review.
+ */
+async function fixReviewIssues(
+  sessionId: string,
+  cardId: string,
+  task: string,
+  plan: string,
+  worktreePath: string,
+  prUrl: string,
+  issues: string,
+  totalTurns: number,
+  totalCostUsd: number | null,
+  reviewRound: number,
+  config: CodeAgentConfig,
+): Promise<void> {
+  console.log(`[autonomous:${sessionId}] Fixing issues from review round ${reviewRound}`);
+
+  const fixPrompt = buildFixPrompt(task, issues, { maxRetries: config.execution.maxRetries });
+
+  let fixTurns = 0;
+  let fixCost: number | null = null;
+
+  const fixSession = startAutonomousSession({
+    sessionId: `${sessionId}-fix-${reviewRound}`,
+    systemPrompt: fixPrompt,
+    task: `Fix these review issues:\n\n${issues}`,
+    worktreePath,
+    maxCostUsd: config.execution.maxCostUsd,
+    maxDurationMinutes: config.execution.maxDurationMinutes,
+    onProgress(event) {
+      console.log(`[autonomous:${sessionId}:fix] ${event.type}`, event.text?.slice(0, 100) ?? event.tool ?? '');
+    },
+    onResult(result) {
+      fixTurns = result.turns;
+      if (result.costUsd !== null) fixCost = result.costUsd;
+    },
+    onError(error) {
+      console.error(`[autonomous:${sessionId}] Fix error:`, error.message);
+    },
+  });
+
+  fixSession.process.on('exit', async (code) => {
+    const newTotalTurns = totalTurns + fixTurns;
+    const newTotalCost = (totalCostUsd ?? 0) + (fixCost ?? 0);
+
+    if (code !== 0 && code !== null) {
+      console.error(`[autonomous:${sessionId}] Fix exited with code ${code}`);
+      await finalizeAutonomousSession(sessionId, cardId, { task, plan, worktreePath, prUrl } as CodeSessionData, newTotalTurns, newTotalCost, prUrl, config, 'Fix session failed');
+      return;
+    }
+
+    // Re-review
+    await updateCard(cardId, {
+      data: { state: 'reviewing', reviewRound: reviewRound + 1 },
+    });
+    await reviewPR(sessionId, cardId, task, plan, worktreePath, prUrl, newTotalTurns, newTotalCost, reviewRound + 1, config);
+  });
+}
+
+/**
+ * Finalize an autonomous session — gather stats and surface the merge card.
+ */
+async function finalizeAutonomousSession(
+  sessionId: string,
+  cardId: string,
+  data: CodeSessionData,
+  totalTurns: number,
+  totalCostUsd: number | null,
+  prUrl: string | null,
+  config: CodeAgentConfig,
+  warning?: string,
+): Promise<void> {
+  try {
+    const stats = getWorktreeStats(data.worktreePath!);
+    const changedFiles = getChangedFiles(data.worktreePath!);
+    const log = getWorktreeLog(data.worktreePath!);
+
+    await updateCard(cardId, {
+      data: {
+        sessionId,
+        task: data.task,
+        context: data.context,
+        branchName: data.branchName ?? '',
+        worktreePath: data.worktreePath,
+        autonomous: true,
+        plan: data.plan,
+        state: 'completed',
+        totalTurns,
+        totalCostUsd,
+        prUrl,
+        result: {
+          sessionId,
+          turns: totalTurns,
+          costUsd: totalCostUsd,
+          stats,
+          changedFiles,
+          log,
+        },
+      },
+    });
+
+    if (config.notifications.onComplete) {
+      if (prUrl) {
+        let msg = formatPrReady(data.task, prUrl, totalTurns, totalCostUsd, stats);
+        if (warning) {
+          msg += `\n\n\u{26A0}\u{FE0F} ${warning}`;
+        }
+        await updateSessionTelegram(sessionId, 'waiting', msg, getMergeKeyboard(cardId));
+      } else {
+        notifySessionState(sessionId, 'completed', cardId, data.task, totalTurns, totalCostUsd, {
+          filesChanged: changedFiles?.length ?? 0,
+        });
+      }
+    }
+  } catch (err) {
+    console.error(`[autonomous:${sessionId}] Failed to finalize:`, err);
+  }
 }
