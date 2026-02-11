@@ -17,7 +17,9 @@ import type {
   GmailAttachment,
   GmailHeader,
   GmailMessagePart,
-  GmailSyncState
+  GmailSyncState,
+  GmailSearchOptions,
+  GmailSearchResult,
 } from './types';
 
 // Environment variables
@@ -275,6 +277,79 @@ export async function fetchUnarchived(options?: {
   return {
     emails,
     nextPageToken: response.data.nextPageToken || undefined,
+  };
+}
+
+/**
+ * Search Gmail using Gmail query syntax.
+ * Supports: from:, to:, subject:, after:, before:, has:attachment, is:unread, label:, etc.
+ */
+export async function searchEmails(options: GmailSearchOptions): Promise<GmailSearchResult> {
+  if (!options.query?.trim()) {
+    throw new Error('Search query is required');
+  }
+
+  const gmail = await getGmailClient();
+  const maxResults = Math.min(Math.max(options.maxResults || 10, 1), 50);
+
+  const response = await gmail.users.messages.list({
+    userId: 'me',
+    q: options.query,
+    maxResults,
+    pageToken: options.pageToken,
+  });
+
+  const messageRefs = response.data.messages || [];
+  const emails: ParsedEmail[] = [];
+
+  for (const ref of messageRefs) {
+    if (!ref.id) continue;
+
+    try {
+      const fullMessage = await gmail.users.messages.get({
+        userId: 'me',
+        id: ref.id,
+        format: 'full',
+      });
+
+      if (fullMessage.data) {
+        emails.push(parseMessage(fullMessage.data as GmailMessage));
+      }
+    } catch (err: any) {
+      // Skip individual message fetch failures (deleted, permission issues)
+      debugLog(`Failed to fetch message ${ref.id}:`, err?.message);
+    }
+  }
+
+  return {
+    emails,
+    totalEstimate: response.data.resultSizeEstimate || undefined,
+    nextPageToken: response.data.nextPageToken || undefined,
+  };
+}
+
+/**
+ * Download an attachment by message ID and attachment ID.
+ * Returns the raw attachment data as a Buffer.
+ */
+export async function getAttachment(
+  messageId: string,
+  attachmentId: string
+): Promise<{ data: Buffer; size: number }> {
+  const gmail = await getGmailClient();
+
+  const response = await gmail.users.messages.attachments.get({
+    userId: 'me',
+    messageId,
+    id: attachmentId,
+  });
+
+  const base64Data = response.data.data || '';
+  const buffer = Buffer.from(base64Data.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+
+  return {
+    data: buffer,
+    size: response.data.size || buffer.length,
   };
 }
 

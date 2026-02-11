@@ -78,6 +78,20 @@ export interface GmailThread {
   messageCount: number;
 }
 
+// Search options
+export interface GmailSearchOptions {
+  query: string;
+  maxResults?: number; // default 10, max 50
+  pageToken?: string;
+}
+
+// Search result (wraps ParsedEmail with search metadata)
+export interface GmailSearchResult {
+  emails: ParsedEmail[];
+  totalEstimate?: number;
+  nextPageToken?: string;
+}
+
 // Sync state
 export interface GmailSyncState {
   lastSyncedAt?: string;
