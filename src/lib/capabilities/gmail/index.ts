@@ -4,28 +4,61 @@ import { searchEmails, getThread, getAttachment, getGravatarUrl, isConfigured } 
 import { insertInboxItemWithTasks } from '@/lib/triage/insert-with-tasks';
 import type { GmailEnrichment } from '@/lib/gmail/types';
 
-const PROMPT = `# Email Drafting
+const PROMPT = `# Email Search, Retrieval & Drafting
 
-You can draft email replies using draft_email.
-- Provide the inbox item ID (from triage) and the reply body
-- Optionally override to/cc/bcc addresses
-- Emails are always drafted for user approval — never sent automatically
-- Whether the email sends or saves as draft depends on GMAIL_ENABLE_SEND setting
-- Use the triage context to write appropriate replies
+You can search Gmail, retrieve email content, and draft replies using these tools.
 
-## When to use
+## search_gmail
 
-- User asks you to reply to an email ("reply to that email from Sarah")
-- Triage suggests an email needs a response
-- User asks you to draft an email for a specific inbox item
+Search Gmail using Gmail query syntax. Use this when the user asks about emails.
 
-## How it works
+**Query syntax:**
+- \`from:email@domain.com\` — Emails from a sender
+- \`to:email@domain.com\` — Emails to a recipient
+- \`subject:keyword\` — Subject contains keyword
+- \`after:2025/01/01\` — Emails after date (YYYY/MM/DD)
+- \`before:2025/12/31\` — Emails before date
+- \`has:attachment\` — Has attachments
+- \`is:unread\` — Unread only
+- \`in:inbox\` — Inbox only
+- \`label:labelname\` — By label
+- Combine freely: \`from:sarah subject:invoice after:2025/06/01 has:attachment\`
 
-1. You call draft_email with the inbox item ID and reply body
-2. The system resolves the item and pre-fills email metadata (to, subject, thread)
-3. An Action Card appears for the user to review and edit the draft
-4. User confirms → email is sent or saved as draft via Gmail API
-5. Card updates with status`;
+**Examples of when to use:**
+- "Find emails from opendate.io" → \`search_gmail(query: "from:opendate.io")\`
+- "Any emails about the contract?" → \`search_gmail(query: "subject:contract OR contract")\`
+- "Unread emails this week" → \`search_gmail(query: "is:unread after:2025/02/03")\`
+
+## get_email
+
+Get the full thread for a specific email. Use after search_gmail to read complete content.
+
+## get_attachment
+
+Download and read email attachments. For text files (CSV, JSON, TXT), returns content inline. Can save to vault.
+
+## save_email_to_triage
+
+Import a searched email into the triage inbox. This lets the user track it, snooze it, or act on it like any other triage item. Safe to call multiple times (deduplicates by thread ID).
+
+## draft_email
+
+Draft a reply to a triage inbox item. Returns an action card for user approval. Never sends directly.
+
+## Workflow guidance
+
+1. User asks about emails → use search_gmail
+2. Need full content → use get_email with the threadId
+3. Email has attachments → use get_attachment to describe/save them
+4. User wants to track it → use save_email_to_triage
+5. User wants to reply → use draft_email (requires the email to be in triage first)
+
+## Important notes
+
+- Search results include body previews (1500 chars). Use get_email for full content.
+- Attachments show metadata in search results. Use get_attachment to read content.
+- Always show the user what you found before taking action.
+- For reply workflows: save to triage first, then use draft_email with the triage item ID.`;
 
 const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
@@ -598,6 +631,6 @@ export const gmailCapability: Capability = {
   name: 'gmail',
   tools: TOOL_DEFINITIONS,
   prompt: PROMPT,
-  promptVersion: 1,
+  promptVersion: 2,
   handleTool: handleGmailTool,
 };
