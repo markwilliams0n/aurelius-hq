@@ -4,6 +4,17 @@ Work completed in the last 2-4 weeks.
 
 ---
 
+## 2026-02-09
+
+Code agent refactor (feature/refactor-code-agent → main, PR #24, PER-233):
+- Decomposed 764-line god object into 8 focused modules under `src/lib/code/`
+- Shared `spawnSession()` replaces duplicated start/resume logic
+- handlers/code.ts: 764 → 286 lines, 283 tests pass
+
+Triage refactor (PR #22, PER-230) + Chat refactor (PR #23, PER-232):
+- Triage: 8-phase cleanup, separated classify/rules/connectors/sync
+- Chat: shared utilities, structured events, O(1) dispatch, TTL caching
+
 ## 2026-02-08
 
 ### Backlog Sweep (overnight autonomous session)

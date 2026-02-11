@@ -6,42 +6,22 @@
 
 **2026-02-10**
 
-Autonomous code agent design (PER-236):
-- Researched OpenHands, Claude Code headless, SWE-agent, Devin, Cursor background agents, GitHub Copilot agent
-- Designed two-phase autonomous flow: read-only planning → headless execution with `--dangerously-skip-permissions`
-- 20-min auto-approve on plans, GitHub PRs as output, dual trigger (user command + heartbeat)
-- Configurable via `capability:code-agent` config key (cost/time ceilings, allowed tools, heartbeat toggle)
-- Design doc: `docs/plans/2026-02-10-autonomous-code-agent-design.md`
+Autonomous code agent implemented + merged (PER-236):
+- Researched OpenHands, Devin, SWE-agent, Cursor, Claude Code headless, GitHub Copilot agent
+- Two-phase: read-only planning → headless execution with `--dangerously-skip-permissions`
+- 20-min auto-approve on plans, GitHub PRs as output via `gh pr create`
+- Approve/reject buttons merge/close PRs via `gh` CLI
+- `capability:code-agent` config key ($5 plan ceiling, $20 execution ceiling, 120min max)
+- Telegram notifications: Planning → Plan Ready (with approve buttons) → Executing → PR Ready
+- Tested end-to-end via Telegram — PR created, merged, worktree cleaned up
+- 11 files, +1016 lines, 283 tests passing
 
 Telegram coding session fixes (PER-234):
 - New messages (not silent edits) for waiting state — user actually gets notified
 - Reply hint always shows, Finish button added to waiting keyboard
-- lastMessage fallback for tool-only turns, Telegram replies sync card state
 
 Web browser capability (PER-235):
-- 6 tools: web_open, web_snapshot, web_get_text, web_click, web_fill, web_screenshot
-- Wraps `agent-browser` CLI with per-conversation sessions
-- Code agent also gets `Bash(npx agent-browser:*)` access
-- DB migration: `capability:browser` config key
-
-Cleanup:
-- Removed 2 stale worktrees + 2 orphaned branches (already merged code agent work)
-- Deleted 11 old coding session cards from DB
-
-**2026-02-09**
-
-Code agent refactor (feature/refactor-code-agent → main, PR #24, PER-233):
-- Decomposed 764-line god object (`handlers/code.ts`) into 8 focused modules under `src/lib/code/`
-- New: types.ts, state.ts, session-manager.ts, telegram.ts, lifecycle.ts
-- Moved: executor.ts, worktree.ts, prompts.ts from capabilities/code/ to lib/code/
-- Shared `spawnSession()` replaces duplicated start/resume logic
-- UI components now use shared types + `deriveSessionMode` (fixes "Needs Response" in list)
-- Migrated telegram/handler.ts from raw Map to function API, fixed stale test mocks
-- handlers/code.ts: 764 → 286 lines, 4 commits, 283 tests pass
-
-Triage refactor (PR #22, PER-230) + Chat refactor (PR #23, PER-232):
-- Triage: 8-phase cleanup, separated classify/rules/connectors/sync
-- Chat: shared utilities, structured events, O(1) dispatch, TTL caching, bug fixes
+- 6 tools wrapping `agent-browser` CLI with per-conversation sessions
 
 ## In Progress
 
@@ -49,9 +29,8 @@ Nothing active — clean slate.
 
 ## Up Next
 
-- [ ] **Implement autonomous code agent** (PER-236) — plan → execute → PR workflow per design doc
+- [ ] **Autonomous agent follow-up** — heartbeat integration (auto-pickup Linear issues), config seeding, web UI for plan display + PR link
 - [ ] **Investigate 15 remaining skipped Gmail threads** — items archived in triage but still in Gmail inbox
-- [ ] **Test coding sessions end-to-end** — verify Telegram notification flow with the fixes
 - [ ] **Test vault end-to-end** (PER-200) — manual testing of all vault functionality
 - [ ] **Phase 3: Memory integration** — Supermemory summaries on start/complete/approve
 
