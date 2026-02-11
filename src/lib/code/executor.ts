@@ -303,7 +303,180 @@ function buildStdinMessage(text: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Session lifecycle
+// Autonomous session (headless, no stdin)
+// ---------------------------------------------------------------------------
+
+export interface AutonomousSessionOptions {
+  sessionId: string;
+  systemPrompt: string;
+  task: string;
+  worktreePath: string;
+  maxCostUsd: number;
+  maxDurationMinutes: number;
+  onProgress: (event: ProgressEvent) => void;
+  onResult: (result: SessionResult) => void;
+  onError: (error: Error) => void;
+  onCostUpdate?: (costUsd: number) => void;
+}
+
+export interface AutonomousSession {
+  pid: number;
+  kill: () => void;
+  process: ChildProcess;
+  state: SessionState;
+}
+
+/**
+ * Spawn an autonomous Claude Code CLI session.
+ *
+ * Uses --dangerously-skip-permissions — the worktree IS the sandbox.
+ * No stdin interaction. The task is passed via -p flag.
+ * Monitors cost and duration, kills at configured ceilings.
+ */
+export function startAutonomousSession(options: AutonomousSessionOptions): AutonomousSession {
+  const {
+    sessionId,
+    systemPrompt,
+    task,
+    worktreePath,
+    maxCostUsd,
+    maxDurationMinutes,
+    onProgress,
+    onResult,
+    onError,
+    onCostUpdate,
+  } = options;
+
+  const log = (level: 'info' | 'error', msg: string) => sessionLog(sessionId, level, msg);
+
+  const args: string[] = [
+    '-p', task,
+    '--append-system-prompt', systemPrompt,
+    '--output-format', 'stream-json',
+    '--verbose',
+    '--dangerously-skip-permissions',
+  ];
+
+  log('info', `Starting autonomous session in ${worktreePath}`);
+  log('info', `Task: ${task.slice(0, 200)}${task.length > 200 ? '...' : ''}`);
+  log('info', `Limits: cost=$${maxCostUsd}, duration=${maxDurationMinutes}min`);
+
+  const child = spawn('claude', args, {
+    cwd: worktreePath,
+    env: buildSafeEnv() as NodeJS.ProcessEnv,
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+
+  log('info', `Spawned autonomous claude CLI, PID: ${child.pid ?? 'unknown'}`);
+
+  // Close stdin immediately — no interaction
+  if (child.stdin) {
+    child.stdin.end();
+  }
+
+  let sessionState: SessionState = 'running';
+  let lastKnownCost = 0;
+  const startTime = Date.now();
+
+  // Duration ceiling timer
+  const durationTimer = setTimeout(() => {
+    if (sessionState === 'running') {
+      log('error', `Duration ceiling hit: ${maxDurationMinutes} minutes`);
+      sessionState = 'error';
+      child.kill('SIGTERM');
+      onError(new Error(`Session killed: exceeded ${maxDurationMinutes} minute time limit`));
+    }
+  }, maxDurationMinutes * 60 * 1000);
+
+  if (child.stdout) {
+    parseStream(
+      child.stdout,
+      log,
+      (event) => {
+        if (event.type === 'tool_call') {
+          log('info', `Tool: ${event.tool} ${event.input ?? ''}`);
+        }
+        onProgress(event);
+      },
+      (result) => {
+        // Track cost and check ceiling
+        if (result.costUsd !== null) {
+          lastKnownCost = result.costUsd;
+          onCostUpdate?.(lastKnownCost);
+
+          if (lastKnownCost >= maxCostUsd) {
+            log('error', `Cost ceiling hit: $${lastKnownCost} >= $${maxCostUsd}`);
+            sessionState = 'error';
+            child.kill('SIGTERM');
+            onError(new Error(`Session killed: cost $${lastKnownCost.toFixed(2)} exceeded $${maxCostUsd} limit`));
+            return;
+          }
+        }
+
+        log('info', `Turn complete — turns: ${result.turns}, cost: $${result.costUsd ?? '?'}`);
+        // In autonomous mode, result events are informational — session keeps going
+        onResult(result);
+      },
+      (error) => {
+        log('error', `Stream error: ${error.message}`);
+        sessionState = 'error';
+        onError(error);
+      },
+    );
+  }
+
+  if (child.stderr) {
+    const stderrRl = createInterface({ input: child.stderr, crlfDelay: Infinity });
+    stderrRl.on('line', (line: string) => {
+      log('error', `stderr: ${line}`);
+      console.error(`[code-executor:stderr] ${line}`);
+    });
+  }
+
+  child.on('error', (err) => {
+    clearTimeout(durationTimer);
+    log('error', `Spawn error: ${err.message}`);
+    sessionState = 'error';
+    onError(new Error(`Failed to spawn claude CLI: ${err.message}`));
+  });
+
+  child.on('exit', (code, signal) => {
+    clearTimeout(durationTimer);
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    log('info', `Process exited — code: ${code}, signal: ${signal}, elapsed: ${elapsed}s, cost: $${lastKnownCost}`);
+    if (sessionState !== 'error') {
+      if (code !== 0 && code !== null) {
+        const reason = signal
+          ? `killed by signal ${signal}`
+          : `exited with code ${code}`;
+        log('error', `Session failed: ${reason}`);
+        sessionState = 'error';
+        onError(new Error(`Claude CLI ${reason}`));
+      } else {
+        sessionState = 'completed';
+        log('info', 'Autonomous session ended successfully');
+      }
+    }
+  });
+
+  const pid = child.pid ?? 0;
+
+  return {
+    pid,
+    get state() { return sessionState; },
+    kill: () => {
+      clearTimeout(durationTimer);
+      if (!child.killed) {
+        sessionState = 'completed';
+        child.kill('SIGTERM');
+      }
+    },
+    process: child,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Interactive session lifecycle (existing)
 // ---------------------------------------------------------------------------
 
 /**

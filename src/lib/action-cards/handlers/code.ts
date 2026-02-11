@@ -9,9 +9,11 @@ import { updateCard } from "../db";
 import {
   getSession as getActiveSession,
   removeSession,
+  clearAutoApproveTimer,
 } from "@/lib/code/session-manager";
 import { notifySessionState } from "@/lib/code/telegram";
-import { spawnSession } from "@/lib/code/lifecycle";
+import { spawnSession, executePlan } from "@/lib/code/lifecycle";
+import { spawnSync } from "child_process";
 
 // Re-export for consumers that import from this file
 export { getActiveSessions, finalizeZombieSession, getSessionForTelegramMessage, setTelegramMessage } from "@/lib/code/session-manager";
@@ -153,12 +155,54 @@ registerCardHandler("code:approve", {
     const worktreePath = data.worktreePath as string;
     const branchName = data.branchName as string;
     const cardId = data._cardId as string | undefined;
+    const isAutonomous = data.autonomous === true;
+    const prUrl = data.prUrl as string | undefined;
 
     if (!worktreePath || !branchName) {
       return { status: "error", error: "Missing worktreePath or branchName" };
     }
 
-    mergeWorktree(worktreePath, branchName);
+    if (isAutonomous && prUrl) {
+      // Autonomous sessions have a GitHub PR — merge it via gh CLI
+      const prNumber = prUrl.match(/\/pull\/(\d+)/)?.[1];
+      if (!prNumber) {
+        return { status: "error", error: `Could not extract PR number from: ${prUrl}` };
+      }
+
+      // Check PR state first — it may already be merged
+      const stateCheck = spawnSync("gh", ["pr", "view", prNumber, "--json", "state", "-q", ".state"], {
+        cwd: process.cwd(),
+        stdio: "pipe",
+        timeout: 15000,
+      });
+      const prState = stateCheck.stdout?.toString().trim();
+
+      if (prState !== "MERGED") {
+        const result = spawnSync("gh", ["pr", "merge", prNumber, "--merge", "--delete-branch"], {
+          cwd: process.cwd(),
+          stdio: "pipe",
+          timeout: 30000,
+        });
+
+        if (result.status !== 0) {
+          const stderr = result.stderr?.toString().trim() || "Unknown error";
+          return { status: "error", error: `Failed to merge PR #${prNumber}: ${stderr}` };
+        }
+      }
+
+      // Pull the merged changes into local main
+      spawnSync("git", ["pull", "origin", "main"], {
+        cwd: process.cwd(),
+        stdio: "pipe",
+        timeout: 15000,
+      });
+
+      // Clean up worktree (branch already deleted by --delete-branch)
+      try { cleanupWorktree(worktreePath, branchName); } catch { /* best effort */ }
+    } else {
+      // Interactive sessions — local fast-forward merge
+      mergeWorktree(worktreePath, branchName);
+    }
 
     // Mark as terminal so it stops showing in pending lists
     if (cardId) {
@@ -181,12 +225,26 @@ registerCardHandler("code:reject", {
     const worktreePath = data.worktreePath as string;
     const branchName = data.branchName as string;
     const cardId = data._cardId as string | undefined;
+    const isAutonomous = data.autonomous === true;
+    const prUrl = data.prUrl as string | undefined;
 
     if (!worktreePath || !branchName) {
       return { status: "error", error: "Missing worktreePath or branchName" };
     }
 
-    // Best effort — don't fail if cleanup has issues
+    // Close the GitHub PR if autonomous
+    if (isAutonomous && prUrl) {
+      const prNumber = prUrl.match(/\/pull\/(\d+)/)?.[1];
+      if (prNumber) {
+        spawnSync("gh", ["pr", "close", prNumber, "--delete-branch"], {
+          cwd: process.cwd(),
+          stdio: "pipe",
+          timeout: 15000,
+        });
+      }
+    }
+
+    // Best effort worktree cleanup
     try {
       cleanupWorktree(worktreePath, branchName);
     } catch {
@@ -240,6 +298,66 @@ registerCardHandler("code:stop", {
     // Mark as terminal so it stops showing in pending lists
     if (cardId) {
       await updateCard(cardId, { data: { ...data, state: 'stopped' } });
+    }
+
+    return { status: "confirmed" };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// code:approve-plan — Approve an autonomous plan and start execution
+// ---------------------------------------------------------------------------
+
+registerCardHandler("code:approve-plan", {
+  label: "Approve Plan",
+  successMessage: "Plan approved — execution starting",
+
+  async execute(data) {
+    const sessionId = data.sessionId as string;
+    const cardId = data._cardId as string | undefined;
+
+    if (!sessionId || !cardId) {
+      return { status: "error", error: "Missing sessionId or cardId" };
+    }
+
+    // Clear auto-approve timer since user approved manually
+    clearAutoApproveTimer(sessionId);
+
+    try {
+      await executePlan(sessionId, cardId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { status: "error", error: `Failed to start execution: ${msg}` };
+    }
+
+    return { status: "confirmed" };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// code:edit-plan — Amend plan with user feedback, reset timer
+// ---------------------------------------------------------------------------
+
+registerCardHandler("code:edit-plan", {
+  label: "Edit Plan",
+  successMessage: "Plan updated — reply with your edits",
+
+  async execute(data) {
+    const sessionId = data.sessionId as string;
+    const cardId = data._cardId as string | undefined;
+
+    if (!sessionId || !cardId) {
+      return { status: "error", error: "Missing sessionId or cardId" };
+    }
+
+    // Clear auto-approve timer — user is editing, will re-trigger on re-approval
+    clearAutoApproveTimer(sessionId);
+
+    // Update card state to indicate editing
+    if (cardId) {
+      await updateCard(cardId, {
+        data: { ...data, state: 'plan-ready', autoApproveAt: null },
+      });
     }
 
     return { status: "confirmed" };

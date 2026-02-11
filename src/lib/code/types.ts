@@ -16,7 +16,12 @@ export type CodeSessionState =
   | 'merged'
   | 'rejected'
   | 'stopped'
-  | 'error';
+  | 'error'
+  // Autonomous flow states
+  | 'planning'
+  | 'plan-ready'
+  | 'executing'
+  | 'pushing';
 
 /** UI display mode derived from card status + session state. */
 export type SessionMode =
@@ -43,7 +48,64 @@ export interface CodeSessionData {
   totalTurns?: number;
   totalCostUsd?: number | null;
   result?: CodeResult;
+  /** Autonomous flow fields */
+  autonomous?: boolean;
+  plan?: string;
+  planApprovedAt?: string;
+  prUrl?: string;
+  autoApproveAt?: string;
 }
+
+/** Configuration for autonomous code agent (stored in capability:code-agent config). */
+export interface CodeAgentConfig {
+  planning: {
+    autoApproveMinutes: number;
+    maxPlanningCostUsd: number;
+  };
+  execution: {
+    maxCostUsd: number;
+    maxDurationMinutes: number;
+    maxRetries: number;
+    commitStrategy: 'incremental' | 'single';
+  };
+  triggers: {
+    heartbeatEnabled: boolean;
+    linearLabel: string;
+    maxConcurrentSessions: number;
+    pauseIfOpenPR: boolean;
+  };
+  notifications: {
+    onPlanReady: boolean;
+    onProgressMilestones: boolean;
+    onComplete: boolean;
+    onError: boolean;
+  };
+}
+
+export const DEFAULT_CODE_AGENT_CONFIG: CodeAgentConfig = {
+  planning: {
+    autoApproveMinutes: 20,
+    maxPlanningCostUsd: 5,
+  },
+  execution: {
+    maxCostUsd: 20,
+    maxDurationMinutes: 120,
+    maxRetries: 3,
+    commitStrategy: 'incremental',
+  },
+  triggers: {
+    heartbeatEnabled: false,
+    linearLabel: 'aurelius',
+    maxConcurrentSessions: 1,
+    pauseIfOpenPR: true,
+  },
+  notifications: {
+    onPlanReady: true,
+    onProgressMilestones: true,
+    onComplete: true,
+    onError: true,
+  },
+};
 
 /** Result gathered from worktree after a session completes. */
 export interface CodeResult {

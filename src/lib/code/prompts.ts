@@ -45,6 +45,118 @@ ${context ? `## Additional Context\n${context}` : ''}
 }
 
 // ---------------------------------------------------------------------------
+// Planning Prompt (read-only, produces a structured plan)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the system prompt for the planning phase of an autonomous session.
+ * The agent reads the codebase and produces a structured plan — no edits.
+ */
+export function buildPlanningPrompt(task: string, context?: string): string {
+  return `
+You are planning a code change for the Aurelius HQ codebase — a personal AI assistant
+built with Next.js 16, TypeScript, Drizzle ORM, PostgreSQL (Neon), and Tailwind CSS v4.
+The app runs locally on macOS (not Vercel).
+
+## Your Task
+${task}
+
+${context ? `## Additional Context\n${context}` : ''}
+
+## Instructions
+
+You are in PLANNING MODE. Do NOT make any edits. Your job is to:
+
+1. Read and understand the relevant code
+2. Identify which files need to change and why
+3. Consider edge cases and risks
+4. Produce a structured plan
+
+## Output Format
+
+Output your plan in this exact format:
+
+## Plan
+
+### Summary
+One paragraph describing the approach.
+
+### Steps
+1. [File path] — What to change and why
+2. [File path] — What to change and why
+...
+
+### Testing
+- How to verify the changes work
+
+### Risks
+- Any potential issues or things to watch out for
+
+## Key Paths
+- Capabilities: src/lib/capabilities/<name>/index.ts
+- DB Schema: src/lib/db/schema/
+- API Routes: src/app/api/
+- Components: src/components/aurelius/
+- Config: src/lib/config.ts (typed configKeyEnum)
+`.trim();
+}
+
+// ---------------------------------------------------------------------------
+// Execution Prompt (autonomous, follows the approved plan)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the system prompt for the execution phase of an autonomous session.
+ * The agent follows the approved plan, edits, tests, commits, pushes, and creates a PR.
+ */
+export function buildExecutionPrompt(
+  task: string,
+  plan: string,
+  config: { commitStrategy: 'incremental' | 'single'; maxRetries: number },
+): string {
+  const commitInstruction = config.commitStrategy === 'incremental'
+    ? 'Commit after each logical chunk of work with clear commit messages.'
+    : 'Make all changes, then create a single commit at the end.';
+
+  return `
+You are working on the Aurelius HQ codebase — a personal AI assistant
+built with Next.js 16, TypeScript, Drizzle ORM, PostgreSQL (Neon), and Tailwind CSS v4.
+The app runs locally on macOS (not Vercel).
+
+## Your Task
+${task}
+
+## Approved Plan
+Follow this plan. Do not deviate unless you discover something that makes a step impossible.
+
+${plan}
+
+## Execution Rules
+- Follow the plan step by step
+- ${commitInstruction}
+- Run \`npx tsc --noEmit\` after changes to verify no type errors
+- Run \`npx vitest run\` if you changed code near existing tests
+- If tests fail, debug and fix (up to ${config.maxRetries} attempts per issue, then note the failure)
+- If adding a config key, the enum requires a DB migration (ALTER TYPE ... ADD VALUE)
+- Tailwind v4 — @tailwindcss/typography is incompatible, use custom CSS
+- Use bun (not npm) for package operations
+
+## When Done
+1. Ensure all changes are committed
+2. Run \`git push -u origin HEAD\` to push the branch
+3. Create a PR: \`gh pr create --title "<concise title>" --body "<summary of changes>"\`
+4. Output the PR URL as your final message
+
+## Key Paths
+- Capabilities: src/lib/capabilities/<name>/index.ts
+- DB Schema: src/lib/db/schema/
+- API Routes: src/app/api/
+- Components: src/components/aurelius/
+- Config: src/lib/config.ts (typed configKeyEnum)
+`.trim();
+}
+
+// ---------------------------------------------------------------------------
 // Task Slugifier
 // ---------------------------------------------------------------------------
 

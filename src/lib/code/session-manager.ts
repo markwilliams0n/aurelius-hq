@@ -28,15 +28,18 @@ const globalStore = globalThis as unknown as {
   __codeTelegramMessages?: Map<string, number>;
   __codeTelegramToSession?: Map<number, string>;
   __codeSigtermRegistered?: boolean;
+  __codeAutoApproveTimers?: Map<string, ReturnType<typeof setTimeout>>;
 };
 
 if (!globalStore.__codeActiveSessions) globalStore.__codeActiveSessions = new Map();
 if (!globalStore.__codeTelegramMessages) globalStore.__codeTelegramMessages = new Map();
 if (!globalStore.__codeTelegramToSession) globalStore.__codeTelegramToSession = new Map();
+if (!globalStore.__codeAutoApproveTimers) globalStore.__codeAutoApproveTimers = new Map();
 
 const activeSessions = globalStore.__codeActiveSessions;
 const telegramMessages = globalStore.__codeTelegramMessages;
 const telegramToSessionMap = globalStore.__codeTelegramToSession;
+const autoApproveTimers = globalStore.__codeAutoApproveTimers;
 
 // Kill all active sessions on server shutdown
 if (!globalStore.__codeSigtermRegistered) {
@@ -102,6 +105,33 @@ export function setTelegramMessage(sessionId: string, messageId: number): void {
 /** Look up which session a Telegram message belongs to. */
 export function getSessionForTelegramMessage(messageId: number): string | undefined {
   return telegramToSessionMap.get(messageId);
+}
+
+// ---------------------------------------------------------------------------
+// Auto-approve timers (for autonomous plan approval)
+// ---------------------------------------------------------------------------
+
+/** Set an auto-approve timer for a session. Calls onApprove when it fires. */
+export function setAutoApproveTimer(
+  sessionId: string,
+  minutes: number,
+  onApprove: () => void,
+): void {
+  clearAutoApproveTimer(sessionId);
+  const timer = setTimeout(() => {
+    autoApproveTimers.delete(sessionId);
+    onApprove();
+  }, minutes * 60 * 1000);
+  autoApproveTimers.set(sessionId, timer);
+}
+
+/** Clear an auto-approve timer (e.g. on manual approve or cancel). */
+export function clearAutoApproveTimer(sessionId: string): void {
+  const existing = autoApproveTimers.get(sessionId);
+  if (existing) {
+    clearTimeout(existing);
+    autoApproveTimers.delete(sessionId);
+  }
 }
 
 // ---------------------------------------------------------------------------

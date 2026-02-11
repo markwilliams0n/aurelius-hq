@@ -139,6 +139,95 @@ export async function updateSessionTelegram(
 }
 
 // ---------------------------------------------------------------------------
+// Autonomous flow notifications
+// ---------------------------------------------------------------------------
+
+/** Build keyboard for plan approval. */
+export function getPlanKeyboard(cardId: string): InlineKeyboardMarkup {
+  return {
+    inline_keyboard: [
+      [
+        { text: '\u{2705} Approve Plan', callback_data: `code:approve-plan:${cardId}` },
+        { text: '\u{270F}\u{FE0F} Edit', callback_data: `code:edit-plan:${cardId}` },
+      ],
+      [{ text: '\u{1F6D1} Cancel', callback_data: `code:stop:${cardId}` }],
+    ],
+  };
+}
+
+/** Format plan-ready notification for Telegram. */
+export function formatPlanReady(
+  task: string,
+  plan: string,
+  autoApproveMinutes: number,
+  costUsd: number | null,
+): string {
+  const truncatedTask = task.length > 50 ? task.slice(0, 47) + '...' : task;
+  const costStr = costUsd !== null ? `$${costUsd.toFixed(2)}` : '...';
+  // Truncate plan to fit Telegram's 4096 char limit with room for chrome
+  const maxPlanLength = 3000;
+  const truncatedPlan = plan.length > maxPlanLength
+    ? plan.slice(0, maxPlanLength) + '\n\n...(truncated)'
+    : plan;
+
+  return [
+    `\u{1F4CB} Coding: Plan Ready`,
+    '',
+    `Task: ${truncatedTask}`,
+    `Planning cost: ${costStr}`,
+    '',
+    truncatedPlan,
+    '',
+    `\u{23F0} Auto-approving in ${autoApproveMinutes} minutes.`,
+  ].join('\n');
+}
+
+/** Format PR-ready notification for Telegram. */
+export function formatPrReady(
+  task: string,
+  prUrl: string,
+  totalTurns: number,
+  totalCostUsd: number | null,
+  extra?: { filesChanged?: number; insertions?: number; deletions?: number },
+): string {
+  const truncatedTask = task.length > 50 ? task.slice(0, 47) + '...' : task;
+  const costStr = totalCostUsd !== null ? `$${totalCostUsd.toFixed(2)}` : '...';
+
+  const lines = [
+    `\u{2705} PR Ready`,
+    '',
+    `Task: ${truncatedTask}`,
+    `Turns: ${totalTurns} \u{00B7} Cost: ${costStr}`,
+  ];
+
+  if (extra?.filesChanged !== undefined) {
+    lines.push(`Files: ${extra.filesChanged} \u{00B7} +${extra.insertions ?? 0} -${extra.deletions ?? 0}`);
+  }
+
+  lines.push('', prUrl);
+
+  return lines.join('\n');
+}
+
+/** Format progress milestone for Telegram. */
+export function formatProgressMilestone(
+  task: string,
+  milestone: string,
+  totalTurns: number,
+  totalCostUsd: number | null,
+): string {
+  const truncatedTask = task.length > 50 ? task.slice(0, 47) + '...' : task;
+  const costStr = totalCostUsd !== null ? `$${totalCostUsd.toFixed(2)}` : '...';
+
+  return [
+    `\u{1F7E1} Coding: ${milestone}`,
+    '',
+    `Task: ${truncatedTask}`,
+    `Turns: ${totalTurns} \u{00B7} Cost: ${costStr}`,
+  ].join('\n');
+}
+
+// ---------------------------------------------------------------------------
 // Convenience: notify session state change
 // ---------------------------------------------------------------------------
 

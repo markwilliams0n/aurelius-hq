@@ -171,4 +171,5 @@ export const CONFIG_DESCRIPTIONS: Record<ConfigKey, string> = {
   "sync:granola": "Granola connector sync state (lastSyncedAt).",
   "sync:linear": "Linear connector sync state (lastSyncAt, lastNotificationId).",
   "sync:slack": "Slack connector sync state (lastSyncAt, channelCursors).",
+  "capability:code-agent": "Autonomous code agent configuration — planning, execution, triggers, and notification settings.",
 };
