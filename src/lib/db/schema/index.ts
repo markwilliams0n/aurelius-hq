@@ -9,3 +9,4 @@ export * from "./action-cards";
 export * from "./system-events";
 export * from "./vault";
 export * from "./ai-cost-log";
+export * from "./reading-list";
