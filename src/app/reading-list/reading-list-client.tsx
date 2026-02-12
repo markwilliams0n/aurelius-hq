@@ -5,6 +5,7 @@ import { AppShell } from "@/components/aurelius/app-shell";
 import { toast } from "sonner";
 import { RefreshCw, ExternalLink, Archive } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useChatPanel } from "@/components/aurelius/chat-provider";
 import type { ReadingListItem } from "@/lib/db/schema/reading-list";
 
 function timeAgo(date: Date): string {
@@ -22,6 +23,7 @@ export function ReadingListClient() {
   const [items, setItems] = useState<ReadingListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  const { open: openChat } = useChatPanel();
 
   // Fetch items on mount
   useEffect(() => {
@@ -113,7 +115,7 @@ export function ReadingListClient() {
           <div className="flex items-center justify-between">
             <h1 className="font-serif text-xl text-gold">Reading List</h1>
             <button
-              onClick={() => console.log("Sync will be wired in Task 7")}
+              onClick={() => openChat("User is on the Reading List page and wants to sync their X/Twitter bookmarks. Help them by using browser automation to navigate to x.com/i/bookmarks, scrape the bookmarks, and POST them to /api/reading-list.")}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
               title="Sync bookmarks"
             >
