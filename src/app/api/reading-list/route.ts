@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { readingList } from "@/lib/db/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
+import { processScrapedBookmarks, type ScrapedBookmark } from "@/lib/reading-list/x-bookmarks";
 
 export const runtime = "nodejs";
 
@@ -38,6 +39,30 @@ export async function GET(request: Request) {
     console.error("[Reading List API] GET failed:", error);
     return NextResponse.json(
       { error: "Failed to fetch reading list" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { bookmarks } = body as { bookmarks: ScrapedBookmark[] };
+
+    if (!bookmarks || !Array.isArray(bookmarks)) {
+      return NextResponse.json(
+        { error: "bookmarks array required" },
+        { status: 400 }
+      );
+    }
+
+    const result = await processScrapedBookmarks(bookmarks);
+
+    return NextResponse.json(result, { status: 201 });
+  } catch (error) {
+    console.error("[Reading List API] POST sync failed:", error);
+    return NextResponse.json(
+      { error: "Failed to process bookmarks" },
       { status: 500 }
     );
   }
