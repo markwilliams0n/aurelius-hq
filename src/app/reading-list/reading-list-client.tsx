@@ -3,9 +3,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { AppShell } from "@/components/aurelius/app-shell";
 import { toast } from "sonner";
-import { RefreshCw, ExternalLink, Archive } from "lucide-react";
+import { ExternalLink, Archive, Bookmark, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useChatPanel } from "@/components/aurelius/chat-provider";
 import type { ReadingListItem } from "@/lib/db/schema/reading-list";
 
 function timeAgo(date: Date): string {
@@ -23,7 +22,9 @@ export function ReadingListClient() {
   const [items, setItems] = useState<ReadingListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTag, setActiveTag] = useState<string | null>(null);
-  const { open: openChat } = useChatPanel();
+  const [showSetup, setShowSetup] = useState(false);
+
+  const bookmarkletHref = `javascript:void(document.head.appendChild(document.createElement('script')).src='http://localhost:3333/bookmarklet.js?t='+Date.now())`;
 
   // Fetch items on mount
   useEffect(() => {
@@ -115,17 +116,42 @@ export function ReadingListClient() {
           <div className="flex items-center justify-between">
             <h1 className="font-serif text-xl text-gold">Reading List</h1>
             <button
-              onClick={() => openChat(
-                "User is on the Reading List page and wants to sync their X/Twitter bookmarks. Use browser automation to navigate to x.com/i/bookmarks, scrape the bookmarks, and POST them to /api/reading-list.",
-                "Sync my X bookmarks to the reading list"
-              )}
+              onClick={() => setShowSetup((s) => !s)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-              title="Sync bookmarks"
+              title="Setup bookmarklet"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Sync X
+              <Bookmark className="w-3.5 h-3.5" />
+              {showSetup ? "Close" : "Setup"}
             </button>
           </div>
+
+          {/* Bookmarklet setup panel */}
+          {showSetup && (
+            <div className="mt-3 p-4 rounded-lg border border-border bg-card">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-foreground font-medium mb-2">
+                    Drag this to your bookmarks bar:
+                  </p>
+                  <a
+                    href={bookmarkletHref}
+                    onClick={(e) => e.preventDefault()}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gold/20 text-gold border border-gold/30 text-sm font-medium cursor-grab active:cursor-grabbing hover:bg-gold/30 transition-colors"
+                  >
+                    <Bookmark className="w-4 h-4" />
+                    + Reading List
+                  </a>
+                </div>
+                <button onClick={() => setShowSetup(false)} className="text-muted-foreground hover:text-foreground">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="mt-3 text-xs text-muted-foreground space-y-1">
+                <p><strong>On X bookmarks page:</strong> Scrapes all visible tweets and syncs them</p>
+                <p><strong>On any other page:</strong> Saves the page (with selected text if any) to your reading list</p>
+              </div>
+            </div>
+          )}
 
           {/* Tag filter bar */}
           {allTags.length > 0 && (
