@@ -22,12 +22,18 @@ Respond in this exact JSON format, no other text:
   const result = await chat(prompt, "You are a concise summarizer. Respond only with valid JSON.", { maxTokens: 256 });
 
   try {
-    const parsed = JSON.parse(result.trim());
+    // Strip markdown code fences if present
+    let cleaned = result.trim();
+    cleaned = cleaned.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/, "");
+    cleaned = cleaned.trim();
+
+    const parsed = JSON.parse(cleaned);
     return {
       summary: parsed.summary || content.slice(0, 200),
       tags: (parsed.tags || []).filter((t: string) => VALID_TAGS.includes(t)),
     };
-  } catch {
+  } catch (e) {
+    console.error("[Summarize] Failed to parse model response:", result.slice(0, 300), e);
     return {
       summary: content.slice(0, 200),
       tags: ["other"],

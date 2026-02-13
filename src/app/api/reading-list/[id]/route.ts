@@ -44,3 +44,32 @@ export async function PATCH(
     );
   }
 }
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+
+  try {
+    const result = await db
+      .delete(readingList)
+      .where(eq(readingList.id, id))
+      .returning({ id: readingList.id });
+
+    if (result.length === 0) {
+      return NextResponse.json(
+        { error: "Item not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ deleted: true });
+  } catch (error) {
+    console.error("[Reading List API] DELETE failed:", error);
+    return NextResponse.json(
+      { error: "Failed to delete reading list item" },
+      { status: 500 }
+    );
+  }
+}

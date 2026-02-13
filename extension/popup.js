@@ -9,6 +9,7 @@ const pageContentEl = document.getElementById("page-content");
 const xInfoEl = document.getElementById("x-info");
 
 let pageData = null;
+let tabId = null;
 
 function setStatus(msg, type) {
   statusEl.textContent = msg;
@@ -24,37 +25,37 @@ async function init() {
       return;
     }
 
+    tabId = tab.id;
     const url = new URL(tab.url);
     const isXBookmarks =
       (url.hostname === "x.com" || url.hostname === "twitter.com") &&
       url.pathname.includes("/bookmarks");
 
     if (isXBookmarks) {
-      // X bookmarks — inject scraper
-      setStatus("Scanning X bookmarks...", "working");
-
+      // X bookmarks — first do a quick count of what's visible
       const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: scrapeXBookmarks,
       });
 
-      const bookmarks = results[0]?.result || [];
+      const visible = results[0]?.result || [];
+      pageData = { type: "x-bookmarks", bookmarks: visible };
 
-      if (bookmarks.length === 0) {
-        setStatus("No bookmarks found. Scroll down to load some first.", "error");
-        return;
-      }
-
-      pageData = { type: "x-bookmarks", bookmarks };
-      xInfoEl.style.display = "block";
-      xInfoEl.textContent = bookmarks.length + " bookmarks found";
       pageInfoEl.style.display = "block";
       pageTitleEl.textContent = "X Bookmarks";
       pageUrlEl.textContent = tab.url;
-      pageContentEl.textContent = bookmarks.slice(0, 3).map(b => "@" + b.author + ": " + b.content.slice(0, 60)).join("\n");
-      saveBtn.textContent = "Sync " + bookmarks.length + " Bookmarks";
+      xInfoEl.style.display = "block";
+
+      if (visible.length === 0) {
+        setStatus("No bookmarks visible. Make sure you're on the bookmarks page.", "error");
+        return;
+      }
+
+      xInfoEl.textContent = visible.length + " bookmarks visible";
+      pageContentEl.textContent = visible.slice(0, 3).map(b => "@" + b.author + ": " + b.content.slice(0, 60)).join("\n");
+      saveBtn.textContent = "Sync " + visible.length + " Visible";
       saveBtn.disabled = false;
-      setStatus("Ready to sync", "success");
+      setStatus("Ready — or scroll down on X first to load more", "success");
     } else {
       // Generic page — extract content
       const results = await chrome.scripting.executeScript({
@@ -90,10 +91,11 @@ async function init() {
   }
 }
 
-// Injected into X bookmarks page
+// Injected into X bookmarks page — scrapes all currently rendered articles
 function scrapeXBookmarks() {
   const articles = document.querySelectorAll("article");
   const bookmarks = [];
+  const seen = new Set();
 
   articles.forEach(function (article) {
     const tweetText = article.querySelector('[data-testid="tweetText"]');
@@ -121,7 +123,8 @@ function scrapeXBookmarks() {
       }
     }
 
-    if (content) {
+    if (content && !seen.has(tweetId)) {
+      seen.add(tweetId);
       bookmarks.push({ tweetId, author, content, url: tweetUrl });
     }
   });
@@ -146,7 +149,22 @@ saveBtn.addEventListener("click", async function () {
   if (!pageData) return;
 
   saveBtn.disabled = true;
-  setStatus("Saving...", "working");
+
+  // For X bookmarks, re-scrape to pick up anything loaded since popup opened
+  if (pageData.type === "x-bookmarks" && tabId) {
+    setStatus("Scanning page for bookmarks...", "working");
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: scrapeXBookmarks,
+    });
+    const fresh = results[0]?.result || [];
+    if (fresh.length > pageData.bookmarks.length) {
+      pageData.bookmarks = fresh;
+    }
+    setStatus("Syncing " + pageData.bookmarks.length + " bookmarks...", "working");
+  } else {
+    setStatus("Saving...", "working");
+  }
 
   try {
     const body =
