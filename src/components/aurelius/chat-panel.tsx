@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChatMessage } from "./chat-message";
@@ -15,10 +15,12 @@ export function ChatPanel({
   isOpen,
   onClose,
   context,
+  initialMessage,
 }: {
   isOpen: boolean;
   onClose: () => void;
   context?: string; // Optional context from current page
+  initialMessage?: string; // Auto-send this message when panel opens
 }) {
   const {
     messages,
@@ -38,6 +40,7 @@ export function ChatPanel({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const [autoSent, setAutoSent] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -46,6 +49,17 @@ export function ChatPanel({
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Auto-send initial message when panel opens
+  useEffect(() => {
+    if (isOpen && initialMessage && !autoSent && !isStreaming && !isLoading) {
+      setAutoSent(true);
+      send(initialMessage);
+    }
+    if (!isOpen) {
+      setAutoSent(false);
+    }
+  }, [isOpen, initialMessage, autoSent, isStreaming, isLoading, send]);
 
   // Close on Escape key
   useEffect(() => {

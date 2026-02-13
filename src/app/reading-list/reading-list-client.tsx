@@ -115,7 +115,10 @@ export function ReadingListClient() {
           <div className="flex items-center justify-between">
             <h1 className="font-serif text-xl text-gold">Reading List</h1>
             <button
-              onClick={() => openChat("User is on the Reading List page and wants to sync their X/Twitter bookmarks. Help them by using browser automation to navigate to x.com/i/bookmarks, scrape the bookmarks, and POST them to /api/reading-list.")}
+              onClick={() => openChat(
+                "User is on the Reading List page and wants to sync their X/Twitter bookmarks. Use browser automation to navigate to x.com/i/bookmarks, scrape the bookmarks, and POST them to /api/reading-list.",
+                "Sync my X bookmarks to the reading list"
+              )}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
               title="Sync bookmarks"
             >

@@ -5,7 +5,7 @@ import { ChatPanel } from "./chat-panel";
 
 type ChatContextType = {
   isOpen: boolean;
-  open: (context?: string) => void;
+  open: (context?: string, initialMessage?: string) => void;
   close: () => void;
   toggle: () => void;
 };
@@ -23,9 +23,11 @@ export function useChatPanel() {
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [context, setContext] = useState<string | undefined>();
+  const [initialMessage, setInitialMessage] = useState<string | undefined>();
 
-  const open = useCallback((ctx?: string) => {
+  const open = useCallback((ctx?: string, msg?: string) => {
     setContext(ctx);
+    setInitialMessage(msg);
     setIsOpen(true);
   }, []);
 
@@ -53,7 +55,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   return (
     <ChatContext.Provider value={{ isOpen, open, close, toggle }}>
       {children}
-      <ChatPanel isOpen={isOpen} onClose={close} context={context} />
+      <ChatPanel isOpen={isOpen} onClose={close} context={context} initialMessage={initialMessage} />
     </ChatContext.Provider>
   );
 }
