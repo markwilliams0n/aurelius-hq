@@ -78,10 +78,12 @@ Respond with ONLY valid JSON, no markdown fences:
       console.error("[Classify Kimi] Failed to log AI cost:", err)
     );
 
-    // Parse JSON from response
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    // Strip markdown code fences if present, then extract JSON
+    let cleaned = response.trim();
+    cleaned = cleaned.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/, "");
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.warn("[Classify Kimi] No JSON found in response");
+      console.warn("[Classify Kimi] No JSON found in response:", cleaned.slice(0, 200));
       return null;
     }
 

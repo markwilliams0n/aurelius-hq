@@ -17,7 +17,10 @@ export async function processScrapedBookmarks(
   let added = 0;
   let skipped = 0;
 
-  for (const bookmark of bookmarks) {
+  for (let i = 0; i < bookmarks.length; i++) {
+    const bookmark = bookmarks[i];
+    console.log(`[Reading List] Processing ${i + 1}/${bookmarks.length}: @${bookmark.author} (${bookmark.tweetId})`);
+
     const existing = await db
       .select({ id: readingList.id })
       .from(readingList)
@@ -33,6 +36,7 @@ export async function processScrapedBookmarks(
       bookmark.content,
       bookmark.author
     );
+    console.log(`[Reading List] Summarized ${i + 1}/${bookmarks.length}: ${tags.join(", ")}`);
 
     await db.insert(readingList).values({
       source: "x-bookmark",

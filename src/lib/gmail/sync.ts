@@ -325,34 +325,69 @@ export async function syncGmailMessages(): Promise<GmailSyncResult> {
 
     console.log(`[Gmail] ${threadMap.size} unique threads to process`);
 
+    // Phase 1: Insert all new threads quickly (no AI calls)
+    const newThreads: Array<{ threadId: string; email: ParsedEmail }> = [];
     for (const [threadId, email] of threadMap) {
       try {
-        // Skip if thread already exists in triage (any status)
         const existing = await findExistingThread(threadId);
         if (existing) {
           result.skipped++;
           continue;
         }
+        newThreads.push({ threadId, email });
+      } catch (error) {
+        console.error(`[Gmail] Error checking ${email.messageId}:`, error);
+        result.errors++;
+      }
+    }
 
-        // Generate AI summary for the email
-        console.log(`[Gmail] Summarizing: ${email.subject}`);
-        const summary = await summarizeEmail(email);
+    console.log(`[Gmail] ${newThreads.length} new threads to insert (${result.skipped} already in triage)`);
 
-        // Transform and insert into triage
-        const item = transformToInboxItem(email, summary);
-        await insertInboxItemWithTasks(item);
-
+    // Insert all new threads with snippet preview (fast, no AI)
+    for (const { email } of newThreads) {
+      try {
+        const item = transformToInboxItem(email);
+        await insertInboxItemWithTasks(item, { skipAiExtraction: true });
         result.synced++;
         result.emails.push({
           id: email.messageId,
           threadId: email.threadId,
           subject: email.subject,
         });
-        console.log(`[Gmail] Synced: ${email.subject}`);
       } catch (error) {
-        console.error(`[Gmail] Error syncing ${email.messageId}:`, error);
+        console.error(`[Gmail] Error inserting ${email.messageId}:`, error);
         result.errors++;
       }
+    }
+
+    console.log(`[Gmail] Inserted ${result.synced} threads, now summarizing in background...`);
+
+    // Phase 2: Backfill AI summaries in parallel batches
+    const SUMMARY_BATCH_SIZE = 5;
+    for (let i = 0; i < newThreads.length; i += SUMMARY_BATCH_SIZE) {
+      const batch = newThreads.slice(i, i + SUMMARY_BATCH_SIZE);
+      console.log(`[Gmail] Summarizing batch ${Math.floor(i / SUMMARY_BATCH_SIZE) + 1}/${Math.ceil(newThreads.length / SUMMARY_BATCH_SIZE)}`);
+      await Promise.allSettled(
+        batch.map(async ({ email }) => {
+          try {
+            const summary = await summarizeEmail(email);
+            if (summary) {
+              await db
+                .update(inboxItems)
+                .set({ preview: summary })
+                .where(
+                  and(
+                    eq(inboxItems.connector, 'gmail'),
+                    eq(inboxItems.externalId, email.threadId)
+                  )
+                );
+            }
+          } catch (error) {
+            // Non-fatal — item already exists with snippet preview
+            console.error(`[Gmail] Summary failed for ${email.subject}:`, error);
+          }
+        })
+      );
     }
 
     // Reconcile: auto-archive triage items whose threads are no longer in Gmail inbox

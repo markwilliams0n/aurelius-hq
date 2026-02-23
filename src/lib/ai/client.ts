@@ -44,7 +44,7 @@ const API_TIMEOUT_MS = 30000;
 export async function chat(
   input: string | Message[],
   instructions?: string,
-  options?: { maxTokens?: number }
+  options?: { maxTokens?: number; timeoutMs?: number }
 ): Promise<string> {
   const result = ai.callModel({
     model: DEFAULT_MODEL,
@@ -52,7 +52,12 @@ export async function chat(
     instructions,
     maxOutputTokens: options?.maxTokens ?? 4096,
   });
-  return result.getText();
+  return Promise.race([
+    result.getText(),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("OpenRouter chat timed out")), options?.timeoutMs ?? API_TIMEOUT_MS)
+    ),
+  ]);
 }
 
 // Result type for streaming

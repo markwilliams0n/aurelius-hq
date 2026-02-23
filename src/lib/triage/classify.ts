@@ -38,6 +38,29 @@ export type ClassificationEnrichment = {
 /** Connectors whose items should always surface individually (never batch-grouped) */
 const INDIVIDUAL_CONNECTORS = new Set(["granola"]);
 
+/**
+ * Fast rule-only classification (no AI calls).
+ * Returns null if no rule matches.
+ */
+function classifyWithRulesOnly(
+  item: InboxItem,
+  rules: TriageRule[]
+): { batchType: string | null; reason: string; ruleId?: string } | null {
+  if (INDIVIDUAL_CONNECTORS.has(item.connector)) {
+    return { batchType: null, reason: `${item.connector} items are always kept for individual review` };
+  }
+  for (const rule of rules) {
+    if (matchRule(rule, item)) {
+      const batchType = rule.action?.batchType ?? null;
+      if (rule.id) {
+        incrementRuleMatchCount(rule.id).catch(() => {});
+      }
+      return { batchType, reason: `Matched rule: ${rule.name}`, ruleId: rule.id };
+    }
+  }
+  return null;
+}
+
 export async function classifyItem(
   item: InboxItem,
   rules?: TriageRule[]
@@ -165,48 +188,80 @@ export async function classifyNewItems(): Promise<{
     // Fetch rules once for all items
     const rules = await getActiveRules();
 
+    // Phase 1: Rule matching (fast, no AI) — pull out rule-matched items first
+    const needsAi: InboxItem[] = [];
     for (const item of items) {
-      try {
-        const { classification: classResult, enrichment: classEnrichment } = await classifyItem(item, rules);
-        byTier[classResult.tier]++;
-
-        // Build classification data for the DB column (no enrichment nesting)
-        const classification = {
-          batchCardId: null,
-          batchType: classResult.batchType,
-          tier: classResult.tier,
-          confidence: classResult.confidence,
-          reason: classResult.reason,
-          classifiedAt: new Date().toISOString(),
-          ...(classResult.ruleId ? { ruleId: classResult.ruleId } : {}),
-        };
-
-        // Build the update — classification + optional enrichment merge
-        const updateData: Record<string, unknown> = {
-          classification,
-          updatedAt: new Date(),
-        };
-
-        // If Kimi returned enrichment, merge it into the enrichment column directly
-        if (classEnrichment) {
-          const existingEnrichment =
-            (item.enrichment as Record<string, unknown>) || {};
-          updateData.enrichment = {
-            ...existingEnrichment,
-            ...classEnrichment,
-          };
-        }
-
+      const ruleResult = classifyWithRulesOnly(item, rules);
+      if (ruleResult) {
+        byTier.rule++;
         await db
           .update(inboxItems)
-          .set(updateData)
+          .set({
+            classification: {
+              batchCardId: null,
+              batchType: ruleResult.batchType,
+              tier: "rule" as const,
+              confidence: 1,
+              reason: ruleResult.reason,
+              classifiedAt: new Date().toISOString(),
+              ruleId: ruleResult.ruleId,
+            },
+            updatedAt: new Date(),
+          })
           .where(eq(inboxItems.id, item.id));
-      } catch (error) {
-        console.error(
-          `[Classify] Failed to classify item ${item.id}:`,
-          error
-        );
-        // Continue with remaining items
+      } else {
+        needsAi.push(item);
+      }
+    }
+
+    console.log(`[Classify] ${items.length - needsAi.length} matched rules, ${needsAi.length} need AI classification`);
+
+    // Phase 2: AI classification in parallel batches
+    const CLASSIFY_BATCH_SIZE = 5;
+    for (let i = 0; i < needsAi.length; i += CLASSIFY_BATCH_SIZE) {
+      const batch = needsAi.slice(i, i + CLASSIFY_BATCH_SIZE);
+      console.log(`[Classify] AI batch ${Math.floor(i / CLASSIFY_BATCH_SIZE) + 1}/${Math.ceil(needsAi.length / CLASSIFY_BATCH_SIZE)}`);
+
+      const results = await Promise.allSettled(
+        batch.map(async (item) => {
+          const { classification: classResult, enrichment: classEnrichment } = await classifyItem(item, rules);
+          byTier[classResult.tier]++;
+
+          const classification = {
+            batchCardId: null,
+            batchType: classResult.batchType,
+            tier: classResult.tier,
+            confidence: classResult.confidence,
+            reason: classResult.reason,
+            classifiedAt: new Date().toISOString(),
+            ...(classResult.ruleId ? { ruleId: classResult.ruleId } : {}),
+          };
+
+          const updateData: Record<string, unknown> = {
+            classification,
+            updatedAt: new Date(),
+          };
+
+          if (classEnrichment) {
+            const existingEnrichment =
+              (item.enrichment as Record<string, unknown>) || {};
+            updateData.enrichment = {
+              ...existingEnrichment,
+              ...classEnrichment,
+            };
+          }
+
+          await db
+            .update(inboxItems)
+            .set(updateData)
+            .where(eq(inboxItems.id, item.id));
+        })
+      );
+
+      for (const r of results) {
+        if (r.status === "rejected") {
+          console.error("[Classify] Batch item failed:", r.reason);
+        }
       }
     }
   }

@@ -10,6 +10,8 @@ const VALID_TAGS = [
   "culture", "health", "science", "other",
 ];
 
+const SUMMARIZE_TIMEOUT_MS = 15000;
+
 export async function summarizeBookmark(content: string, author: string): Promise<SummarizeResult> {
   const prompt = `Summarize this tweet/thread by @${author} in 1-2 sentences. Then assign 1-3 topic tags from this list: ${VALID_TAGS.join(", ")}.
 
@@ -19,7 +21,21 @@ ${content}
 Respond in this exact JSON format, no other text:
 {"summary": "...", "tags": ["...", "..."]}`;
 
-  const result = await chat(prompt, "You are a concise summarizer. Respond only with valid JSON.", { maxTokens: 256 });
+  let result: string;
+  try {
+    result = await Promise.race([
+      chat(prompt, "You are a concise summarizer. Respond only with valid JSON.", { maxTokens: 256 }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Summarization timed out")), SUMMARIZE_TIMEOUT_MS)
+      ),
+    ]);
+  } catch (e) {
+    console.error(`[Summarize] Failed for @${author}:`, e);
+    return {
+      summary: content.slice(0, 200),
+      tags: ["other"],
+    };
+  }
 
   try {
     // Strip markdown code fences if present
