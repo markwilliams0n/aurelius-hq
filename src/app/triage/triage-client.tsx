@@ -377,6 +377,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
               if (index >= 0) nav.setCurrentIndex(index);
             }}
             activeItemId={currentItem?.id}
+            onSkipFromArchive={actions.handleSkipFromArchive}
           />
         )}
 

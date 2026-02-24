@@ -302,6 +302,36 @@ export async function POST(
   });
 }
 
+// PUT /api/triage/[id] - Update item fields (e.g. classification)
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const body = await request.json();
+
+  const item = await findItem(id);
+  if (!item) {
+    return NextResponse.json({ error: "Item not found" }, { status: 404 });
+  }
+
+  const updateData: Partial<typeof inboxItems.$inferInsert> = {
+    updatedAt: new Date(),
+  };
+
+  if (body.classification) {
+    updateData.classification = body.classification;
+  }
+
+  const [updatedItem] = await db
+    .update(inboxItems)
+    .set(updateData)
+    .where(eq(inboxItems.id, item.id))
+    .returning();
+
+  return NextResponse.json({ success: true, item: updatedItem });
+}
+
 // Helper to calculate snooze time from duration string
 function calculateSnoozeTime(duration: string): Date {
   const now = new Date();

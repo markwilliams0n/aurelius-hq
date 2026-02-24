@@ -614,6 +614,41 @@ export function useTriageActions({
     bulkArchiveItems(items);
   }, [bulkArchiveItems]);
 
+  // Skip from archive — move item from archive tier to review tier
+  const handleSkipFromArchive = useCallback(async (item: TriageItem) => {
+    const apiId = item.dbId || item.id;
+    try {
+      // Optimistically update local items
+      setLocalItems((prev) =>
+        prev.map((i) => {
+          if (i.id !== item.id) return i;
+          const existing = (i as any).classification || {};
+          return {
+            ...i,
+            classification: { ...existing, recommendation: "review", confidence: Math.min(existing.confidence || 0, 0.85) },
+          } as any;
+        })
+      );
+
+      const res = await fetch(`/api/triage/${apiId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classification: {
+            ...((item as any).classification || {}),
+            recommendation: "review",
+            confidence: Math.min(((item as any).classification?.confidence || 0), 0.85),
+          },
+        }),
+      });
+      if (!res.ok) throw new Error();
+      mutate();
+    } catch {
+      toast.error("Failed to move item");
+      mutate(); // Revert optimistic update
+    }
+  }, [setLocalItems, mutate]);
+
   // Quick task handler (t key)
   const handleQuickTask = useCallback(() => {
     if (!currentItem) return;
@@ -677,5 +712,6 @@ export function useTriageActions({
     handleSync,
     handleBulkArchive,
     handleBulkArchiveItems,
+    handleSkipFromArchive,
   };
 }
