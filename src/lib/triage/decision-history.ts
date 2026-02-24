@@ -1,101 +1,85 @@
 import { db } from "@/lib/db";
-import { inboxItems } from "@/lib/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
-export interface DecisionCounts {
-  archived: number;
-  snoozed: number;
-  actioned: number;
+export interface TriagePathCounts {
+  bulk: number;
+  quick: number;
+  engaged: number;
   total: number;
 }
 
 export interface DecisionSummary {
   sender: string;
   senderDomain: string;
-  senderDecisions: DecisionCounts;
-  domainDecisions: DecisionCounts;
+  senderDecisions: TriagePathCounts;
+  domainDecisions: TriagePathCounts;
 }
 
-function emptyDecisionCounts(): DecisionCounts {
-  return { archived: 0, snoozed: 0, actioned: 0, total: 0 };
+function emptyTriagePathCounts(): TriagePathCounts {
+  return { bulk: 0, quick: 0, engaged: 0, total: 0 };
 }
 
 function rowsToCounts(
-  rows: Array<{ status: string; count: number }>
-): DecisionCounts {
-  const counts = emptyDecisionCounts();
+  rows: Array<{ triage_path: string; count: number }>
+): TriagePathCounts {
+  const counts = emptyTriagePathCounts();
   for (const row of rows) {
-    if (row.status === "archived") counts.archived = row.count;
-    else if (row.status === "snoozed") counts.snoozed = row.count;
-    else if (row.status === "actioned") counts.actioned = row.count;
+    if (row.triage_path === "bulk") counts.bulk = row.count;
+    else if (row.triage_path === "quick") counts.quick = row.count;
+    else if (row.triage_path === "engaged") counts.engaged = row.count;
   }
-  counts.total = counts.archived + counts.snoozed + counts.actioned;
+  counts.total = counts.bulk + counts.quick + counts.engaged;
   return counts;
 }
 
 /**
- * Query past triage decisions for a sender and their domain.
- * Returns counts of archived/snoozed/actioned emails for both the
- * exact sender address and the sender's domain.
+ * Query triage path history for a sender and their domain.
+ * Extracts triagePath from the classification JSONB column.
  */
 export async function getDecisionHistory(
   sender: string,
   senderDomain: string
 ): Promise<DecisionSummary> {
   const [senderRows, domainRows] = await Promise.all([
-    // Exact sender match
-    db
-      .select({
-        status: inboxItems.status,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(inboxItems)
-      .where(
-        and(
-          eq(inboxItems.connector, "gmail"),
-          eq(inboxItems.sender, sender),
-          sql`${inboxItems.status} != 'new'`
-        )
-      )
-      .groupBy(inboxItems.status),
-
-    // Domain match (sender LIKE '%@domain')
-    db
-      .select({
-        status: inboxItems.status,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(inboxItems)
-      .where(
-        and(
-          eq(inboxItems.connector, "gmail"),
-          sql`${inboxItems.sender} LIKE '%@' || ${senderDomain}`,
-          sql`${inboxItems.status} != 'new'`
-        )
-      )
-      .groupBy(inboxItems.status),
+    db.execute(sql`
+      SELECT classification->>'triagePath' as triage_path, count(*)::int as count
+      FROM inbox_items
+      WHERE connector = 'gmail'
+        AND sender = ${sender}
+        AND status != 'new'
+        AND classification->>'triagePath' IS NOT NULL
+      GROUP BY classification->>'triagePath'
+    `),
+    db.execute(sql`
+      SELECT classification->>'triagePath' as triage_path, count(*)::int as count
+      FROM inbox_items
+      WHERE connector = 'gmail'
+        AND sender LIKE '%@' || ${senderDomain}
+        AND status != 'new'
+        AND classification->>'triagePath' IS NOT NULL
+      GROUP BY classification->>'triagePath'
+    `),
   ]);
 
   return {
     sender,
     senderDomain,
-    senderDecisions: rowsToCounts(senderRows),
-    domainDecisions: rowsToCounts(domainRows),
+    senderDecisions: rowsToCounts(
+      senderRows as unknown as Array<{ triage_path: string; count: number }>
+    ),
+    domainDecisions: rowsToCounts(
+      domainRows as unknown as Array<{ triage_path: string; count: number }>
+    ),
   };
 }
 
 /**
- * Format a DecisionSummary into human-readable text for the LLM prompt.
- * Returns lines like:
- *   "Sender notifications@github.com: archived 8/9, acted on 1"
- *   "Domain github.com: archived 12/15, acted on 2, snoozed 1"
- * Or for new senders:
- *   "No prior history with new@unknown.com or domain unknown.com."
+ * Format decision history for the classifier prompt.
+ * New format: "Sender x@y.com: bulk-archived 6/9, quick-archived 2/9, engaged 1/9"
  */
 export function formatDecisionHistory(summary: DecisionSummary): string {
   const { sender, senderDomain, senderDecisions, domainDecisions } = summary;
 
-  // No history at all
   if (senderDecisions.total === 0 && domainDecisions.total === 0) {
     return `No prior history with ${sender} or domain ${senderDomain}.`;
   }
@@ -103,32 +87,20 @@ export function formatDecisionHistory(summary: DecisionSummary): string {
   const lines: string[] = [];
 
   if (senderDecisions.total > 0) {
-    lines.push(
-      `Sender ${sender}: ${formatCounts(senderDecisions)}`
-    );
+    lines.push(`Sender ${sender}: ${formatTriageCounts(senderDecisions)}`);
   }
 
   if (domainDecisions.total > 0) {
-    lines.push(
-      `Domain ${senderDomain}: ${formatCounts(domainDecisions)}`
-    );
+    lines.push(`Domain ${senderDomain}: ${formatTriageCounts(domainDecisions)}`);
   }
 
   return lines.join("\n");
 }
 
-function formatCounts(counts: DecisionCounts): string {
+function formatTriageCounts(counts: TriagePathCounts): string {
   const parts: string[] = [];
-
-  if (counts.archived > 0) {
-    parts.push(`archived ${counts.archived}/${counts.total}`);
-  }
-  if (counts.actioned > 0) {
-    parts.push(`acted on ${counts.actioned}`);
-  }
-  if (counts.snoozed > 0) {
-    parts.push(`snoozed ${counts.snoozed}`);
-  }
-
+  if (counts.bulk > 0) parts.push(`bulk-archived ${counts.bulk}/${counts.total}`);
+  if (counts.quick > 0) parts.push(`quick-archived ${counts.quick}/${counts.total}`);
+  if (counts.engaged > 0) parts.push(`engaged ${counts.engaged}/${counts.total}`);
   return parts.join(", ");
 }
