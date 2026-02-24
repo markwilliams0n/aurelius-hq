@@ -7,14 +7,12 @@
  *
  * Run order:
  * 1. Daily maintenance (backup + learning)
- * 2. Connector syncs (Granola, Gmail, Linear, Slack)
+ * 2. Connector syncs (Granola, Gmail)
  * 3. Classification (rule -> Ollama -> Kimi)
  */
 
 import type { GranolaSyncResult } from '@/lib/granola';
 import type { GmailSyncResult } from '@/lib/gmail';
-import type { LinearSyncResult } from '@/lib/linear';
-import type { SlackSyncResult } from '@/lib/slack';
 import type { BackupResult } from './backup';
 import type { DailyLearningResult } from '@/lib/triage/daily-learning';
 import { syncAllConnectors } from '@/lib/connectors/sync-all';
@@ -37,10 +35,6 @@ export interface HeartbeatOptions {
   skipGranola?: boolean;
   /** Skip Gmail sync */
   skipGmail?: boolean;
-  /** Skip Linear sync */
-  skipLinear?: boolean;
-  /** Skip Slack sync */
-  skipSlack?: boolean;
   /** Skip classification pipeline */
   skipClassify?: boolean;
   /** Skip daily learning loop */
@@ -58,8 +52,6 @@ export interface StepResult {
 export interface HeartbeatResult {
   granola?: GranolaSyncResult;
   gmail?: GmailSyncResult;
-  linear?: LinearSyncResult;
-  slack?: SlackSyncResult;
   backup?: BackupResult;
   learning?: DailyLearningResult;
   /** Granular step results for debugging */
@@ -67,8 +59,6 @@ export interface HeartbeatResult {
     backup?: StepResult;
     granola?: StepResult;
     gmail?: StepResult;
-    linear?: StepResult;
-    slack?: StepResult;
     classify?: StepResult;
     learning?: StepResult;
   };
@@ -83,10 +73,8 @@ export interface HeartbeatResult {
  * 1. Daily backup (once per day, keeps last 7)
  * 2. Sync Granola meetings
  * 3. Sync Gmail messages
- * 4. Sync Linear notifications
- * 5. Sync Slack messages
- * 6. Classify new inbox items (rule -> Ollama -> Kimi)
- * 7. Daily learning loop (once per day -- analyze triage patterns, suggest rules)
+ * 4. Classify new inbox items (rule -> Ollama -> Kimi)
+ * 5. Daily learning loop (once per day -- analyze triage patterns, suggest rules)
  *
  * Memory extraction is handled by Supermemory -- content is sent to Supermemory
  * at the point of creation (chat messages, triage saves) rather than in heartbeat.
@@ -116,9 +104,6 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
   const skipConnectors: string[] = [];
   if (options.skipGranola) skipConnectors.push('granola');
   if (options.skipGmail) skipConnectors.push('gmail');
-  if (options.skipLinear) skipConnectors.push('linear');
-  if (options.skipSlack) skipConnectors.push('slack');
-
   const sync = await syncAllConnectors({
     skip: skipConnectors,
     onProgress: progress,
@@ -180,8 +165,6 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
   return {
     granola: sync.connectorResults.granola as GranolaSyncResult | undefined,
     gmail: sync.connectorResults.gmail as GmailSyncResult | undefined,
-    linear: sync.connectorResults.linear as LinearSyncResult | undefined,
-    slack: sync.connectorResults.slack as SlackSyncResult | undefined,
     backup: maintenance.backup,
     learning: maintenance.learning,
     steps,

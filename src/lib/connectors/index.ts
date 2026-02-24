@@ -7,15 +7,11 @@
 
 import { gmailConnector } from './gmail';
 import { granolaConnector } from './granola';
-import { linearConnector } from './linear';
-import { slackConnector } from './slack';
 import type { Connector } from './types';
 
 export const connectors: Connector[] = [
   granolaConnector,
   gmailConnector,
-  linearConnector,
-  slackConnector,
 ];
 
 export function getConnector(name: string): Connector | undefined {

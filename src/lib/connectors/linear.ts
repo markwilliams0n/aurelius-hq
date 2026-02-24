@@ -6,11 +6,11 @@
  */
 
 import { syncLinearNotifications } from '@/lib/linear';
-import type { Connector } from './types';
+import type { Connector, HeartbeatStep } from './types';
 
 export const linearConnector: Connector = {
   name: 'linear',
-  step: 'linear',
+  step: 'linear' as HeartbeatStep, // Dormant — not registered in connector list
   async sync() {
     const r = await syncLinearNotifications();
     return {

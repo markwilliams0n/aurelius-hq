@@ -62,8 +62,6 @@ async function runHeartbeatSafe(): Promise<void> {
         steps: result.steps,
         gmail: result.gmail,
         granola: result.granola,
-        linear: result.linear,
-        slack: result.slack,
         warnings: result.warnings,
         duration,
         error: result.warnings.length > 0 ? result.warnings.join('; ') : undefined,
