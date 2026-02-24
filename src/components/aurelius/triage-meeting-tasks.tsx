@@ -73,9 +73,11 @@ export function TriageMeetingTasks({
   // Only show meetings that have tasks for you, or meetings without tasks at all
   const meetingsWithTasks = useMemo(() => {
     return items.map((item) => {
-      const itemKey = item.dbId || item.id;
-      const allTasks = tasksByItemId[itemKey] || [];
+      // tasksByItemId is keyed by display ID (externalId), which matches
+      // item.id after client-side transform. Fall back to dbId for safety.
+      const allTasks = tasksByItemId[item.id] || tasksByItemId[item.dbId || item.id] || [];
       const yourTasks = getYourTasks(allTasks);
+      const itemKey = item.dbId || item.id;
       return { item, yourTasks, itemKey };
     });
   }, [items, tasksByItemId]);
