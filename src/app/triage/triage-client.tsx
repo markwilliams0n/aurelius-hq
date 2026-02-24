@@ -5,6 +5,7 @@ import { AppShell } from "@/components/aurelius/app-shell";
 import { TriageCard } from "@/components/aurelius/triage-card";
 import type { TriageItem } from "@/components/aurelius/triage-card";
 import { TriageBatchCard } from "@/components/aurelius/triage-batch-card";
+import { TriageEmailTiers } from "@/components/aurelius/triage-email-tiers";
 import { TriageListView } from "@/components/aurelius/triage-list-view";
 import type { BatchCardWithItems } from "@/lib/triage/batch-cards";
 import { useTriageData, useTriageRules } from "@/hooks/use-triage-data";
@@ -374,8 +375,45 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           />
         )}
 
-        {/* Card area */}
-        {!isLoading && hasItems && triageView === "card" && (
+        {/* Email tier layout (gmail tab) */}
+        {!isLoading && hasItems && connectorFilter === "gmail" && triageView === "card" && (
+          <TriageEmailTiers
+            items={filteredItems}
+            tasksByItemId={tasksByItemId}
+            onArchive={(item) => {
+              const apiId = item.dbId || item.id;
+              fetch(`/api/triage/${apiId}/tasks`, { method: "DELETE" }).catch(() => {});
+              fetch(`/api/triage/${apiId}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "archive" }),
+              }).catch(console.error);
+              setLocalItems((prev) => prev.filter((i) => i.id !== item.id));
+            }}
+            onBulkArchive={(itemsToArchive) => {
+              for (const item of itemsToArchive) {
+                const apiId = item.dbId || item.id;
+                fetch(`/api/triage/${apiId}/tasks`, { method: "DELETE" }).catch(() => {});
+                fetch(`/api/triage/${apiId}`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ action: "archive" }),
+                }).catch(console.error);
+              }
+              const ids = new Set(itemsToArchive.map((i) => i.id));
+              setLocalItems((prev) => prev.filter((i) => !ids.has(i.id)));
+              toast.success(`Archived ${itemsToArchive.length} email${itemsToArchive.length === 1 ? "" : "s"}`);
+            }}
+            onSelectItem={(item) => {
+              const index = filteredItems.findIndex((i) => i.id === item.id);
+              if (index >= 0) nav.setCurrentIndex(index + batchCardCount);
+            }}
+            activeItemId={currentItem?.id}
+          />
+        )}
+
+        {/* Card area (meetings tab) */}
+        {!isLoading && hasItems && connectorFilter === "granola" && triageView === "card" && (
         <div className="flex-1 flex items-start justify-center pt-12 p-6 relative overflow-y-auto">
           {/* Card stack effect */}
           {!isOnBatchCard && filteredItems.slice(individualItemIndex + 1, individualItemIndex + 3).map((item, idx) => (
