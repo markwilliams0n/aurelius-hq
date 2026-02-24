@@ -241,6 +241,8 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
                 toast.error("Failed to undo");
               }
             }}
+            onOpenRulesPanel={() => setIsRulesPanelOpen(true)}
+            onCreateRule={actions.handleRuleInput}
           />
         ) : undefined
       }
