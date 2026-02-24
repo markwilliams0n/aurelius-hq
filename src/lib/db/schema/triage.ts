@@ -37,7 +37,7 @@ export const priorityEnum = pgEnum("priority", [
 ]);
 
 // Triage rule status
-export const ruleStatusEnum = pgEnum("rule_status", ["active", "inactive"]);
+export const ruleStatusEnum = pgEnum("rule_status", ["active", "inactive", "proposed", "dismissed"]);
 
 // Rule type: structured (deterministic) vs guidance (natural language for AI)
 export const ruleTypeEnum = pgEnum("rule_type", ["structured", "guidance"]);
@@ -48,6 +48,7 @@ export const ruleSourceEnum = pgEnum("rule_source", [
   "user_settings",
   "daily_learning",
   "override",
+  "learned",
 ]);
 
 // Inbox items: unified triage inbox
@@ -224,6 +225,18 @@ export const triageRules = pgTable(
     // Stats
     matchCount: integer("match_count").default(0).notNull(),
     lastMatchedAt: timestamp("last_matched_at", { withTimezone: true }),
+
+    // Pattern tracking (for proposed rules — prevents re-proposing dismissed patterns)
+    patternKey: text("pattern_key"),
+    evidence: jsonb("evidence").$type<{
+      sender?: string;
+      senderDomain?: string;
+      bulk?: number;
+      quick?: number;
+      engaged?: number;
+      total?: number;
+      overrideCount?: number;
+    }>(),
 
     // Timestamps
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
