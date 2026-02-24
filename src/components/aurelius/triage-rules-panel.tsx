@@ -14,12 +14,12 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import type { TriageRule } from "@/lib/db/schema";
+import type { SerializedTriageRule } from "@/hooks/use-triage-data";
 
 interface RulesPanelProps {
   isOpen: boolean;
   onClose: () => void;
-  rules: TriageRule[];
+  rules: SerializedTriageRule[];
   onMutateRules: () => void;
 }
 
@@ -54,7 +54,7 @@ export function TriageRulesPanel({ isOpen, onClose, rules, onMutateRules }: Rule
     }
   };
 
-  const handleToggle = async (rule: TriageRule) => {
+  const handleToggle = async (rule: SerializedTriageRule) => {
     const newStatus = rule.status === "active" ? "inactive" : "active";
     try {
       const res = await fetch(`/api/triage/rules/${rule.id}`, {

@@ -22,6 +22,8 @@ import { TaskCreatorPanel } from "@/components/aurelius/task-creator-panel";
 import { TriageGroupPicker } from "@/components/aurelius/triage-group-picker";
 import { ActionCard } from "@/components/aurelius/action-card";
 import { CardContent } from "@/components/aurelius/cards/card-content";
+import { TriageActivityFeed } from "@/components/aurelius/triage-activity-feed";
+import { TriageRulesPanel } from "@/components/aurelius/triage-rules-panel";
 import type { ActionCardData } from "@/lib/types/action-card";
 import { toast } from "sonner";
 import {
@@ -69,6 +71,8 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const cardRef = useRef<HTMLDivElement>(null);
+  const [emailSubView, setEmailSubView] = useState<"activity" | "triage">("activity");
+  const [isRulesPanelOpen, setIsRulesPanelOpen] = useState(false);
 
   const sidebarWidth = isSidebarExpanded ? 480 : 320;
 
@@ -175,6 +179,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
 
     // Card view individual item actions
     { key: "ArrowLeft", handler: actions.handleArchive, when: () => isIndividualCard },
+    { key: "ArrowLeft", modifiers: { shift: true }, handler: actions.handleQuickArchive, when: () => isIndividualCard },
     { key: "ArrowUp", handler: actions.handleMemory, when: () => isIndividualCard },
     { key: "ArrowUp", modifiers: { shift: true }, handler: actions.handleMemoryFull, when: () => isIndividualCard },
     { key: "ArrowRight", handler: actions.handleOpenActions, when: () => isIndividualCard },
@@ -325,6 +330,34 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
                 </button>
               );
             })}
+
+            {/* Email sub-view toggle (only when on gmail connector filter) */}
+            {connectorFilter === "gmail" && (
+              <div className="flex items-center gap-1 bg-secondary/30 rounded-lg p-0.5 ml-auto">
+                <button
+                  onClick={() => setEmailSubView("activity")}
+                  className={cn(
+                    "px-3 py-1 text-xs rounded-md transition-colors",
+                    emailSubView === "activity"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Activity
+                </button>
+                <button
+                  onClick={() => setEmailSubView("triage")}
+                  className={cn(
+                    "px-3 py-1 text-xs rounded-md transition-colors",
+                    emailSubView === "triage"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Triage ({filteredItems.length})
+                </button>
+              </div>
+            )}
           </div>
         </header>
 
@@ -360,8 +393,16 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           />
         )}
 
+        {/* Activity feed (default email view) */}
+        {!isLoading && connectorFilter === "gmail" && triageView === "card" && emailSubView === "activity" && (
+          <TriageActivityFeed
+            onOpenRulesPanel={() => setIsRulesPanelOpen(true)}
+            onCreateRule={actions.handleRuleInput}
+          />
+        )}
+
         {/* Email tier layout (gmail tab) */}
-        {!isLoading && hasItems && connectorFilter === "gmail" && triageView === "card" && (
+        {!isLoading && hasItems && connectorFilter === "gmail" && triageView === "card" && emailSubView === "triage" && (
           <TriageEmailTiers
             items={filteredItems}
             tasksByItemId={tasksByItemId}
@@ -522,6 +563,14 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           onClose={() => { actions.setQuickTaskCard(null); handleCloseOverlay(); }}
         />
       )}
+
+      {/* Rules panel slide-out */}
+      <TriageRulesPanel
+        isOpen={isRulesPanelOpen}
+        onClose={() => setIsRulesPanelOpen(false)}
+        rules={triageRules || []}
+        onMutateRules={mutateRules}
+      />
     </AppShell>
   );
 }
