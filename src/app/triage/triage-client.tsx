@@ -6,6 +6,7 @@ import { TriageCard } from "@/components/aurelius/triage-card";
 import type { TriageItem } from "@/components/aurelius/triage-card";
 import { TriageBatchCard } from "@/components/aurelius/triage-batch-card";
 import { TriageEmailTiers } from "@/components/aurelius/triage-email-tiers";
+import { TriageMeetingTasks } from "@/components/aurelius/triage-meeting-tasks";
 import { TriageListView } from "@/components/aurelius/triage-list-view";
 import type { BatchCardWithItems } from "@/lib/triage/batch-cards";
 import { useTriageData, useTriageRules } from "@/hooks/use-triage-data";
@@ -361,8 +362,8 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           </div>
         )}
 
-        {/* List view */}
-        {!isLoading && hasItems && triageView === "list" && (
+        {/* List view (not for granola — meetings have their own layout) */}
+        {!isLoading && hasItems && triageView === "list" && connectorFilter !== "granola" && (
           <TriageListView
             items={filteredItems}
             selectedIds={selectedIds}
@@ -412,66 +413,61 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           />
         )}
 
-        {/* Card area (meetings tab) */}
-        {!isLoading && hasItems && connectorFilter === "granola" && triageView === "card" && (
-        <div className="flex-1 flex items-start justify-center pt-12 p-6 relative overflow-y-auto">
-          {/* Card stack effect */}
-          {!isOnBatchCard && filteredItems.slice(individualItemIndex + 1, individualItemIndex + 3).map((item, idx) => (
-            <div
-              key={`${item.id}-stack-${idx}`}
-              className="absolute"
-              style={{
-                transform: `scale(${0.95 - idx * 0.03}) translateY(${(idx + 1) * 8}px)`,
-                zIndex: 10 - idx,
-                opacity: 0.3 - idx * 0.1,
-              }}
-            >
-              <TriageCard item={item} isActive={false} />
-            </div>
-          ))}
-
-          {/* Active card and tasks box */}
-          <div className="flex flex-col items-center gap-4">
-            {/* Batch card */}
-            {isOnBatchCard && currentBatchCard && (
-              <div className="relative z-20">
-                <TriageBatchCard
-                  card={currentBatchCard}
-                  isActive={true}
-                  onAction={actions.handleBatchAction}
-                  onRuleInput={actions.handleRuleInput}
-                  onReclassify={actions.handleReclassify}
-                  rules={triageRules.filter((r) => r.action?.batchType === (currentBatchCard.data?.batchType as string))}
-                  onDeleteRule={actions.handleDeleteRule}
-                />
-              </div>
-            )}
-
-            {/* Individual card */}
-            {!isOnBatchCard && currentItem && (
-              <>
-                <div
-                  className={cn(
-                    "relative z-20 transition-all duration-200",
-                    animatingOut === "left" && "animate-swipe-left",
-                    animatingOut === "right" && "animate-swipe-right",
-                    animatingOut === "up" && "animate-swipe-up"
-                  )}
-                >
-                  <TriageCard ref={cardRef} item={currentItem} isActive={true} senderItemCount={senderCounts[`${currentItem.connector}:${currentItem.sender}`] || 0} />
-                </div>
-
-                {/* Suggested tasks box */}
-                {!animatingOut && (
-                  <SuggestedTasksBox
-                    itemId={currentItem.dbId || currentItem.id}
-                    initialTasks={tasksByItemId[currentItem.dbId || currentItem.id]}
-                  />
-                )}
-              </>
-            )}
-          </div>
-        </div>
+        {/* Meeting tasks view (meetings/granola tab) */}
+        {!isLoading && hasItems && connectorFilter === "granola" && (
+          <TriageMeetingTasks
+            items={filteredItems}
+            tasksByItemId={tasksByItemId}
+            onAcceptTask={(taskId, itemId) => {
+              fetch(`/api/triage/${itemId}/tasks`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ taskIds: [taskId], action: "accept" }),
+              }).then((res) => {
+                if (!res.ok) {
+                  console.error("Failed to accept task:", res.status);
+                  return;
+                }
+                mutate();
+              }).catch(console.error);
+            }}
+            onDismissTask={(taskId, itemId) => {
+              fetch(`/api/triage/${itemId}/tasks`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ taskIds: [taskId], action: "dismiss" }),
+              }).then((res) => {
+                if (!res.ok) {
+                  console.error("Failed to dismiss task:", res.status);
+                  return;
+                }
+                mutate();
+              }).catch(console.error);
+            }}
+            onArchiveMeeting={(item) => {
+              const apiId = item.dbId || item.id;
+              fetch(`/api/triage/${apiId}/tasks`, { method: "DELETE" }).catch(() => {});
+              fetch(`/api/triage/${apiId}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "archive" }),
+              }).then((res) => {
+                if (!res.ok) {
+                  console.error("Failed to archive meeting:", res.status);
+                  return;
+                }
+                setLocalItems((prev) => prev.filter((i) => i.id !== item.id));
+                mutate();
+              }).catch(console.error);
+            }}
+            onOpenChat={(item) => {
+              const index = filteredItems.findIndex((i) => i.id === item.id);
+              if (index >= 0) {
+                nav.setCurrentIndex(index + batchCardCount);
+                nav.setViewMode("chat");
+              }
+            }}
+          />
         )}
       </div>
 
