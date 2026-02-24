@@ -172,4 +172,5 @@ export const CONFIG_DESCRIPTIONS: Record<ConfigKey, string> = {
   "sync:linear": "Linear connector sync state (lastSyncAt, lastNotificationId).",
   "sync:slack": "Slack connector sync state (lastSyncAt, channelCursors).",
   "capability:code-agent": "Autonomous code agent configuration — planning, execution, triggers, and notification settings.",
+  "email:preferences": "Natural language email triage preferences — rules the AI classifier uses to decide what needs attention vs. what gets archived.",
 };
