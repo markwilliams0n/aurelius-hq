@@ -133,6 +133,51 @@ export function useTriageActions({
     toast.success('Restored');
   }, [setLocalItems, setCurrentIndex, updateLastAction]);
 
+  // Show proposal toast when triage API suggests a rule
+  const showProposalToast = useCallback((proposal: {
+    id: string;
+    type: string;
+    ruleText: string;
+    sender: string;
+    senderName: string | null;
+    evidence: { bulk?: number; quick?: number; engaged?: number; total?: number; overrideCount?: number };
+  }) => {
+    const displayName = proposal.senderName || proposal.sender;
+    const ev = proposal.evidence;
+
+    let message: string;
+    if (proposal.type === "archive") {
+      message = `You've archived ${ev.total}/${ev.total} from ${displayName} — always archive?`;
+    } else {
+      if (ev.overrideCount) {
+        message = `You overrode archive for ${displayName} ${ev.overrideCount} times — always surface?`;
+      } else {
+        message = `You engaged with ${ev.engaged}/${ev.total} from ${displayName} — always surface?`;
+      }
+    }
+
+    toast(message, {
+      duration: 10000,
+      action: {
+        label: "Yes",
+        onClick: () => {
+          fetch(`/api/triage/rules/${proposal.id}/accept`, { method: "POST" })
+            .then(() => {
+              toast.success("Rule created");
+              mutateRules();
+            })
+            .catch(() => toast.error("Failed to create rule"));
+        },
+      },
+      cancel: {
+        label: "Not yet",
+        onClick: () => {
+          fetch(`/api/triage/rules/${proposal.id}/dismiss`, { method: "POST" }).catch(() => {});
+        },
+      },
+    });
+  }, [mutateRules]);
+
   // Archive action (ArrowLeft)
   const handleArchive = useCallback(() => {
     if (!currentItem) return;
@@ -147,11 +192,18 @@ export function useTriageActions({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'archive' }),
-    }).catch((error) => {
-      console.error('Failed to archive:', error);
-      toast.error('Failed to archive - item restored');
-      setLocalItems((prev) => [itemToArchive, ...prev]);
-    });
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.proposal) {
+          showProposalToast(data.proposal);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to archive:', error);
+        toast.error('Failed to archive - item restored');
+        setLocalItems((prev) => [itemToArchive, ...prev]);
+      });
 
     setTimeout(() => {
       setLocalItems((prev) => prev.filter((i) => i.id !== itemToArchive.id));
@@ -161,7 +213,42 @@ export function useTriageActions({
     toast.success('Archived', {
       action: { label: 'Undo', onClick: () => handleUndo() },
     });
-  }, [currentItem, setAnimatingOut, updateLastAction, setLocalItems, handleUndo]);
+  }, [currentItem, setAnimatingOut, updateLastAction, setLocalItems, handleUndo, showProposalToast]);
+
+  // Quick archive action (Shift+ArrowLeft)
+  const handleQuickArchive = useCallback(() => {
+    if (!currentItem) return;
+
+    const itemToArchive = currentItem;
+    const apiId = itemToArchive.dbId || itemToArchive.id;
+    setAnimatingOut('left');
+    updateLastAction({ type: 'archive', itemId: itemToArchive.id, item: itemToArchive });
+
+    fetch(`/api/triage/${apiId}/tasks`, { method: 'DELETE' }).catch(() => {});
+    fetch(`/api/triage/${apiId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'archive', triagePath: 'quick' }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.proposal) showProposalToast(data.proposal);
+      })
+      .catch((error) => {
+        console.error('Failed to archive:', error);
+        toast.error('Failed to archive - item restored');
+        setLocalItems((prev) => [itemToArchive, ...prev]);
+      });
+
+    setTimeout(() => {
+      setLocalItems((prev) => prev.filter((i) => i.id !== itemToArchive.id));
+      setAnimatingOut(null);
+    }, 150);
+
+    toast.success('Archived', {
+      action: { label: 'Undo', onClick: () => handleUndo() },
+    });
+  }, [currentItem, setAnimatingOut, updateLastAction, setLocalItems, handleUndo, showProposalToast]);
 
   // Memory summary (ArrowUp)
   const handleMemory = useCallback(async () => {
@@ -502,13 +589,18 @@ export function useTriageActions({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'archive', triagePath: 'bulk' }),
-      }).catch(console.error);
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.proposal) showProposalToast(data.proposal);
+        })
+        .catch(console.error);
     });
 
     toast.success(`Archived ${count} item${count === 1 ? '' : 's'}`, {
       action: { label: 'Undo', onClick: () => handleUndo() },
     });
-  }, [handleUndo, updateLastAction, setLocalItems, setSelectedIds]);
+  }, [handleUndo, updateLastAction, setLocalItems, setSelectedIds, showProposalToast]);
 
   // Bulk archive selected items (list view)
   const handleBulkArchive = useCallback(async () => {
@@ -561,6 +653,7 @@ export function useTriageActions({
 
     // Individual item actions
     handleArchive,
+    handleQuickArchive,
     handleMemory,
     handleMemoryFull,
     handleOpenActions,
