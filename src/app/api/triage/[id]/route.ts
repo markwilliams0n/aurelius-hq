@@ -4,6 +4,7 @@ import { inboxItems, type InboxItem } from "@/lib/db/schema";
 import { eq, or } from "drizzle-orm";
 import { syncArchiveToGmail, syncSpamToGmail, markActionNeeded } from "@/lib/gmail/actions";
 import { logActivity } from "@/lib/activity";
+import { checkForProposals, createProposedRule } from "@/lib/triage/rule-proposals";
 
 // Log the user's actual triage decision into the classification column.
 // Fire-and-forget: errors are caught and logged, never block the response.
@@ -274,10 +275,30 @@ export async function POST(
     });
   }
 
+  // Check for rule proposals (only for gmail archive/engage actions)
+  let proposal = null;
+  if (item.connector === "gmail" && ["archive", "actioned", "action-needed"].includes(action)) {
+    const proposalResult = await checkForProposals(item.sender, item.senderName).catch(() => null);
+    if (proposalResult) {
+      const ruleId = await createProposedRule(proposalResult).catch(() => null);
+      if (ruleId) {
+        proposal = {
+          id: ruleId,
+          type: proposalResult.type,
+          ruleText: proposalResult.ruleText,
+          sender: proposalResult.sender,
+          senderName: proposalResult.senderName,
+          evidence: proposalResult.evidence,
+        };
+      }
+    }
+  }
+
   return NextResponse.json({
     success: true,
     action,
     item: updatedItem,
+    proposal,
   });
 }
 
