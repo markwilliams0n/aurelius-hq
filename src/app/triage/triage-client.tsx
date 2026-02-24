@@ -26,11 +26,8 @@ import { CardContent } from "@/components/aurelius/cards/card-content";
 import type { ActionCardData } from "@/lib/types/action-card";
 import { toast } from "sonner";
 import {
-  MessageSquare,
   Inbox,
   Mail,
-  LayoutList,
-  Filter,
   CalendarDays,
   RefreshCw,
   LayoutGrid,
@@ -39,15 +36,12 @@ import {
 import { cn } from "@/lib/utils";
 
 const CONNECTOR_FILTERS: Array<{
-  value: "all" | "gmail" | "slack" | "linear" | "granola";
+  value: "gmail" | "granola";
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { value: "all", label: "All", icon: Filter },
-  { value: "gmail", label: "Gmail", icon: Mail },
-  { value: "slack", label: "Slack", icon: MessageSquare },
-  { value: "linear", label: "Linear", icon: LayoutList },
-  { value: "granola", label: "Granola", icon: CalendarDays },
+  { value: "gmail", label: "Email", icon: Mail },
+  { value: "granola", label: "Meetings", icon: CalendarDays },
 ];
 
 export function TriageClient({ userEmail }: { userEmail?: string }) {
@@ -175,18 +169,12 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     { key: "Tab", handler: () => cycleConnectorFilter(false) },
     { key: "Tab", modifiers: { shift: true }, handler: () => cycleConnectorFilter(true) },
 
-    // Cmd+1-5 selects connector filters (global)
+    // Cmd+1-2 selects connector filters (global)
     { key: "1", modifiers: { meta: true }, handler: () => selectConnectorFilter(0) },
     { key: "2", modifiers: { meta: true }, handler: () => selectConnectorFilter(1) },
-    { key: "3", modifiers: { meta: true }, handler: () => selectConnectorFilter(2) },
-    { key: "4", modifiers: { meta: true }, handler: () => selectConnectorFilter(3) },
-    { key: "5", modifiers: { meta: true }, handler: () => selectConnectorFilter(4) },
     // Ctrl variants for non-Mac
     { key: "1", modifiers: { ctrl: true }, handler: () => selectConnectorFilter(0) },
     { key: "2", modifiers: { ctrl: true }, handler: () => selectConnectorFilter(1) },
-    { key: "3", modifiers: { ctrl: true }, handler: () => selectConnectorFilter(2) },
-    { key: "4", modifiers: { ctrl: true }, handler: () => selectConnectorFilter(3) },
-    { key: "5", modifiers: { ctrl: true }, handler: () => selectConnectorFilter(4) },
 
     // Toggle card/list view (v) — only in triage mode
     {

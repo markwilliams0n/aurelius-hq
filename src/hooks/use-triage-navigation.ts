@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import type { TriageItem } from '@/components/aurelius/triage-card';
 
-export type ConnectorFilter = 'all' | 'gmail' | 'slack' | 'linear' | 'granola';
+export type ConnectorFilter = 'gmail' | 'granola';
 export type TriageView = 'card' | 'list';
 export type ViewMode =
   | 'triage'
@@ -16,13 +16,7 @@ export type ViewMode =
   | 'quick-task'
   | 'group-picker';
 
-const CONNECTOR_FILTER_VALUES: ConnectorFilter[] = [
-  'all',
-  'gmail',
-  'slack',
-  'linear',
-  'granola',
-];
+const CONNECTOR_FILTER_VALUES: ConnectorFilter[] = ['gmail', 'granola'];
 
 export function useTriageNavigation(
   localItems: TriageItem[],
@@ -30,14 +24,13 @@ export function useTriageNavigation(
 ) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [connectorFilter, setConnectorFilter] =
-    useState<ConnectorFilter>('all');
+    useState<ConnectorFilter>('gmail');
   const [triageView, setTriageView] = useState<TriageView>('card');
   const [viewMode, setViewMode] = useState<ViewMode>('triage');
   const [returnToList, setReturnToList] = useState(false);
 
   // Filter items by connector
   const filteredItems = useMemo(() => {
-    if (connectorFilter === 'all') return localItems;
     return localItems.filter((item) => item.connector === connectorFilter);
   }, [localItems, connectorFilter]);
 
@@ -61,10 +54,7 @@ export function useTriageNavigation(
   // Get counts per connector
   const connectorCounts = useMemo(
     () => ({
-      all: localItems.length,
       gmail: localItems.filter((i) => i.connector === 'gmail').length,
-      slack: localItems.filter((i) => i.connector === 'slack').length,
-      linear: localItems.filter((i) => i.connector === 'linear').length,
       granola: localItems.filter((i) => i.connector === 'granola').length,
     }),
     [localItems]
