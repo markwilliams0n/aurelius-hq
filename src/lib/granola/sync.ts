@@ -29,6 +29,7 @@ import {
 } from './extract-memory';
 import { upsertEntity } from '@/lib/memory/entities';
 import { createFact } from '@/lib/memory/facts';
+import { addMemory } from '@/lib/memory/supermemory';
 
 export interface GranolaSyncResult {
   synced: number;
@@ -239,6 +240,51 @@ async function saveExtractedMemory(
 }
 
 /**
+ * Save a formatted meeting summary to Supermemory
+ * for semantic search and email classifier context.
+ */
+async function saveMeetingToSupermemory(
+  title: string,
+  attendees: string[],
+  extraction: MeetingMemoryExtraction,
+  meetingDate: string
+): Promise<void> {
+  const parts = [
+    `Meeting: ${title} (${meetingDate})`,
+    attendees.length > 0 ? `Attendees: ${attendees.join(', ')}` : '',
+    extraction.summary ? `Summary: ${extraction.summary}` : '',
+  ];
+
+  if (extraction.facts.length > 0) {
+    parts.push('Key facts:');
+    for (const fact of extraction.facts.slice(0, 10)) {
+      parts.push(`- ${fact.content}`);
+    }
+  }
+
+  if (extraction.actionItems.length > 0) {
+    parts.push('Action items:');
+    for (const item of extraction.actionItems) {
+      const assignee = item.assignee ? ` [${item.assignee}]` : '';
+      parts.push(`-${assignee} ${item.description}`);
+    }
+  }
+
+  if (extraction.topics.length > 0) {
+    parts.push(`Topics: ${extraction.topics.join(', ')}`);
+  }
+
+  const content = parts.filter(Boolean).join('\n');
+
+  await addMemory(content, {
+    type: 'meeting',
+    source: 'granola',
+    title,
+    date: meetingDate,
+  });
+}
+
+/**
  * Check if a meeting is already in triage.
  * Returns the existing item's id and status, or null if not found.
  */
@@ -340,6 +386,21 @@ export async function syncGranolaMeetings(): Promise<GranolaSyncResult> {
               console.log(`[Granola] Auto-saved: ${entitiesSaved} entities, ${factsSaved} facts to memory`);
             } catch (saveError) {
               console.warn(`[Granola] Memory auto-save failed (will still sync to triage):`, saveError);
+            }
+
+            // Save formatted summary to Supermemory (for semantic search + email classifier)
+            try {
+              const meetingDate = (calendarEvent as { start?: { dateTime?: string } } | undefined)?.start?.dateTime
+                ? new Date((calendarEvent as { start: { dateTime: string } }).start.dateTime).toLocaleDateString()
+                : new Date(doc.created_at).toLocaleDateString();
+              const attendeeNames = attendees
+                .map((a: { displayName?: string; email?: string }) => a.displayName || a.email)
+                .filter(Boolean) as string[];
+
+              await saveMeetingToSupermemory(doc.title, attendeeNames, extractedMemory, meetingDate);
+              console.log(`[Granola] Saved meeting summary to Supermemory: ${doc.title}`);
+            } catch (smError) {
+              console.warn(`[Granola] Supermemory save failed (non-blocking):`, smError);
             }
           } catch (extractError) {
             console.warn(`[Granola] Memory extraction failed, using fallback:`, extractError);
