@@ -1,10 +1,37 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { inboxItems } from "@/lib/db/schema";
+import { inboxItems, type InboxItem } from "@/lib/db/schema";
 import { eq, or } from "drizzle-orm";
 import { syncArchiveToGmail, syncSpamToGmail, markActionNeeded } from "@/lib/gmail/actions";
 import { archiveNotification } from "@/lib/linear";
 import { logActivity } from "@/lib/activity";
+
+// Log the user's actual triage decision into the classification column.
+// Fire-and-forget: errors are caught and logged, never block the response.
+function logDecision(item: InboxItem, actualAction: string) {
+  if (item.connector !== "gmail") return;
+  const classification = item.classification as Record<string, unknown> | null;
+  if (!classification?.recommendation) return;
+
+  const recommendedArchive = classification.recommendation === "archive";
+  const userArchived = actualAction === "archived" || actualAction === "spam";
+  const wasOverride = recommendedArchive !== userArchived;
+
+  // Cast needed: the classification column type doesn't include decision fields,
+  // but we're enriching the existing JSON with learning-loop metadata.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const enrichedClassification = {
+    ...classification,
+    actualAction,
+    wasOverride,
+    decidedAt: new Date().toISOString(),
+  } as any;
+
+  db.update(inboxItems)
+    .set({ classification: enrichedClassification })
+    .where(eq(inboxItems.id, item.id))
+    .catch((err) => console.error("[Triage] Decision log failed:", err));
+}
 
 // Check if string is a valid UUID
 function isUUID(str: string): boolean {
@@ -95,6 +122,7 @@ export async function POST(
           })
         );
       }
+      logDecision(item, "archived");
       break;
 
     case "snooze":
@@ -108,6 +136,7 @@ export async function POST(
       }
       updates.status = "snoozed";
       updates.snoozedUntil = snoozeUntil;
+      logDecision(item, "snoozed");
       break;
 
     case "flag":
@@ -132,6 +161,7 @@ export async function POST(
     case "actioned":
       updates.status = "actioned";
       updates.snoozedUntil = null;
+      logDecision(item, "actioned");
       break;
 
     case "spam":
@@ -145,6 +175,7 @@ export async function POST(
           })
         );
       }
+      logDecision(item, "spam");
       break;
 
     case "action-needed": {
@@ -169,6 +200,7 @@ export async function POST(
           })
         );
       }
+      logDecision(item, "action-needed");
       break;
     }
 
