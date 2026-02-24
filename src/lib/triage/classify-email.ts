@@ -1,10 +1,10 @@
 import { chatWithModel } from "@/lib/ai/client";
-import { getConfig } from "@/lib/config";
 import { getMemoryContext } from "@/lib/memory/supermemory";
 import {
   getDecisionHistory,
   formatDecisionHistory,
 } from "./decision-history";
+import { getActiveRules } from "./rules";
 import type { InboxItem } from "@/lib/db/schema";
 
 // Fast, cheap model for classification (structured JSON, no reasoning needed)
@@ -50,11 +50,12 @@ Respond with ONLY a JSON object:
 }
 
 Guidelines:
-- If user archived 100% from this sender, confidence for "archive" should be 0.95+
+- If the triage rules explicitly cover this sender/domain, follow the rule with 0.95+ confidence
+- If user bulk-archives 100% from this sender, confidence for "archive" should be 0.95+
 - New senders with no history → lean toward "attention" with lower confidence
 - Direct personal emails from known contacts → almost always "attention"
-- Automated notifications → lean toward "archive" unless user has acted on them
-- Weight user preferences heavily`;
+- Automated notifications → lean toward "archive" unless user has engaged with them
+- Weight triage rules heavily — they represent confirmed user preferences`;
 
 // ---------------------------------------------------------------------------
 // Pure functions
@@ -75,7 +76,7 @@ export function buildClassificationPrompt(
   context: {
     decisionHistory: string;
     senderMemoryContext: string;
-    preferences: string[];
+    rules: string[];
   }
 ): string {
   const lines: string[] = [];
@@ -103,12 +104,12 @@ export function buildClassificationPrompt(
     lines.push(context.senderMemoryContext);
   }
 
-  // Preferences
-  if (context.preferences.length > 0) {
+  // Triage rules
+  if (context.rules.length > 0) {
     lines.push("");
-    lines.push("=== USER PREFERENCES ===");
-    for (const pref of context.preferences) {
-      lines.push(`- ${pref}`);
+    lines.push("=== TRIAGE RULES ===");
+    for (const rule of context.rules) {
+      lines.push(`- ${rule}`);
     }
   }
 
@@ -213,15 +214,24 @@ async function fetchSenderMemoryContext(
 }
 
 /**
- * Read email:preferences from config and parse the JSON string array.
- * Returns empty array on any failure.
+ * Fetch active triage rules from the DB and convert each into a human-readable
+ * string for inclusion in the LLM classification prompt.
  */
-async function fetchPreferences(): Promise<string[]> {
+async function fetchActiveRuleTexts(): Promise<string[]> {
   try {
-    const config = await getConfig("email:preferences");
-    if (!config?.content) return [];
-    const parsed = JSON.parse(config.content);
-    return Array.isArray(parsed) ? parsed : [];
+    const rules = await getActiveRules();
+    return rules.map((r) => {
+      if (r.type === "guidance" && r.guidance) return r.guidance;
+      if (r.type === "structured" && r.trigger) {
+        const parts: string[] = [];
+        const t = r.trigger as Record<string, string>;
+        if (t.sender) parts.push(`from ${t.sender}`);
+        if (t.senderDomain) parts.push(`from @${t.senderDomain}`);
+        if (t.subjectContains) parts.push(`with subject containing "${t.subjectContains}"`);
+        return `${r.name}: Archive emails ${parts.join(" ")}`;
+      }
+      return r.name;
+    });
   } catch {
     return [];
   }
@@ -242,11 +252,11 @@ export async function classifyEmail(
     const senderDomain = extractSenderDomain(item.sender);
 
     // Gather RAG context in parallel
-    const [decisionSummary, senderMemoryContext, preferences] =
+    const [decisionSummary, senderMemoryContext, rules] =
       await Promise.all([
         getDecisionHistory(item.sender, senderDomain),
         fetchSenderMemoryContext(item.sender, item.senderName),
-        fetchPreferences(),
+        fetchActiveRuleTexts(),
       ]);
 
     const decisionHistory = formatDecisionHistory(decisionSummary);
@@ -265,7 +275,7 @@ export async function classifyEmail(
       {
         decisionHistory,
         senderMemoryContext,
-        preferences,
+        rules,
       }
     );
 

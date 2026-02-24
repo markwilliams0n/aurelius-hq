@@ -9,7 +9,6 @@ import { db } from '@/lib/db';
 import { inboxItems } from '@/lib/db/schema';
 import { eq, isNull, and } from 'drizzle-orm';
 import { classifyEmails, type EmailClassification } from './classify-email';
-import { seedEmailPreferences } from './seed-preferences';
 
 export interface ClassifyEmailsResult {
   classified: number;
@@ -17,9 +16,6 @@ export interface ClassifyEmailsResult {
 }
 
 export async function classifyNewEmails(): Promise<ClassifyEmailsResult> {
-  // Seed preferences on first run
-  await seedEmailPreferences();
-
   // Fetch unclassified gmail items
   const items = await db
     .select()

@@ -216,7 +216,7 @@ describe("buildClassificationPrompt", () => {
   const baseContext = {
     decisionHistory: "Sender alice@example.com: archived 2/5, acted on 3",
     senderMemoryContext: "Alice is the VP of Finance at Acme Corp.",
-    preferences: [
+    rules: [
       "Always surface emails from direct reports",
       "Archive marketing newsletters",
     ],
@@ -264,7 +264,7 @@ describe("buildClassificationPrompt", () => {
     expect(prompt).toContain("VP of Finance at Acme Corp");
   });
 
-  it("includes preferences as bullet points", () => {
+  it("includes rules as bullet points", () => {
     const prompt = buildClassificationPrompt(baseEmail, baseContext);
 
     expect(prompt).toContain("- Always surface emails from direct reports");
@@ -280,13 +280,13 @@ describe("buildClassificationPrompt", () => {
     expect(prompt).not.toContain("SENDER CONTEXT");
   });
 
-  it("omits preferences section when preferences are empty", () => {
+  it("omits rules section when rules are empty", () => {
     const prompt = buildClassificationPrompt(baseEmail, {
       ...baseContext,
-      preferences: [],
+      rules: [],
     });
 
-    expect(prompt).not.toContain("USER PREFERENCES");
+    expect(prompt).not.toContain("TRIAGE RULES");
   });
 
   it("shows 'No prior decisions.' when decision history is empty", () => {
