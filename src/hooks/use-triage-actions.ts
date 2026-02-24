@@ -478,22 +478,21 @@ export function useTriageActions({
     await mutate();
   }, [isSyncing, mutate, mutateRules]);
 
-  // Bulk archive selected items (list view)
-  const handleBulkArchive = useCallback(async () => {
-    if (selectedIds.size === 0) return;
+  // Shared bulk archive logic — archives items and supports undo
+  const bulkArchiveItems = useCallback((itemsToArchive: TriageItem[]) => {
+    if (itemsToArchive.length === 0) return;
 
-    const idsToArchive = Array.from(selectedIds);
-    const itemsToArchive = localItems.filter((i) => selectedIds.has(i.id));
-    const count = idsToArchive.length;
+    const count = itemsToArchive.length;
 
     updateLastAction({
       type: 'bulk-archive',
-      itemId: idsToArchive[0],
+      itemId: itemsToArchive[0].id,
       item: itemsToArchive[0],
     });
     bulkUndoRef.current = itemsToArchive;
 
-    setLocalItems((prev) => prev.filter((i) => !selectedIds.has(i.id)));
+    const idsSet = new Set(itemsToArchive.map((i) => i.id));
+    setLocalItems((prev) => prev.filter((i) => !idsSet.has(i.id)));
     setSelectedIds(new Set());
 
     itemsToArchive.forEach((item) => {
@@ -509,7 +508,19 @@ export function useTriageActions({
     toast.success(`Archived ${count} item${count === 1 ? '' : 's'}`, {
       action: { label: 'Undo', onClick: () => handleUndo() },
     });
-  }, [selectedIds, localItems, handleUndo, updateLastAction, setLocalItems, setSelectedIds]);
+  }, [handleUndo, updateLastAction, setLocalItems, setSelectedIds]);
+
+  // Bulk archive selected items (list view)
+  const handleBulkArchive = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    const itemsToArchive = localItems.filter((i) => selectedIds.has(i.id));
+    bulkArchiveItems(itemsToArchive);
+  }, [selectedIds, localItems, bulkArchiveItems]);
+
+  // Bulk archive explicit items (tier view)
+  const handleBulkArchiveItems = useCallback((items: TriageItem[]) => {
+    bulkArchiveItems(items);
+  }, [bulkArchiveItems]);
 
   // Quick task handler (t key)
   const handleQuickTask = useCallback(() => {
@@ -572,5 +583,6 @@ export function useTriageActions({
     // Other
     handleSync,
     handleBulkArchive,
+    handleBulkArchiveItems,
   };
 }

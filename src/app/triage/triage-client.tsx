@@ -365,30 +365,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           <TriageEmailTiers
             items={filteredItems}
             tasksByItemId={tasksByItemId}
-            onArchive={(item) => {
-              const apiId = item.dbId || item.id;
-              fetch(`/api/triage/${apiId}/tasks`, { method: "DELETE" }).catch(() => {});
-              fetch(`/api/triage/${apiId}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "archive" }),
-              }).catch(console.error);
-              setLocalItems((prev) => prev.filter((i) => i.id !== item.id));
-            }}
-            onBulkArchive={(itemsToArchive) => {
-              for (const item of itemsToArchive) {
-                const apiId = item.dbId || item.id;
-                fetch(`/api/triage/${apiId}/tasks`, { method: "DELETE" }).catch(() => {});
-                fetch(`/api/triage/${apiId}`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ action: "archive" }),
-                }).catch(console.error);
-              }
-              const ids = new Set(itemsToArchive.map((i) => i.id));
-              setLocalItems((prev) => prev.filter((i) => !ids.has(i.id)));
-              toast.success(`Archived ${itemsToArchive.length} email${itemsToArchive.length === 1 ? "" : "s"}`);
-            }}
+            onBulkArchive={actions.handleBulkArchiveItems}
             onSelectItem={(item) => {
               const index = filteredItems.findIndex((i) => i.id === item.id);
               if (index >= 0) nav.setCurrentIndex(index);

@@ -10,7 +10,6 @@ import { SuggestedTasksBox } from "@/components/aurelius/suggested-tasks-box";
 interface EmailTiersProps {
   items: TriageItem[];
   tasksByItemId: Record<string, unknown[]>;
-  onArchive: (item: TriageItem) => void;
   onBulkArchive: (items: TriageItem[]) => void;
   onSelectItem: (item: TriageItem) => void;
   activeItemId?: string;
@@ -41,7 +40,6 @@ function getConfidence(item: TriageItem): number {
 export function TriageEmailTiers({
   items,
   tasksByItemId,
-  onArchive,
   onBulkArchive,
   onSelectItem,
   activeItemId,
@@ -67,7 +65,6 @@ export function TriageEmailTiers({
       {archiveItems.length > 0 && (
         <ArchiveTier
           items={archiveItems}
-          onArchive={onArchive}
           onBulkArchive={onBulkArchive}
         />
       )}
@@ -165,11 +162,9 @@ export function TriageEmailTiers({
  */
 function ArchiveTier({
   items,
-  onArchive,
   onBulkArchive,
 }: {
   items: TriageItem[];
-  onArchive: (item: TriageItem) => void;
   onBulkArchive: (items: TriageItem[]) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);

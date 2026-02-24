@@ -3,7 +3,6 @@ import { db } from "@/lib/db";
 import { inboxItems, type InboxItem } from "@/lib/db/schema";
 import { eq, or } from "drizzle-orm";
 import { syncArchiveToGmail, syncSpamToGmail, markActionNeeded } from "@/lib/gmail/actions";
-import { archiveNotification } from "@/lib/linear";
 import { logActivity } from "@/lib/activity";
 
 // Log the user's actual triage decision into the classification column.
@@ -110,18 +109,6 @@ export async function POST(
           })
         );
       }
-      // Sync to Linear in background (mark notification as read)
-      if (item.connector === "linear" && item.externalId) {
-        backgroundTasks.push(
-          archiveNotification(item.externalId).then((success) => {
-            if (success) {
-              console.log("[Triage] Linear notification archived:", item.externalId);
-            }
-          }).catch((error) => {
-            console.error("[Triage] Background Linear archive failed:", error);
-          })
-        );
-      }
       logDecision(item, "archived");
       break;
 
@@ -144,6 +131,7 @@ export async function POST(
       updates.tags = currentTags.includes("flagged")
         ? currentTags.filter((t) => t !== "flagged")
         : [...currentTags, "flagged"];
+      logDecision(item, "flagged");
       break;
 
     case "priority":
