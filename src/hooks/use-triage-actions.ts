@@ -501,7 +501,7 @@ export function useTriageActions({
       fetch(`/api/triage/${apiId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'archive' }),
+        body: JSON.stringify({ action: 'archive', triagePath: 'bulk' }),
       }).catch(console.error);
     });
 

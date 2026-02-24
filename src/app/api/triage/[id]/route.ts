@@ -7,7 +7,7 @@ import { logActivity } from "@/lib/activity";
 
 // Log the user's actual triage decision into the classification column.
 // Fire-and-forget: errors are caught and logged, never block the response.
-function logDecision(item: InboxItem, actualAction: string) {
+function logDecision(item: InboxItem, actualAction: string, clientTriagePath?: string) {
   if (item.connector !== "gmail") return;
   const classification = item.classification as Record<string, unknown> | null;
   if (!classification?.recommendation) return;
@@ -16,6 +16,22 @@ function logDecision(item: InboxItem, actualAction: string) {
   const userArchived = actualAction === "archived" || actualAction === "spam";
   const wasOverride = recommendedArchive !== userArchived;
 
+  // Derive triagePath:
+  // - If client sent one (e.g. 'bulk'), use it
+  // - If action is archive/spam and no client path: check if a prior non-archive action exists → 'engaged', else 'quick'
+  // - If action is anything else (flag, snooze, etc.) → always 'engaged'
+  let triagePath: string;
+  if (clientTriagePath) {
+    triagePath = clientTriagePath;
+  } else if (actualAction === "archived" || actualAction === "spam") {
+    const priorAction = classification.actualAction as string | undefined;
+    triagePath = priorAction && priorAction !== "archived" && priorAction !== "spam"
+      ? "engaged"
+      : "quick";
+  } else {
+    triagePath = "engaged";
+  }
+
   // Cast needed: the classification column type doesn't include decision fields,
   // but we're enriching the existing JSON with learning-loop metadata.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -23,6 +39,7 @@ function logDecision(item: InboxItem, actualAction: string) {
     ...classification,
     actualAction,
     wasOverride,
+    triagePath,
     decidedAt: new Date().toISOString(),
   } as any;
 
@@ -109,7 +126,7 @@ export async function POST(
           })
         );
       }
-      logDecision(item, "archived");
+      logDecision(item, "archived", actionData.triagePath);
       break;
 
     case "snooze":
