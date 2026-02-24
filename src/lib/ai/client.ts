@@ -46,8 +46,18 @@ export async function chat(
   instructions?: string,
   options?: { maxTokens?: number; timeoutMs?: number }
 ): Promise<string> {
+  return chatWithModel(DEFAULT_MODEL, input, instructions, options);
+}
+
+// Chat with a specific model (for tasks that need a different model than default)
+export async function chatWithModel(
+  model: string,
+  input: string | Message[],
+  instructions?: string,
+  options?: { maxTokens?: number; timeoutMs?: number }
+): Promise<string> {
   const result = ai.callModel({
-    model: DEFAULT_MODEL,
+    model,
     input,
     instructions,
     maxOutputTokens: options?.maxTokens ?? 4096,

@@ -1,4 +1,4 @@
-import { chat } from "@/lib/ai/client";
+import { chatWithModel } from "@/lib/ai/client";
 import { getConfig } from "@/lib/config";
 import { getMemoryContext } from "@/lib/memory/supermemory";
 import {
@@ -6,6 +6,10 @@ import {
   formatDecisionHistory,
 } from "./decision-history";
 import type { InboxItem } from "@/lib/db/schema";
+
+// Fast, cheap model for classification (structured JSON, no reasoning needed)
+const CLASSIFICATION_MODEL =
+  process.env.CLASSIFICATION_MODEL || "google/gemini-2.0-flash-001";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -265,10 +269,12 @@ export async function classifyEmail(
       }
     );
 
-    const response = await chat(prompt, CLASSIFICATION_SYSTEM_PROMPT, {
-      maxTokens: 512,
-      timeoutMs: 15_000,
-    });
+    const response = await chatWithModel(
+      CLASSIFICATION_MODEL,
+      prompt,
+      CLASSIFICATION_SYSTEM_PROMPT,
+      { maxTokens: 512, timeoutMs: 15_000 }
+    );
 
     return parseClassificationResponse(response);
   } catch (error) {
