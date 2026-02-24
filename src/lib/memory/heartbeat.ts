@@ -8,7 +8,7 @@
  * Run order:
  * 1. Daily maintenance (backup + learning)
  * 2. Connector syncs (Granola, Gmail)
- * 3. Classification (rule -> Ollama -> Kimi)
+ * 3. Classification (AI email classifier)
  */
 
 import type { GranolaSyncResult } from '@/lib/granola';
@@ -17,8 +17,7 @@ import type { BackupResult } from './backup';
 import type { DailyLearningResult } from '@/lib/triage/daily-learning';
 import { syncAllConnectors } from '@/lib/connectors/sync-all';
 import { runDailyMaintenance } from '@/lib/jobs/daily-maintenance';
-import { classifyNewItems } from '@/lib/triage/classify';
-import { seedDefaultRules } from '@/lib/triage/rules';
+import { classifyNewEmails } from '@/lib/triage/classify-emails-pipeline';
 
 // --- Public type exports (re-exported from connectors/types for backward compatibility) ---
 
@@ -73,7 +72,7 @@ export interface HeartbeatResult {
  * 1. Daily backup (once per day, keeps last 7)
  * 2. Sync Granola meetings
  * 3. Sync Gmail messages
- * 4. Classify new inbox items (rule -> Ollama -> Kimi)
+ * 4. Classify new gmail items (AI email classifier)
  * 5. Daily learning loop (once per day -- analyze triage patterns, suggest rules)
  *
  * Memory extraction is handled by Supermemory -- content is sent to Supermemory
@@ -125,12 +124,10 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
     progress?.('classify', 'start');
     const classifyStart = Date.now();
     try {
-      // Ensure seed rules exist before classifying
-      await seedDefaultRules();
-      const classifyResult = await classifyNewItems();
+      const classifyResult = await classifyNewEmails();
       if (classifyResult.classified > 0) {
         console.log(
-          `[Heartbeat] Classify: ${classifyResult.classified} items (rule:${classifyResult.byTier.rule} ollama:${classifyResult.byTier.ollama} kimi:${classifyResult.byTier.kimi})`
+          `[Heartbeat] Classify: ${classifyResult.classified} emails (archive:${classifyResult.byTier.archive} review:${classifyResult.byTier.review} attention:${classifyResult.byTier.attention})`
         );
       }
       steps.classify = {
@@ -138,7 +135,7 @@ export async function runHeartbeat(options: HeartbeatOptions = {}): Promise<Hear
         durationMs: Date.now() - classifyStart,
       };
       progress?.('classify', 'done', classifyResult.classified > 0
-        ? `${classifyResult.classified} items`
+        ? `${classifyResult.classified} emails`
         : undefined);
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);

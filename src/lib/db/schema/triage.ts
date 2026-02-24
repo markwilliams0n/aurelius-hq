@@ -137,15 +137,29 @@ export const inboxItems = pgTable(
     }>(),
 
     // Classification from pre-processing pipeline
-    classification: jsonb("classification").$type<{
-      batchCardId: string | null;
-      batchType: string | null;
-      tier: "rule" | "ollama" | "kimi";
-      confidence: number;
-      reason: string;
-      classifiedAt: string;
-      ruleId?: string;
-    }>(),
+    // Legacy shape (rules -> Ollama -> Kimi) or new AI classifier shape
+    classification: jsonb("classification").$type<
+      | {
+          batchCardId: string | null;
+          batchType: string | null;
+          tier: "rule" | "ollama" | "kimi";
+          confidence: number;
+          reason: string;
+          classifiedAt: string;
+          ruleId?: string;
+        }
+      | {
+          recommendation: "archive" | "review" | "attention";
+          confidence: number;
+          reasoning: string;
+          signals: {
+            senderHistory: string;
+            relationshipContext: string;
+            contentAnalysis: string;
+          };
+          classifiedAt: string;
+        }
+    >(),
 
     // Timestamps
     receivedAt: timestamp("received_at", { withTimezone: true })
