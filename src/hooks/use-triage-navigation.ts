@@ -19,8 +19,7 @@ export type ViewMode =
 const CONNECTOR_FILTER_VALUES: ConnectorFilter[] = ['gmail', 'granola'];
 
 export function useTriageNavigation(
-  localItems: TriageItem[],
-  batchCardCount: number
+  localItems: TriageItem[]
 ) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [connectorFilter, setConnectorFilter] =
@@ -34,16 +33,9 @@ export function useTriageNavigation(
     return localItems.filter((item) => item.connector === connectorFilter);
   }, [localItems, connectorFilter]);
 
-  // Batch card navigation: batch cards occupy indices 0..batchCardCount-1,
-  // individual items start at batchCardCount
-  const isOnBatchCard = currentIndex < batchCardCount;
-  const individualItemIndex = currentIndex - batchCardCount;
-
-  // Current item (from filtered list, offset by batch card count)
-  const currentItem = isOnBatchCard
-    ? undefined
-    : filteredItems[individualItemIndex];
-  const totalCards = batchCardCount + filteredItems.length;
+  // Current item from filtered list
+  const currentItem = filteredItems[currentIndex];
+  const totalCards = filteredItems.length;
   const hasItems = totalCards > 0;
 
   // Reset index when filter changes
@@ -97,12 +89,12 @@ export function useTriageNavigation(
     (id: string) => {
       const index = filteredItems.findIndex((i) => i.id === id);
       if (index >= 0) {
-        setCurrentIndex(index + batchCardCount);
+        setCurrentIndex(index);
         setReturnToList(true);
         setTriageView('card');
       }
     },
-    [filteredItems, batchCardCount]
+    [filteredItems]
   );
 
   // Close overlay, handling return-to-list logic
@@ -123,8 +115,6 @@ export function useTriageNavigation(
     setReturnToList,
     filteredItems,
     currentItem,
-    isOnBatchCard,
-    individualItemIndex,
     totalCards,
     hasItems,
     connectorCounts,

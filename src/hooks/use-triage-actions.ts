@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useRef } from 'react';
 import type { TriageItem } from '@/components/aurelius/triage-card';
-import type { BatchCardWithItems } from '@/lib/triage/batch-cards';
 import type { ActionCardData } from '@/lib/types/action-card';
 import type { ViewMode } from '@/hooks/use-triage-navigation';
 import { toast } from 'sonner';
@@ -10,8 +9,6 @@ import { toast } from 'sonner';
 interface UseTriageActionsParams {
   localItems: TriageItem[];
   setLocalItems: React.Dispatch<React.SetStateAction<TriageItem[]>>;
-  localBatchCards: BatchCardWithItems[];
-  setLocalBatchCards: React.Dispatch<React.SetStateAction<BatchCardWithItems[]>>;
   currentItem: TriageItem | undefined;
   currentIndex: number;
   setCurrentIndex: React.Dispatch<React.SetStateAction<number>>;
@@ -58,8 +55,6 @@ function getActionMessage(action: string): string {
 export function useTriageActions({
   localItems,
   setLocalItems,
-  localBatchCards,
-  setLocalBatchCards,
   currentItem,
   currentIndex,
   setCurrentIndex,
@@ -423,81 +418,6 @@ export function useTriageActions({
     [currentItem, setViewMode, setAnimatingOut, setLocalItems]
   );
 
-  // Batch card action handler
-  const handleBatchAction = useCallback(
-    async (cardId: string, checkedIds: string[], uncheckedIds: string[]) => {
-      try {
-        await fetch(`/api/triage/batch/${cardId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            checkedItemIds: checkedIds,
-            uncheckedItemIds: uncheckedIds,
-          }),
-        });
-
-        setLocalBatchCards((prev) => prev.filter((c) => c.id !== cardId));
-        mutate();
-        toast.success(
-          `Batch action complete: ${checkedIds.length} processed, ${uncheckedIds.length} kept`
-        );
-      } catch (error) {
-        console.error('Failed to execute batch action:', error);
-        toast.error('Batch action failed');
-      }
-    },
-    [setLocalBatchCards, mutate]
-  );
-
-  // Reclassify handler
-  const handleReclassify = useCallback(
-    async (
-      itemId: string,
-      fromBatchType: string,
-      toBatchType: string,
-      sender: string,
-      senderName: string | null,
-      connector: string
-    ) => {
-      try {
-        const res = await fetch('/api/triage/batch/reclassify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            itemId,
-            fromBatchType,
-            toBatchType,
-            sender,
-            senderName,
-            connector,
-          }),
-        });
-        if (!res.ok) throw new Error('Reclassify failed');
-
-        setLocalBatchCards((prev) =>
-          prev
-            .map((card) => {
-              const cardBatchType = (card.data?.batchType as string) || '';
-              if (cardBatchType === fromBatchType) {
-                return {
-                  ...card,
-                  items: card.items.filter((i) => i.id !== itemId),
-                };
-              }
-              return card;
-            })
-            .filter((card) => card.items.length > 0)
-        );
-
-        toast.success(`Moved to ${toBatchType} -- rule created`);
-      } catch (error) {
-        console.error('Reclassify failed:', error);
-        toast.error('Failed to reclassify item');
-      }
-    },
-    [setLocalBatchCards]
-  );
-
   // Delete a triage rule
   const handleDeleteRule = useCallback(
     async (ruleId: string) => {
@@ -644,10 +564,6 @@ export function useTriageActions({
     handleUndo,
     handleQuickTask,
     handleOpenLinear,
-
-    // Batch card actions
-    handleBatchAction,
-    handleReclassify,
 
     // Rule actions
     handleDeleteRule,

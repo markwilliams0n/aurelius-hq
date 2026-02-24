@@ -2,13 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef, Dispatch, SetStateAction, useMemo } from "react";
 import { AppShell } from "@/components/aurelius/app-shell";
-import { TriageCard } from "@/components/aurelius/triage-card";
 import type { TriageItem } from "@/components/aurelius/triage-card";
-import { TriageBatchCard } from "@/components/aurelius/triage-batch-card";
 import { TriageEmailTiers } from "@/components/aurelius/triage-email-tiers";
 import { TriageMeetingTasks } from "@/components/aurelius/triage-meeting-tasks";
 import { TriageListView } from "@/components/aurelius/triage-list-view";
-import type { BatchCardWithItems } from "@/lib/triage/batch-cards";
 import { useTriageData, useTriageRules } from "@/hooks/use-triage-data";
 import { useTriageNavigation } from "@/hooks/use-triage-navigation";
 import { useTriageActions } from "@/hooks/use-triage-actions";
@@ -51,7 +48,6 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
   const {
     items: fetchedItems,
     stats,
-    batchCards: fetchedBatchCards,
     tasksByItemId,
     senderCounts,
     isLoading,
@@ -61,19 +57,12 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
 
   // Local state for optimistic updates (synced from SWR)
   const [localItems, setLocalItems] = useState<TriageItem[]>([]);
-  const [localBatchCards, setLocalBatchCards] = useState<BatchCardWithItems[]>([]);
 
   useEffect(() => {
     if (fetchedItems.length > 0 || !isLoading) {
       setLocalItems(fetchedItems);
     }
   }, [fetchedItems, isLoading]);
-
-  useEffect(() => {
-    if (fetchedBatchCards.length > 0 || !isLoading) {
-      setLocalBatchCards(fetchedBatchCards);
-    }
-  }, [fetchedBatchCards, isLoading]);
 
   // UI-only local state
   const [animatingOut, setAnimatingOut] = useState<"left" | "right" | "up" | null>(null);
@@ -82,10 +71,9 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
   const cardRef = useRef<HTMLDivElement>(null);
 
   const sidebarWidth = isSidebarExpanded ? 480 : 320;
-  const batchCardCount = localBatchCards.length;
 
   // Navigation hook
-  const nav = useTriageNavigation(localItems, batchCardCount);
+  const nav = useTriageNavigation(localItems);
   const {
     currentIndex, setCurrentIndex,
     connectorFilter, setConnectorFilter,
@@ -93,7 +81,6 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     viewMode, setViewMode,
     returnToList, setReturnToList,
     filteredItems, currentItem,
-    isOnBatchCard, individualItemIndex,
     totalCards, hasItems,
     connectorCounts,
     cycleConnectorFilter,
@@ -102,15 +89,12 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     handleCloseOverlay,
   } = nav;
 
-  const currentBatchCard = isOnBatchCard ? localBatchCards[currentIndex] : null;
   const progress = hasItems ? `${currentIndex + 1} / ${totalCards}` : "0 / 0";
 
   // Actions hook
   const actions = useTriageActions({
     localItems,
     setLocalItems,
-    localBatchCards,
-    setLocalBatchCards,
     currentItem,
     currentIndex,
     setCurrentIndex,
@@ -142,7 +126,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
 
   // Keyboard bindings
   const isCardTriage = triageView === "card" && viewMode === "triage";
-  const isIndividualCard = isCardTriage && !isOnBatchCard;
+  const isIndividualCard = isCardTriage;
 
   const keyBindings: KeyBinding[] = useMemo(() => [
     // Escape — complex multi-branch handler
@@ -407,7 +391,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
             }}
             onSelectItem={(item) => {
               const index = filteredItems.findIndex((i) => i.id === item.id);
-              if (index >= 0) nav.setCurrentIndex(index + batchCardCount);
+              if (index >= 0) nav.setCurrentIndex(index);
             }}
             activeItemId={currentItem?.id}
           />
@@ -463,7 +447,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
             onOpenChat={(item) => {
               const index = filteredItems.findIndex((i) => i.id === item.id);
               if (index >= 0) {
-                nav.setCurrentIndex(index + batchCardCount);
+                nav.setCurrentIndex(index);
                 nav.setViewMode("chat");
               }
             }}

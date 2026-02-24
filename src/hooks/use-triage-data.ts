@@ -2,7 +2,6 @@
 
 import useSWR from 'swr';
 import type { TriageItem } from '@/components/aurelius/triage-card';
-import type { BatchCardWithItems } from '@/lib/triage/batch-cards';
 import type { SuggestedTask } from '@/lib/db/schema/tasks';
 import type { TriageRule } from '@/lib/db/schema/triage';
 
@@ -22,7 +21,6 @@ type SerializedTask = Omit<SuggestedTask, 'createdAt' | 'updatedAt'> & {
 export interface TriageData {
   items: TriageItem[];
   stats: { new: number; archived: number; snoozed: number; actioned: number };
-  batchCards: BatchCardWithItems[];
   tasksByItemId: Record<string, SerializedTask[]>;
   senderCounts: Record<string, number>;
 }
@@ -47,7 +45,6 @@ const triageFetcher = async (url: string): Promise<TriageData> => {
   return {
     items,
     stats: data.stats || { new: 0, archived: 0, snoozed: 0, actioned: 0 },
-    batchCards: data.batchCards || [],
     tasksByItemId: data.tasksByItemId || {},
     senderCounts: data.senderCounts || {},
   };
@@ -74,7 +71,6 @@ export function useTriageData() {
   return {
     items: data?.items ?? [],
     stats: data?.stats ?? { new: 0, archived: 0, snoozed: 0, actioned: 0 },
-    batchCards: data?.batchCards ?? [],
     tasksByItemId: data?.tasksByItemId ?? {},
     senderCounts: data?.senderCounts ?? {},
     isLoading,
