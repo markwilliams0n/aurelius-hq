@@ -9,6 +9,7 @@ import { db } from '@/lib/db';
 import { inboxItems } from '@/lib/db/schema';
 import { eq, isNull, and } from 'drizzle-orm';
 import { classifyEmails, type EmailClassification } from './classify-email';
+import { getActiveRules, incrementRuleMatchCount } from './rules';
 
 export interface ClassifyEmailsResult {
   classified: number;
@@ -63,6 +64,26 @@ export async function classifyNewEmails(): Promise<ClassifyEmailsResult> {
         updatedAt: new Date(),
       })
       .where(eq(inboxItems.id, item.id));
+  }
+
+  // Update hit counts for rules that the classifier referenced
+  try {
+    const activeRules = await getActiveRules();
+    for (const item of items) {
+      const classification = classifications.get(item.id);
+      if (!classification?.matchedRules?.length) continue;
+
+      for (const ruleText of classification.matchedRules) {
+        const matchedRule = activeRules.find(
+          (r) => r.guidance === ruleText || r.name === ruleText
+        );
+        if (matchedRule) {
+          await incrementRuleMatchCount(matchedRule.id);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[Classify] Rule hit tracking failed:", err);
   }
 
   console.log(

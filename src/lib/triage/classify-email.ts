@@ -24,6 +24,7 @@ export interface EmailClassification {
     relationshipContext: string;
     contentAnalysis: string;
   };
+  matchedRules?: string[]; // Rule texts that influenced this classification
 }
 
 // ---------------------------------------------------------------------------
@@ -46,7 +47,8 @@ Respond with ONLY a JSON object:
     "senderHistory": "Brief note about past interactions",
     "relationshipContext": "What we know about sender from memory",
     "contentAnalysis": "What kind of email this is"
-  }
+  },
+  "matchedRules": ["exact text of any triage rule that influenced this decision"]
 }
 
 Guidelines:
@@ -55,7 +57,8 @@ Guidelines:
 - New senders with no history → lean toward "attention" with lower confidence
 - Direct personal emails from known contacts → almost always "attention"
 - Automated notifications → lean toward "archive" unless user has engaged with them
-- Weight triage rules heavily — they represent confirmed user preferences`;
+- Weight triage rules heavily — they represent confirmed user preferences
+- If you followed a triage rule, include its exact text in matchedRules`;
 
 // ---------------------------------------------------------------------------
 // Pure functions
@@ -175,9 +178,13 @@ export function parseClassificationResponse(
           : fallback.signals.contentAnalysis,
     };
 
-    return { recommendation, confidence, reasoning, signals };
+    const matchedRules = Array.isArray(parsed.matchedRules)
+      ? parsed.matchedRules.filter((r: unknown) => typeof r === "string")
+      : [];
+
+    return { recommendation, confidence, reasoning, signals, matchedRules };
   } catch {
-    return fallback;
+    return { ...fallback, matchedRules: [] };
   }
 }
 
