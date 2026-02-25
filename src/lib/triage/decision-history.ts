@@ -54,7 +54,7 @@ export async function getDecisionHistory(
       SELECT classification->>'triagePath' as triage_path, count(*)::int as count
       FROM inbox_items
       WHERE connector = 'gmail'
-        AND sender LIKE '%@' || ${senderDomain}
+        AND split_part(sender, '@', 2) = ${senderDomain}
         AND status != 'new'
         AND classification->>'triagePath' IS NOT NULL
       GROUP BY classification->>'triagePath'

@@ -147,7 +147,7 @@ export function useTriageActions({
 
     let message: string;
     if (proposal.type === "archive") {
-      message = `You've archived ${ev.total}/${ev.total} from ${displayName} — always archive?`;
+      message = `You've archived all ${ev.total} emails from ${displayName} — always archive?`;
     } else {
       if (ev.overrideCount) {
         message = `You overrode archive for ${displayName} ${ev.overrideCount} times — always surface?`;

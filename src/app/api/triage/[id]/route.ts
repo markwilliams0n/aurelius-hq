@@ -47,6 +47,7 @@ function logDecision(item: InboxItem, actualAction: string, clientTriagePath?: s
   db.update(inboxItems)
     .set({ classification: enrichedClassification })
     .where(eq(inboxItems.id, item.id))
+    .execute()
     .catch((err) => console.error("[Triage] Decision log failed:", err));
 }
 
@@ -320,6 +321,14 @@ export async function PUT(
   };
 
   if (body.classification) {
+    const c = body.classification;
+    const validRecs = ["archive", "review", "attention"];
+    if (!c.recommendation || !validRecs.includes(c.recommendation)) {
+      return NextResponse.json({ error: "Invalid classification recommendation" }, { status: 400 });
+    }
+    if (typeof c.confidence !== "number" || c.confidence < 0 || c.confidence > 1) {
+      return NextResponse.json({ error: "Invalid classification confidence" }, { status: 400 });
+    }
     updateData.classification = body.classification;
   }
 
