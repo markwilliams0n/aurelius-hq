@@ -111,8 +111,8 @@ export function TriageSidebar({ stats, isExpanded = false, onToggleExpand, onUnd
   useEffect(() => {
     if (activeTab === "activity") {
       fetchActivities();
-      // Poll every 3 seconds for activity updates (to catch background memory completion)
-      const interval = setInterval(fetchActivities, 3000);
+      // Poll for activity updates
+      const interval = setInterval(fetchActivities, 15000);
       return () => clearInterval(interval);
     } else {
       fetchDailyNotes();

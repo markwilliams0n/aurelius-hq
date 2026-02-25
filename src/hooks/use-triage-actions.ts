@@ -193,7 +193,10 @@ export function useTriageActions({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'archive' }),
     })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(`API returned ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
         if (data.proposal) {
           showProposalToast(data.proposal);
@@ -230,7 +233,10 @@ export function useTriageActions({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'archive', triagePath: 'quick' }),
     })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(`API returned ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
         if (data.proposal) showProposalToast(data.proposal);
       })
@@ -481,11 +487,12 @@ export function useTriageActions({
 
       const apiId = currentItem.dbId || currentItem.id;
       try {
-        await fetch(`/api/triage/${apiId}`, {
+        const res = await fetch(`/api/triage/${apiId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action, ...data }),
         });
+        if (!res.ok) throw new Error(`API returned ${res.status}`);
 
         if (action === 'snooze' || action === 'actioned') {
           setAnimatingOut('right');
@@ -509,7 +516,8 @@ export function useTriageActions({
   const handleDeleteRule = useCallback(
     async (ruleId: string) => {
       try {
-        await fetch(`/api/triage/rules/${ruleId}`, { method: 'DELETE' });
+        const res = await fetch(`/api/triage/rules/${ruleId}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(`API returned ${res.status}`);
         mutateRules();
         toast.success('Rule deleted');
       } catch (error) {
@@ -524,11 +532,12 @@ export function useTriageActions({
   const handleRuleInput = useCallback(
     async (input: string) => {
       try {
-        await fetch('/api/triage/rules', {
+        const res = await fetch('/api/triage/rules', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ input, source: 'user_chat' }),
         });
+        if (!res.ok) throw new Error(`API returned ${res.status}`);
         mutateRules();
         toast.success('Rule created from your input');
       } catch (error) {
@@ -550,19 +559,19 @@ export function useTriageActions({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ trigger: 'manual' }),
     })
-      .then(() => {
+      .then((res) => {
+        if (!res.ok) throw new Error(`API returned ${res.status}`);
         mutate();
         mutateRules();
         toast.success('Sync complete');
-        setIsSyncing(false);
       })
       .catch((error) => {
         console.error('Sync failed:', error);
         toast.error('Sync failed');
+      })
+      .finally(() => {
         setIsSyncing(false);
       });
-
-    await mutate();
   }, [isSyncing, mutate, mutateRules]);
 
   // Shared bulk archive logic — archives items and supports undo
@@ -590,7 +599,10 @@ export function useTriageActions({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'archive', triagePath: 'bulk' }),
       })
-        .then((res) => res.json())
+        .then((res) => {
+          if (!res.ok) throw new Error(`API returned ${res.status}`);
+          return res.json();
+        })
         .then((data) => {
           if (data.proposal) showProposalToast(data.proposal);
         })
@@ -654,7 +666,10 @@ export function useTriageActions({
     if (!currentItem) return;
     const taskApiId = currentItem.dbId || currentItem.id;
     fetch(`/api/triage/${taskApiId}/quick-task`, { method: 'POST' })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(`API returned ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
         if (data.card) {
           setQuickTaskCard(data.card);

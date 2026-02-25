@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Archive, Eye, AlertCircle, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TriageCard } from "@/components/aurelius/triage-card";
@@ -213,6 +213,15 @@ function ArchiveBatchBox({
   onSkipFromArchive?: (item: TriageItem) => void;
 }) {
   const [uncheckedIds, setUncheckedIds] = useState<Set<string>>(new Set());
+
+  // Prune stale unchecked IDs when items change
+  useEffect(() => {
+    const itemIds = new Set(items.map((i) => i.id));
+    setUncheckedIds((prev) => {
+      const pruned = new Set([...prev].filter((id) => itemIds.has(id)));
+      return pruned.size === prev.size ? prev : pruned;
+    });
+  }, [items]);
 
   const checkedItems = items.filter((i) => !uncheckedIds.has(i.id));
 

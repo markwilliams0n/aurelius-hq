@@ -329,7 +329,15 @@ export async function PUT(
     if (typeof c.confidence !== "number" || c.confidence < 0 || c.confidence > 1) {
       return NextResponse.json({ error: "Invalid classification confidence" }, { status: 400 });
     }
-    updateData.classification = body.classification;
+    // Only pass through validated fields, preserve existing classification data
+    const existing = (item.classification as Record<string, unknown>) || {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    updateData.classification = {
+      ...existing,
+      recommendation: c.recommendation,
+      confidence: c.confidence,
+      ...(typeof c.reasoning === "string" && { reasoning: c.reasoning }),
+    } as any;
   }
 
   const [updatedItem] = await db
