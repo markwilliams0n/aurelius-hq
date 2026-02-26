@@ -8,7 +8,7 @@
 
 // --- Heartbeat step types (single source of truth) ---
 
-export type HeartbeatStep = 'backup' | 'granola' | 'gmail' | 'linear' | 'slack' | 'classify' | 'learning';
+export type HeartbeatStep = 'backup' | 'granola' | 'gmail' | 'classify' | 'learning';
 export type HeartbeatStepStatus = 'start' | 'done' | 'skip' | 'error';
 
 // --- Sync result types ---

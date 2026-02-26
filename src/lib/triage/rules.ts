@@ -37,6 +37,17 @@ const SEED_RULES: Array<{
   { name: "Beehiiv → newsletters", trigger: { senderDomain: "beehiiv.com" }, batchType: "newsletters" },
 ];
 
+const SEED_GUIDANCE: Array<{ name: string; guidance: string }> = [
+  {
+    name: "Surface personal emails from contacts",
+    guidance: "Always surface direct personal emails from people the user has met or works with",
+  },
+  {
+    name: "New direct outreach needs attention",
+    guidance: "If someone new reaches out directly, treat it as needing attention",
+  },
+];
+
 /**
  * Ensure seed rules exist in the database. Skips any rule whose name already exists.
  * Returns the number of new rules created.
@@ -55,6 +66,18 @@ export async function seedDefaultRules(): Promise<number> {
       trigger: seed.trigger,
       action: { type: "batch", batchType: seed.batchType },
       description: "Default rule — auto-created",
+    });
+    created++;
+  }
+
+  for (const seed of SEED_GUIDANCE) {
+    if (existingNames.has(seed.name)) continue;
+    await db.insert(triageRules).values({
+      name: seed.name,
+      type: "guidance",
+      source: "user_settings",
+      guidance: seed.guidance,
+      description: "Default guidance — auto-created",
     });
     created++;
   }

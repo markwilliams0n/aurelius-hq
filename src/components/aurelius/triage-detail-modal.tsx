@@ -453,15 +453,16 @@ export function TriageDetailModal({ item, onClose, onReply }: TriageDetailModalP
 
             if (bodyHtml && item.connector === 'gmail') {
               return (
-                <div
-                  className="prose prose-sm dark:prose-invert max-w-none
-                    [&_a]:text-gold [&_a]:no-underline [&_a:hover]:underline
-                    [&_img]:max-w-full [&_img]:h-auto
-                    [&_table]:border-collapse [&_td]:p-2 [&_th]:p-2
-                    [&_*]:max-w-full
-                    [&_:not(a)]:!text-inherit"
-                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(bodyHtml) }}
-                />
+                <div className="rounded-lg overflow-hidden border border-border">
+                  <div
+                    className="bg-white text-black p-4
+                      [&_a]:text-blue-600 [&_a]:no-underline [&_a:hover]:underline
+                      [&_img]:max-w-full [&_img]:h-auto
+                      [&_table]:border-collapse [&_td]:p-2 [&_th]:p-2
+                      [&_*]:max-w-full"
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(bodyHtml) }}
+                  />
+                </div>
               );
             }
 

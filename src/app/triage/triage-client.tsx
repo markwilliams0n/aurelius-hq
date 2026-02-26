@@ -2,11 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef, Dispatch, SetStateAction, useMemo } from "react";
 import { AppShell } from "@/components/aurelius/app-shell";
-import { TriageCard } from "@/components/aurelius/triage-card";
 import type { TriageItem } from "@/components/aurelius/triage-card";
-import { TriageBatchCard } from "@/components/aurelius/triage-batch-card";
+import { TriageEmailTiers } from "@/components/aurelius/triage-email-tiers";
+import { TriageMeetingTasks } from "@/components/aurelius/triage-meeting-tasks";
 import { TriageListView } from "@/components/aurelius/triage-list-view";
-import type { BatchCardWithItems } from "@/lib/triage/batch-cards";
 import { useTriageData, useTriageRules } from "@/hooks/use-triage-data";
 import { useTriageNavigation } from "@/hooks/use-triage-navigation";
 import { useTriageActions } from "@/hooks/use-triage-actions";
@@ -23,14 +22,13 @@ import { TaskCreatorPanel } from "@/components/aurelius/task-creator-panel";
 import { TriageGroupPicker } from "@/components/aurelius/triage-group-picker";
 import { ActionCard } from "@/components/aurelius/action-card";
 import { CardContent } from "@/components/aurelius/cards/card-content";
+
+import { TriageRulesPanel } from "@/components/aurelius/triage-rules-panel";
 import type { ActionCardData } from "@/lib/types/action-card";
 import { toast } from "sonner";
 import {
-  MessageSquare,
   Inbox,
   Mail,
-  LayoutList,
-  Filter,
   CalendarDays,
   RefreshCw,
   LayoutGrid,
@@ -39,15 +37,12 @@ import {
 import { cn } from "@/lib/utils";
 
 const CONNECTOR_FILTERS: Array<{
-  value: "all" | "gmail" | "slack" | "linear" | "granola";
+  value: "gmail" | "granola";
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { value: "all", label: "All", icon: Filter },
-  { value: "gmail", label: "Gmail", icon: Mail },
-  { value: "slack", label: "Slack", icon: MessageSquare },
-  { value: "linear", label: "Linear", icon: LayoutList },
-  { value: "granola", label: "Granola", icon: CalendarDays },
+  { value: "gmail", label: "Email", icon: Mail },
+  { value: "granola", label: "Meetings", icon: CalendarDays },
 ];
 
 export function TriageClient({ userEmail }: { userEmail?: string }) {
@@ -55,7 +50,6 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
   const {
     items: fetchedItems,
     stats,
-    batchCards: fetchedBatchCards,
     tasksByItemId,
     senderCounts,
     isLoading,
@@ -65,7 +59,6 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
 
   // Local state for optimistic updates (synced from SWR)
   const [localItems, setLocalItems] = useState<TriageItem[]>([]);
-  const [localBatchCards, setLocalBatchCards] = useState<BatchCardWithItems[]>([]);
 
   useEffect(() => {
     if (fetchedItems.length > 0 || !isLoading) {
@@ -73,23 +66,18 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     }
   }, [fetchedItems, isLoading]);
 
-  useEffect(() => {
-    if (fetchedBatchCards.length > 0 || !isLoading) {
-      setLocalBatchCards(fetchedBatchCards);
-    }
-  }, [fetchedBatchCards, isLoading]);
-
   // UI-only local state
   const [animatingOut, setAnimatingOut] = useState<"left" | "right" | "up" | null>(null);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const cardRef = useRef<HTMLDivElement>(null);
 
+  const [isRulesPanelOpen, setIsRulesPanelOpen] = useState(false);
+
   const sidebarWidth = isSidebarExpanded ? 480 : 320;
-  const batchCardCount = localBatchCards.length;
 
   // Navigation hook
-  const nav = useTriageNavigation(localItems, batchCardCount);
+  const nav = useTriageNavigation(localItems);
   const {
     currentIndex, setCurrentIndex,
     connectorFilter, setConnectorFilter,
@@ -97,7 +85,6 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     viewMode, setViewMode,
     returnToList, setReturnToList,
     filteredItems, currentItem,
-    isOnBatchCard, individualItemIndex,
     totalCards, hasItems,
     connectorCounts,
     cycleConnectorFilter,
@@ -106,15 +93,12 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     handleCloseOverlay,
   } = nav;
 
-  const currentBatchCard = isOnBatchCard ? localBatchCards[currentIndex] : null;
   const progress = hasItems ? `${currentIndex + 1} / ${totalCards}` : "0 / 0";
 
   // Actions hook
   const actions = useTriageActions({
     localItems,
     setLocalItems,
-    localBatchCards,
-    setLocalBatchCards,
     currentItem,
     currentIndex,
     setCurrentIndex,
@@ -146,7 +130,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
 
   // Keyboard bindings
   const isCardTriage = triageView === "card" && viewMode === "triage";
-  const isIndividualCard = isCardTriage && !isOnBatchCard;
+  const isIndividualCard = isCardTriage;
 
   const keyBindings: KeyBinding[] = useMemo(() => [
     // Escape — complex multi-branch handler
@@ -175,18 +159,12 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
     { key: "Tab", handler: () => cycleConnectorFilter(false) },
     { key: "Tab", modifiers: { shift: true }, handler: () => cycleConnectorFilter(true) },
 
-    // Cmd+1-5 selects connector filters (global)
+    // Cmd+1-2 selects connector filters (global)
     { key: "1", modifiers: { meta: true }, handler: () => selectConnectorFilter(0) },
     { key: "2", modifiers: { meta: true }, handler: () => selectConnectorFilter(1) },
-    { key: "3", modifiers: { meta: true }, handler: () => selectConnectorFilter(2) },
-    { key: "4", modifiers: { meta: true }, handler: () => selectConnectorFilter(3) },
-    { key: "5", modifiers: { meta: true }, handler: () => selectConnectorFilter(4) },
     // Ctrl variants for non-Mac
     { key: "1", modifiers: { ctrl: true }, handler: () => selectConnectorFilter(0) },
     { key: "2", modifiers: { ctrl: true }, handler: () => selectConnectorFilter(1) },
-    { key: "3", modifiers: { ctrl: true }, handler: () => selectConnectorFilter(2) },
-    { key: "4", modifiers: { ctrl: true }, handler: () => selectConnectorFilter(3) },
-    { key: "5", modifiers: { ctrl: true }, handler: () => selectConnectorFilter(4) },
 
     // Toggle card/list view (v) — only in triage mode
     {
@@ -201,6 +179,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
 
     // Card view individual item actions
     { key: "ArrowLeft", handler: actions.handleArchive, when: () => isIndividualCard },
+    { key: "ArrowLeft", modifiers: { shift: true }, handler: actions.handleQuickArchive, when: () => isIndividualCard },
     { key: "ArrowUp", handler: actions.handleMemory, when: () => isIndividualCard },
     { key: "ArrowUp", modifiers: { shift: true }, handler: actions.handleMemoryFull, when: () => isIndividualCard },
     { key: "ArrowRight", handler: actions.handleOpenActions, when: () => isIndividualCard },
@@ -262,6 +241,8 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
                 toast.error("Failed to undo");
               }
             }}
+            onOpenRulesPanel={() => setIsRulesPanelOpen(true)}
+            onCreateRule={actions.handleRuleInput}
           />
         ) : undefined
       }
@@ -351,6 +332,7 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
                 </button>
               );
             })}
+
           </div>
         </header>
 
@@ -372,8 +354,8 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           </div>
         )}
 
-        {/* List view */}
-        {!isLoading && hasItems && triageView === "list" && (
+        {/* List view (not for granola — meetings have their own layout) */}
+        {!isLoading && hasItems && triageView === "list" && connectorFilter !== "granola" && (
           <TriageListView
             items={filteredItems}
             selectedIds={selectedIds}
@@ -386,66 +368,76 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           />
         )}
 
-        {/* Card area */}
-        {!isLoading && hasItems && triageView === "card" && (
-        <div className="flex-1 flex items-start justify-center pt-12 p-6 relative overflow-y-auto">
-          {/* Card stack effect */}
-          {!isOnBatchCard && filteredItems.slice(individualItemIndex + 1, individualItemIndex + 3).map((item, idx) => (
-            <div
-              key={`${item.id}-stack-${idx}`}
-              className="absolute"
-              style={{
-                transform: `scale(${0.95 - idx * 0.03}) translateY(${(idx + 1) * 8}px)`,
-                zIndex: 10 - idx,
-                opacity: 0.3 - idx * 0.1,
-              }}
-            >
-              <TriageCard item={item} isActive={false} />
-            </div>
-          ))}
+        {/* Email tier layout (gmail tab) */}
+        {!isLoading && hasItems && connectorFilter === "gmail" && triageView === "card" && (
+          <TriageEmailTiers
+            items={filteredItems}
+            tasksByItemId={tasksByItemId}
+            onBulkArchive={actions.handleBulkArchiveItems}
+            onSelectItem={(item) => {
+              const index = filteredItems.findIndex((i) => i.id === item.id);
+              if (index >= 0) nav.setCurrentIndex(index);
+            }}
+            activeItemId={currentItem?.id}
+            onSkipFromArchive={actions.handleSkipFromArchive}
+          />
+        )}
 
-          {/* Active card and tasks box */}
-          <div className="flex flex-col items-center gap-4">
-            {/* Batch card */}
-            {isOnBatchCard && currentBatchCard && (
-              <div className="relative z-20">
-                <TriageBatchCard
-                  card={currentBatchCard}
-                  isActive={true}
-                  onAction={actions.handleBatchAction}
-                  onRuleInput={actions.handleRuleInput}
-                  onReclassify={actions.handleReclassify}
-                  rules={triageRules.filter((r) => r.action?.batchType === (currentBatchCard.data?.batchType as string))}
-                  onDeleteRule={actions.handleDeleteRule}
-                />
-              </div>
-            )}
-
-            {/* Individual card */}
-            {!isOnBatchCard && currentItem && (
-              <>
-                <div
-                  className={cn(
-                    "relative z-20 transition-all duration-200",
-                    animatingOut === "left" && "animate-swipe-left",
-                    animatingOut === "right" && "animate-swipe-right",
-                    animatingOut === "up" && "animate-swipe-up"
-                  )}
-                >
-                  <TriageCard ref={cardRef} item={currentItem} isActive={true} senderItemCount={senderCounts[`${currentItem.connector}:${currentItem.sender}`] || 0} />
-                </div>
-
-                {/* Suggested tasks box */}
-                {!animatingOut && (
-                  <SuggestedTasksBox
-                    itemId={currentItem.dbId || currentItem.id}
-                    initialTasks={tasksByItemId[currentItem.dbId || currentItem.id]}
-                  />
-                )}
-              </>
-            )}
-          </div>
-        </div>
+        {/* Meeting tasks view (meetings/granola tab) */}
+        {!isLoading && hasItems && connectorFilter === "granola" && (
+          <TriageMeetingTasks
+            items={filteredItems}
+            tasksByItemId={tasksByItemId}
+            onAcceptTask={(taskId, itemId) => {
+              fetch(`/api/triage/${itemId}/tasks`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ taskIds: [taskId], action: "accept" }),
+              }).then((res) => {
+                if (!res.ok) {
+                  console.error("Failed to accept task:", res.status);
+                  return;
+                }
+                mutate();
+              }).catch(console.error);
+            }}
+            onDismissTask={(taskId, itemId) => {
+              fetch(`/api/triage/${itemId}/tasks`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ taskIds: [taskId], action: "dismiss" }),
+              }).then((res) => {
+                if (!res.ok) {
+                  console.error("Failed to dismiss task:", res.status);
+                  return;
+                }
+                mutate();
+              }).catch(console.error);
+            }}
+            onArchiveMeeting={(item) => {
+              const apiId = item.dbId || item.id;
+              fetch(`/api/triage/${apiId}/tasks`, { method: "DELETE" }).catch(() => {});
+              fetch(`/api/triage/${apiId}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "archive" }),
+              }).then((res) => {
+                if (!res.ok) {
+                  console.error("Failed to archive meeting:", res.status);
+                  return;
+                }
+                setLocalItems((prev) => prev.filter((i) => i.id !== item.id));
+                mutate();
+              }).catch(console.error);
+            }}
+            onOpenChat={(item) => {
+              const index = filteredItems.findIndex((i) => i.id === item.id);
+              if (index >= 0) {
+                nav.setCurrentIndex(index);
+                nav.setViewMode("chat");
+              }
+            }}
+          />
         )}
       </div>
 
@@ -539,6 +531,14 @@ export function TriageClient({ userEmail }: { userEmail?: string }) {
           onClose={() => { actions.setQuickTaskCard(null); handleCloseOverlay(); }}
         />
       )}
+
+      {/* Rules panel slide-out */}
+      <TriageRulesPanel
+        isOpen={isRulesPanelOpen}
+        onClose={() => setIsRulesPanelOpen(false)}
+        rules={triageRules || []}
+        onMutateRules={mutateRules}
+      />
     </AppShell>
   );
 }

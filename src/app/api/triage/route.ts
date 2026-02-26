@@ -3,8 +3,6 @@ import { getTriageQueue } from "@/lib/triage/queue";
 import { db } from "@/lib/db";
 import { inboxItems as inboxItemsTable, suggestedTasks } from "@/lib/db/schema";
 import { eq, desc, and, lt, sql, inArray } from "drizzle-orm";
-import { getBatchCardsWithItems } from "@/lib/triage/batch-cards";
-
 // Wake up snoozed items whose snooze time has passed
 async function wakeUpSnoozedItems() {
   const now = new Date();
@@ -66,8 +64,8 @@ export async function GET(request: Request) {
   // First, wake up any snoozed items whose time has passed
   await wakeUpSnoozedItems();
 
-  // Fetch filtered items, stats, sender counts, and batch cards in parallel
-  const [dbItems, statsRows, senderCountRows, batchCards] = await Promise.all([
+  // Fetch filtered items, stats, and sender counts in parallel
+  const [dbItems, statsRows, senderCountRows] = await Promise.all([
     getInboxItemsFromDb({
       status,
       connector: connector || undefined,
@@ -91,22 +89,10 @@ export async function GET(request: Request) {
       .from(inboxItemsTable)
       .where(eq(inboxItemsTable.status, "new"))
       .groupBy(inboxItemsTable.sender, inboxItemsTable.connector),
-    // Batch cards with their items
-    getBatchCardsWithItems(),
   ]);
 
-  // Collect IDs of items already shown in batch cards so they don't also
-  // appear as individual triage items
-  const batchItemIds = new Set<string>();
-  for (const card of batchCards) {
-    for (const item of card.items) {
-      batchItemIds.add(item.id);
-    }
-  }
-
-  // Sort by priority then date, excluding items already in batch cards
-  const individualItems = dbItems.filter((i) => !batchItemIds.has(i.id));
-  const queue = getTriageQueue(individualItems);
+  // Sort by priority then date
+  const queue = getTriageQueue(dbItems);
 
   // Build stats from aggregated counts
   const statsByStatus: Record<string, number> = {};
@@ -162,7 +148,6 @@ export async function GET(request: Request) {
     total: queue.length,
     tasksByItemId,
     senderCounts,
-    batchCards,
     stats: {
       new: statsByStatus["new"] || 0,
       archived: statsByStatus["archived"] || 0,

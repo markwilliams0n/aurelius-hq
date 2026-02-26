@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import type { TriageItem } from '@/components/aurelius/triage-card';
 
-export type ConnectorFilter = 'all' | 'gmail' | 'slack' | 'linear' | 'granola';
+export type ConnectorFilter = 'gmail' | 'granola';
 export type TriageView = 'card' | 'list';
 export type ViewMode =
   | 'triage'
@@ -16,41 +16,26 @@ export type ViewMode =
   | 'quick-task'
   | 'group-picker';
 
-const CONNECTOR_FILTER_VALUES: ConnectorFilter[] = [
-  'all',
-  'gmail',
-  'slack',
-  'linear',
-  'granola',
-];
+const CONNECTOR_FILTER_VALUES: ConnectorFilter[] = ['gmail', 'granola'];
 
 export function useTriageNavigation(
-  localItems: TriageItem[],
-  batchCardCount: number
+  localItems: TriageItem[]
 ) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [connectorFilter, setConnectorFilter] =
-    useState<ConnectorFilter>('all');
+    useState<ConnectorFilter>('gmail');
   const [triageView, setTriageView] = useState<TriageView>('card');
   const [viewMode, setViewMode] = useState<ViewMode>('triage');
   const [returnToList, setReturnToList] = useState(false);
 
   // Filter items by connector
   const filteredItems = useMemo(() => {
-    if (connectorFilter === 'all') return localItems;
     return localItems.filter((item) => item.connector === connectorFilter);
   }, [localItems, connectorFilter]);
 
-  // Batch card navigation: batch cards occupy indices 0..batchCardCount-1,
-  // individual items start at batchCardCount
-  const isOnBatchCard = currentIndex < batchCardCount;
-  const individualItemIndex = currentIndex - batchCardCount;
-
-  // Current item (from filtered list, offset by batch card count)
-  const currentItem = isOnBatchCard
-    ? undefined
-    : filteredItems[individualItemIndex];
-  const totalCards = batchCardCount + filteredItems.length;
+  // Current item from filtered list
+  const currentItem = filteredItems[currentIndex];
+  const totalCards = filteredItems.length;
   const hasItems = totalCards > 0;
 
   // Reset index when filter changes
@@ -61,10 +46,7 @@ export function useTriageNavigation(
   // Get counts per connector
   const connectorCounts = useMemo(
     () => ({
-      all: localItems.length,
       gmail: localItems.filter((i) => i.connector === 'gmail').length,
-      slack: localItems.filter((i) => i.connector === 'slack').length,
-      linear: localItems.filter((i) => i.connector === 'linear').length,
       granola: localItems.filter((i) => i.connector === 'granola').length,
     }),
     [localItems]
@@ -107,12 +89,12 @@ export function useTriageNavigation(
     (id: string) => {
       const index = filteredItems.findIndex((i) => i.id === id);
       if (index >= 0) {
-        setCurrentIndex(index + batchCardCount);
+        setCurrentIndex(index);
         setReturnToList(true);
         setTriageView('card');
       }
     },
-    [filteredItems, batchCardCount]
+    [filteredItems]
   );
 
   // Close overlay, handling return-to-list logic
@@ -133,8 +115,6 @@ export function useTriageNavigation(
     setReturnToList,
     filteredItems,
     currentItem,
-    isOnBatchCard,
-    individualItemIndex,
     totalCards,
     hasItems,
     connectorCounts,

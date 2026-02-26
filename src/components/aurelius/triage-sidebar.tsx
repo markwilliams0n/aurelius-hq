@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import useSWR from "swr";
 import {
   Inbox,
   Archive,
@@ -20,6 +21,10 @@ import {
   XCircle,
   FileText,
   RefreshCw,
+  Eye,
+  AlertCircle,
+  Settings2,
+  Send,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RightSidebar } from "./right-sidebar";
@@ -34,6 +39,8 @@ interface TriageSidebarProps {
   isExpanded?: boolean;
   onToggleExpand?: () => void;
   onUndo?: (activityId: string, action: string, itemId: string) => void;
+  onOpenRulesPanel?: () => void;
+  onCreateRule?: (input: string) => void;
 }
 
 type ActivityItem = {
@@ -59,12 +66,19 @@ type ActivityItem = {
   createdAt: string;
 };
 
-export function TriageSidebar({ stats, isExpanded = false, onToggleExpand, onUndo }: TriageSidebarProps) {
+export function TriageSidebar({ stats, isExpanded = false, onToggleExpand, onUndo, onOpenRulesPanel, onCreateRule }: TriageSidebarProps) {
   const [activeTab, setActiveTab] = useState<"activity" | "notes">("activity");
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [dailyNotes, setDailyNotes] = useState<string>("");
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
+
+  // Classification feed via SWR
+  const { data: classificationData } = useSWR(
+    activeTab === "activity" ? "/api/triage/activity?limit=30" : null,
+    (url: string) => fetch(url).then((r) => r.json()),
+    { refreshInterval: 30000 }
+  );
 
   // Fetch activities
   const fetchActivities = useCallback(async () => {
@@ -97,8 +111,8 @@ export function TriageSidebar({ stats, isExpanded = false, onToggleExpand, onUnd
   useEffect(() => {
     if (activeTab === "activity") {
       fetchActivities();
-      // Poll every 3 seconds for activity updates (to catch background memory completion)
-      const interval = setInterval(fetchActivities, 3000);
+      // Poll for activity updates
+      const interval = setInterval(fetchActivities, 15000);
       return () => clearInterval(interval);
     } else {
       fetchDailyNotes();
@@ -182,13 +196,38 @@ export function TriageSidebar({ stats, isExpanded = false, onToggleExpand, onUnd
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto">
         {activeTab === "activity" ? (
-          <ActivityList
-            activities={activities}
-            expandedItems={expandedItems}
-            onToggleExpanded={toggleExpanded}
-            onUndo={handleUndo}
-            onRefresh={fetchActivities}
-          />
+          <div className="flex flex-col">
+            <ActivityList
+              activities={activities}
+              expandedItems={expandedItems}
+              onToggleExpanded={toggleExpanded}
+              onUndo={handleUndo}
+              onRefresh={fetchActivities}
+            />
+
+            {/* Classifications section */}
+            <ClassificationFeed items={classificationData?.items} />
+
+            {/* Manage Rules button */}
+            {onOpenRulesPanel && (
+              <div className="px-4 py-2 border-t border-border">
+                <button
+                  onClick={onOpenRulesPanel}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground rounded-lg hover:bg-secondary/50 transition-colors w-full"
+                >
+                  <Settings2 className="w-3.5 h-3.5" />
+                  Manage Rules
+                </button>
+              </div>
+            )}
+
+            {/* Rule input */}
+            {onCreateRule && (
+              <div className="px-3 py-2 border-t border-border">
+                <RuleInput onSubmit={onCreateRule} />
+              </div>
+            )}
+          </div>
         ) : (
           <DailyNotesView content={dailyNotes} onRefresh={fetchDailyNotes} />
         )}
@@ -372,6 +411,110 @@ function ActivityList({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// Classification feed component
+function ClassificationFeed({ items }: { items?: Array<{
+  id: string;
+  sender: string;
+  senderName: string | null;
+  subject: string;
+  classification: {
+    recommendation?: string;
+    confidence?: number;
+    wasOverride?: boolean;
+  } | null;
+}> }) {
+  if (!items || items.length === 0) return null;
+
+  return (
+    <div className="border-t border-border">
+      <div className="px-4 py-2">
+        <h4 className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+          Recent Classifications
+        </h4>
+      </div>
+      <div className="space-y-1 pb-2">
+        {items.map((item) => (
+          <div
+            key={item.id}
+            className={cn(
+              "flex items-start gap-2 px-3 py-1.5 rounded text-xs",
+              item.classification?.wasOverride && "bg-orange-500/5"
+            )}
+          >
+            {/* Recommendation icon */}
+            <span className="pt-0.5">
+              {item.classification?.recommendation === "archive" && (
+                <Archive className="w-3 h-3 text-green-400" />
+              )}
+              {item.classification?.recommendation === "review" && (
+                <Eye className="w-3 h-3 text-gold" />
+              )}
+              {item.classification?.recommendation === "attention" && (
+                <AlertCircle className="w-3 h-3 text-orange-400" />
+              )}
+            </span>
+            <div className="flex-1 min-w-0">
+              <span className="font-medium text-foreground truncate">
+                {item.senderName || item.sender}
+              </span>
+              <span className="text-muted-foreground ml-1 truncate">
+                {item.subject}
+              </span>
+              {item.classification?.wasOverride && (
+                <div className="text-orange-400 text-[10px] mt-0.5">
+                  Override — suggested {item.classification.recommendation}
+                </div>
+              )}
+            </div>
+            {item.classification?.confidence != null && (
+              <span className="text-muted-foreground/50 text-[10px] shrink-0">
+                {Math.round(item.classification.confidence * 100)}%
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Rule input component
+function RuleInput({ onSubmit }: { onSubmit: (input: string) => void }) {
+  const [value, setValue] = useState("");
+
+  const handleSubmit = () => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    onSubmit(trimmed);
+    setValue("");
+  };
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            handleSubmit();
+          }
+        }}
+        placeholder="Add a triage rule..."
+        className="flex-1 bg-secondary/50 rounded-lg px-3 py-1.5 text-xs placeholder:text-muted-foreground/50 border border-border focus:outline-none focus:border-gold/50"
+      />
+      <button
+        onClick={handleSubmit}
+        disabled={!value.trim()}
+        className="p-1.5 rounded-lg text-muted-foreground hover:text-gold hover:bg-secondary/50 transition-colors disabled:opacity-30"
+      >
+        <Send className="w-3.5 h-3.5" />
+      </button>
     </div>
   );
 }

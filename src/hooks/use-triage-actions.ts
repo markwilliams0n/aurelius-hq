@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useRef } from 'react';
 import type { TriageItem } from '@/components/aurelius/triage-card';
-import type { BatchCardWithItems } from '@/lib/triage/batch-cards';
 import type { ActionCardData } from '@/lib/types/action-card';
 import type { ViewMode } from '@/hooks/use-triage-navigation';
 import { toast } from 'sonner';
@@ -10,8 +9,6 @@ import { toast } from 'sonner';
 interface UseTriageActionsParams {
   localItems: TriageItem[];
   setLocalItems: React.Dispatch<React.SetStateAction<TriageItem[]>>;
-  localBatchCards: BatchCardWithItems[];
-  setLocalBatchCards: React.Dispatch<React.SetStateAction<BatchCardWithItems[]>>;
   currentItem: TriageItem | undefined;
   currentIndex: number;
   setCurrentIndex: React.Dispatch<React.SetStateAction<number>>;
@@ -58,8 +55,6 @@ function getActionMessage(action: string): string {
 export function useTriageActions({
   localItems,
   setLocalItems,
-  localBatchCards,
-  setLocalBatchCards,
   currentItem,
   currentIndex,
   setCurrentIndex,
@@ -138,6 +133,51 @@ export function useTriageActions({
     toast.success('Restored');
   }, [setLocalItems, setCurrentIndex, updateLastAction]);
 
+  // Show proposal toast when triage API suggests a rule
+  const showProposalToast = useCallback((proposal: {
+    id: string;
+    type: string;
+    ruleText: string;
+    sender: string;
+    senderName: string | null;
+    evidence: { bulk?: number; quick?: number; engaged?: number; total?: number; overrideCount?: number };
+  }) => {
+    const displayName = proposal.senderName || proposal.sender;
+    const ev = proposal.evidence;
+
+    let message: string;
+    if (proposal.type === "archive") {
+      message = `You've archived all ${ev.total} emails from ${displayName} — always archive?`;
+    } else {
+      if (ev.overrideCount) {
+        message = `You overrode archive for ${displayName} ${ev.overrideCount} times — always surface?`;
+      } else {
+        message = `You engaged with ${ev.engaged}/${ev.total} from ${displayName} — always surface?`;
+      }
+    }
+
+    toast(message, {
+      duration: 10000,
+      action: {
+        label: "Yes",
+        onClick: () => {
+          fetch(`/api/triage/rules/${proposal.id}/accept`, { method: "POST" })
+            .then(() => {
+              toast.success("Rule created");
+              mutateRules();
+            })
+            .catch(() => toast.error("Failed to create rule"));
+        },
+      },
+      cancel: {
+        label: "Not yet",
+        onClick: () => {
+          fetch(`/api/triage/rules/${proposal.id}/dismiss`, { method: "POST" }).catch(() => {});
+        },
+      },
+    });
+  }, [mutateRules]);
+
   // Archive action (ArrowLeft)
   const handleArchive = useCallback(() => {
     if (!currentItem) return;
@@ -152,11 +192,21 @@ export function useTriageActions({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'archive' }),
-    }).catch((error) => {
-      console.error('Failed to archive:', error);
-      toast.error('Failed to archive - item restored');
-      setLocalItems((prev) => [itemToArchive, ...prev]);
-    });
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`API returned ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        if (data.proposal) {
+          showProposalToast(data.proposal);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to archive:', error);
+        toast.error('Failed to archive - item restored');
+        setLocalItems((prev) => [itemToArchive, ...prev]);
+      });
 
     setTimeout(() => {
       setLocalItems((prev) => prev.filter((i) => i.id !== itemToArchive.id));
@@ -166,7 +216,45 @@ export function useTriageActions({
     toast.success('Archived', {
       action: { label: 'Undo', onClick: () => handleUndo() },
     });
-  }, [currentItem, setAnimatingOut, updateLastAction, setLocalItems, handleUndo]);
+  }, [currentItem, setAnimatingOut, updateLastAction, setLocalItems, handleUndo, showProposalToast]);
+
+  // Quick archive action (Shift+ArrowLeft)
+  const handleQuickArchive = useCallback(() => {
+    if (!currentItem) return;
+
+    const itemToArchive = currentItem;
+    const apiId = itemToArchive.dbId || itemToArchive.id;
+    setAnimatingOut('left');
+    updateLastAction({ type: 'archive', itemId: itemToArchive.id, item: itemToArchive });
+
+    fetch(`/api/triage/${apiId}/tasks`, { method: 'DELETE' }).catch(() => {});
+    fetch(`/api/triage/${apiId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'archive', triagePath: 'quick' }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`API returned ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        if (data.proposal) showProposalToast(data.proposal);
+      })
+      .catch((error) => {
+        console.error('Failed to archive:', error);
+        toast.error('Failed to archive - item restored');
+        setLocalItems((prev) => [itemToArchive, ...prev]);
+      });
+
+    setTimeout(() => {
+      setLocalItems((prev) => prev.filter((i) => i.id !== itemToArchive.id));
+      setAnimatingOut(null);
+    }, 150);
+
+    toast.success('Archived', {
+      action: { label: 'Undo', onClick: () => handleUndo() },
+    });
+  }, [currentItem, setAnimatingOut, updateLastAction, setLocalItems, handleUndo, showProposalToast]);
 
   // Memory summary (ArrowUp)
   const handleMemory = useCallback(async () => {
@@ -399,11 +487,12 @@ export function useTriageActions({
 
       const apiId = currentItem.dbId || currentItem.id;
       try {
-        await fetch(`/api/triage/${apiId}`, {
+        const res = await fetch(`/api/triage/${apiId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action, ...data }),
         });
+        if (!res.ok) throw new Error(`API returned ${res.status}`);
 
         if (action === 'snooze' || action === 'actioned') {
           setAnimatingOut('right');
@@ -423,86 +512,12 @@ export function useTriageActions({
     [currentItem, setViewMode, setAnimatingOut, setLocalItems]
   );
 
-  // Batch card action handler
-  const handleBatchAction = useCallback(
-    async (cardId: string, checkedIds: string[], uncheckedIds: string[]) => {
-      try {
-        await fetch(`/api/triage/batch/${cardId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            checkedItemIds: checkedIds,
-            uncheckedItemIds: uncheckedIds,
-          }),
-        });
-
-        setLocalBatchCards((prev) => prev.filter((c) => c.id !== cardId));
-        mutate();
-        toast.success(
-          `Batch action complete: ${checkedIds.length} processed, ${uncheckedIds.length} kept`
-        );
-      } catch (error) {
-        console.error('Failed to execute batch action:', error);
-        toast.error('Batch action failed');
-      }
-    },
-    [setLocalBatchCards, mutate]
-  );
-
-  // Reclassify handler
-  const handleReclassify = useCallback(
-    async (
-      itemId: string,
-      fromBatchType: string,
-      toBatchType: string,
-      sender: string,
-      senderName: string | null,
-      connector: string
-    ) => {
-      try {
-        const res = await fetch('/api/triage/batch/reclassify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            itemId,
-            fromBatchType,
-            toBatchType,
-            sender,
-            senderName,
-            connector,
-          }),
-        });
-        if (!res.ok) throw new Error('Reclassify failed');
-
-        setLocalBatchCards((prev) =>
-          prev
-            .map((card) => {
-              const cardBatchType = (card.data?.batchType as string) || '';
-              if (cardBatchType === fromBatchType) {
-                return {
-                  ...card,
-                  items: card.items.filter((i) => i.id !== itemId),
-                };
-              }
-              return card;
-            })
-            .filter((card) => card.items.length > 0)
-        );
-
-        toast.success(`Moved to ${toBatchType} -- rule created`);
-      } catch (error) {
-        console.error('Reclassify failed:', error);
-        toast.error('Failed to reclassify item');
-      }
-    },
-    [setLocalBatchCards]
-  );
-
   // Delete a triage rule
   const handleDeleteRule = useCallback(
     async (ruleId: string) => {
       try {
-        await fetch(`/api/triage/rules/${ruleId}`, { method: 'DELETE' });
+        const res = await fetch(`/api/triage/rules/${ruleId}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(`API returned ${res.status}`);
         mutateRules();
         toast.success('Rule deleted');
       } catch (error) {
@@ -517,11 +532,12 @@ export function useTriageActions({
   const handleRuleInput = useCallback(
     async (input: string) => {
       try {
-        await fetch('/api/triage/rules', {
+        const res = await fetch('/api/triage/rules', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ input, source: 'user_chat' }),
         });
+        if (!res.ok) throw new Error(`API returned ${res.status}`);
         mutateRules();
         toast.success('Rule created from your input');
       } catch (error) {
@@ -543,37 +559,36 @@ export function useTriageActions({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ trigger: 'manual' }),
     })
-      .then(() => {
+      .then((res) => {
+        if (!res.ok) throw new Error(`API returned ${res.status}`);
         mutate();
         mutateRules();
         toast.success('Sync complete');
-        setIsSyncing(false);
       })
       .catch((error) => {
         console.error('Sync failed:', error);
         toast.error('Sync failed');
+      })
+      .finally(() => {
         setIsSyncing(false);
       });
-
-    await mutate();
   }, [isSyncing, mutate, mutateRules]);
 
-  // Bulk archive selected items (list view)
-  const handleBulkArchive = useCallback(async () => {
-    if (selectedIds.size === 0) return;
+  // Shared bulk archive logic — archives items and supports undo
+  const bulkArchiveItems = useCallback((itemsToArchive: TriageItem[]) => {
+    if (itemsToArchive.length === 0) return;
 
-    const idsToArchive = Array.from(selectedIds);
-    const itemsToArchive = localItems.filter((i) => selectedIds.has(i.id));
-    const count = idsToArchive.length;
+    const count = itemsToArchive.length;
 
     updateLastAction({
       type: 'bulk-archive',
-      itemId: idsToArchive[0],
+      itemId: itemsToArchive[0].id,
       item: itemsToArchive[0],
     });
     bulkUndoRef.current = itemsToArchive;
 
-    setLocalItems((prev) => prev.filter((i) => !selectedIds.has(i.id)));
+    const idsSet = new Set(itemsToArchive.map((i) => i.id));
+    setLocalItems((prev) => prev.filter((i) => !idsSet.has(i.id)));
     setSelectedIds(new Set());
 
     itemsToArchive.forEach((item) => {
@@ -582,21 +597,79 @@ export function useTriageActions({
       fetch(`/api/triage/${apiId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'archive' }),
-      }).catch(console.error);
+        body: JSON.stringify({ action: 'archive', triagePath: 'bulk' }),
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error(`API returned ${res.status}`);
+          return res.json();
+        })
+        .then((data) => {
+          if (data.proposal) showProposalToast(data.proposal);
+        })
+        .catch(console.error);
     });
 
     toast.success(`Archived ${count} item${count === 1 ? '' : 's'}`, {
       action: { label: 'Undo', onClick: () => handleUndo() },
     });
-  }, [selectedIds, localItems, handleUndo, updateLastAction, setLocalItems, setSelectedIds]);
+  }, [handleUndo, updateLastAction, setLocalItems, setSelectedIds, showProposalToast]);
+
+  // Bulk archive selected items (list view)
+  const handleBulkArchive = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    const itemsToArchive = localItems.filter((i) => selectedIds.has(i.id));
+    bulkArchiveItems(itemsToArchive);
+  }, [selectedIds, localItems, bulkArchiveItems]);
+
+  // Bulk archive explicit items (tier view)
+  const handleBulkArchiveItems = useCallback((items: TriageItem[]) => {
+    bulkArchiveItems(items);
+  }, [bulkArchiveItems]);
+
+  // Skip from archive — move item from archive tier to review tier
+  const handleSkipFromArchive = useCallback(async (item: TriageItem) => {
+    const apiId = item.dbId || item.id;
+    try {
+      // Optimistically update local items
+      setLocalItems((prev) =>
+        prev.map((i) => {
+          if (i.id !== item.id) return i;
+          const existing = (i as any).classification || {};
+          return {
+            ...i,
+            classification: { ...existing, recommendation: "review", confidence: Math.min(existing.confidence || 0, 0.85) },
+          } as any;
+        })
+      );
+
+      const res = await fetch(`/api/triage/${apiId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classification: {
+            ...((item as any).classification || {}),
+            recommendation: "review",
+            confidence: Math.min(((item as any).classification?.confidence || 0), 0.85),
+          },
+        }),
+      });
+      if (!res.ok) throw new Error();
+      mutate();
+    } catch {
+      toast.error("Failed to move item");
+      mutate(); // Revert optimistic update
+    }
+  }, [setLocalItems, mutate]);
 
   // Quick task handler (t key)
   const handleQuickTask = useCallback(() => {
     if (!currentItem) return;
     const taskApiId = currentItem.dbId || currentItem.id;
     fetch(`/api/triage/${taskApiId}/quick-task`, { method: 'POST' })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(`API returned ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
         if (data.card) {
           setQuickTaskCard(data.card);
@@ -630,6 +703,7 @@ export function useTriageActions({
 
     // Individual item actions
     handleArchive,
+    handleQuickArchive,
     handleMemory,
     handleMemoryFull,
     handleOpenActions,
@@ -645,10 +719,6 @@ export function useTriageActions({
     handleQuickTask,
     handleOpenLinear,
 
-    // Batch card actions
-    handleBatchAction,
-    handleReclassify,
-
     // Rule actions
     handleDeleteRule,
     handleRuleInput,
@@ -656,5 +726,7 @@ export function useTriageActions({
     // Other
     handleSync,
     handleBulkArchive,
+    handleBulkArchiveItems,
+    handleSkipFromArchive,
   };
 }

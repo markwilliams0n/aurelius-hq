@@ -78,6 +78,8 @@ function makeRule(overrides: Partial<TriageRule> = {}): TriageRule {
     createdBy: "user",
     matchCount: 0,
     lastMatchedAt: null,
+    patternKey: null,
+    evidence: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,

@@ -7,11 +7,11 @@
 
 import { syncSlackMessages, startSocketMode, isSocketConfigured } from '@/lib/slack';
 import { syncSlackDirectory } from '@/lib/slack/directory';
-import type { Connector } from './types';
+import type { Connector, HeartbeatStep } from './types';
 
 export const slackConnector: Connector = {
   name: 'slack',
-  step: 'slack',
+  step: 'slack' as HeartbeatStep, // Dormant — not registered in connector list
   async sync() {
     // Socket Mode: connect for real-time messages, then refresh directory cache
     if (isSocketConfigured()) {

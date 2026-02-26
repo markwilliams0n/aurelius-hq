@@ -1,10 +1,55 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { inboxItems } from "@/lib/db/schema";
+import { inboxItems, type InboxItem } from "@/lib/db/schema";
 import { eq, or } from "drizzle-orm";
 import { syncArchiveToGmail, syncSpamToGmail, markActionNeeded } from "@/lib/gmail/actions";
-import { archiveNotification } from "@/lib/linear";
 import { logActivity } from "@/lib/activity";
+import { checkForProposals, createProposedRule } from "@/lib/triage/rule-proposals";
+
+// Log the user's actual triage decision into the classification column.
+// Fire-and-forget: errors are caught and logged, never block the response.
+function logDecision(item: InboxItem, actualAction: string, clientTriagePath?: string) {
+  if (item.connector !== "gmail") return;
+  const classification = item.classification as Record<string, unknown> | null;
+  if (!classification?.recommendation) return;
+
+  const recommendedArchive = classification.recommendation === "archive";
+  const userArchived = actualAction === "archived" || actualAction === "spam";
+  const wasOverride = recommendedArchive !== userArchived;
+
+  // Derive triagePath:
+  // - If client sent one (e.g. 'bulk'), use it
+  // - If action is archive/spam and no client path: check if a prior non-archive action exists → 'engaged', else 'quick'
+  // - If action is anything else (flag, snooze, etc.) → always 'engaged'
+  let triagePath: string;
+  if (clientTriagePath) {
+    triagePath = clientTriagePath;
+  } else if (actualAction === "archived" || actualAction === "spam") {
+    const priorAction = classification.actualAction as string | undefined;
+    triagePath = priorAction && priorAction !== "archived" && priorAction !== "spam"
+      ? "engaged"
+      : "quick";
+  } else {
+    triagePath = "engaged";
+  }
+
+  // Cast needed: the classification column type doesn't include decision fields,
+  // but we're enriching the existing JSON with learning-loop metadata.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const enrichedClassification = {
+    ...classification,
+    actualAction,
+    wasOverride,
+    triagePath,
+    decidedAt: new Date().toISOString(),
+  } as any;
+
+  db.update(inboxItems)
+    .set({ classification: enrichedClassification })
+    .where(eq(inboxItems.id, item.id))
+    .execute()
+    .catch((err) => console.error("[Triage] Decision log failed:", err));
+}
 
 // Check if string is a valid UUID
 function isUUID(str: string): boolean {
@@ -83,18 +128,7 @@ export async function POST(
           })
         );
       }
-      // Sync to Linear in background (mark notification as read)
-      if (item.connector === "linear" && item.externalId) {
-        backgroundTasks.push(
-          archiveNotification(item.externalId).then((success) => {
-            if (success) {
-              console.log("[Triage] Linear notification archived:", item.externalId);
-            }
-          }).catch((error) => {
-            console.error("[Triage] Background Linear archive failed:", error);
-          })
-        );
-      }
+      logDecision(item, "archived", actionData.triagePath);
       break;
 
     case "snooze":
@@ -108,6 +142,7 @@ export async function POST(
       }
       updates.status = "snoozed";
       updates.snoozedUntil = snoozeUntil;
+      logDecision(item, "snoozed");
       break;
 
     case "flag":
@@ -115,6 +150,7 @@ export async function POST(
       updates.tags = currentTags.includes("flagged")
         ? currentTags.filter((t) => t !== "flagged")
         : [...currentTags, "flagged"];
+      logDecision(item, "flagged");
       break;
 
     case "priority":
@@ -132,6 +168,7 @@ export async function POST(
     case "actioned":
       updates.status = "actioned";
       updates.snoozedUntil = null;
+      logDecision(item, "actioned");
       break;
 
     case "spam":
@@ -145,6 +182,7 @@ export async function POST(
           })
         );
       }
+      logDecision(item, "spam");
       break;
 
     case "action-needed": {
@@ -169,6 +207,7 @@ export async function POST(
           })
         );
       }
+      logDecision(item, "action-needed");
       break;
     }
 
@@ -237,11 +276,77 @@ export async function POST(
     });
   }
 
+  // Check for rule proposals (only for gmail archive/engage actions)
+  let proposal = null;
+  if (item.connector === "gmail" && ["archive", "actioned", "action-needed"].includes(action)) {
+    const proposalResult = await checkForProposals(item.sender, item.senderName).catch(() => null);
+    if (proposalResult) {
+      const ruleId = await createProposedRule(proposalResult).catch(() => null);
+      if (ruleId) {
+        proposal = {
+          id: ruleId,
+          type: proposalResult.type,
+          ruleText: proposalResult.ruleText,
+          sender: proposalResult.sender,
+          senderName: proposalResult.senderName,
+          evidence: proposalResult.evidence,
+        };
+      }
+    }
+  }
+
   return NextResponse.json({
     success: true,
     action,
     item: updatedItem,
+    proposal,
   });
+}
+
+// PUT /api/triage/[id] - Update item fields (e.g. classification)
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const body = await request.json();
+
+  const item = await findItem(id);
+  if (!item) {
+    return NextResponse.json({ error: "Item not found" }, { status: 404 });
+  }
+
+  const updateData: Partial<typeof inboxItems.$inferInsert> = {
+    updatedAt: new Date(),
+  };
+
+  if (body.classification) {
+    const c = body.classification;
+    const validRecs = ["archive", "review", "attention"];
+    if (!c.recommendation || !validRecs.includes(c.recommendation)) {
+      return NextResponse.json({ error: "Invalid classification recommendation" }, { status: 400 });
+    }
+    if (typeof c.confidence !== "number" || c.confidence < 0 || c.confidence > 1) {
+      return NextResponse.json({ error: "Invalid classification confidence" }, { status: 400 });
+    }
+    // Only pass through validated fields, preserve existing classification data
+    const existing = (item.classification as Record<string, unknown>) || {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    updateData.classification = {
+      ...existing,
+      recommendation: c.recommendation,
+      confidence: c.confidence,
+      ...(typeof c.reasoning === "string" && { reasoning: c.reasoning }),
+    } as any;
+  }
+
+  const [updatedItem] = await db
+    .update(inboxItems)
+    .set(updateData)
+    .where(eq(inboxItems.id, item.id))
+    .returning();
+
+  return NextResponse.json({ success: true, item: updatedItem });
 }
 
 // Helper to calculate snooze time from duration string
